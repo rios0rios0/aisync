@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-git/go-git/v5 v5.17.2
-	github.com/rios0rios0/cliforge v0.1.1-0.20260402173400-cd7225c728db
+	github.com/rios0rios0/cliforge v0.2.1-0.20260404230949-b9683f7eded2
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
