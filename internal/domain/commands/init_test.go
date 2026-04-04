@@ -1,0 +1,345 @@
+//go:build unit
+
+package commands_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/rios0rios0/aisync/internal/domain/commands"
+	"github.com/rios0rios0/aisync/internal/domain/entities"
+	"github.com/rios0rios0/aisync/test/doubles"
+)
+
+func TestInitCommand_Execute(t *testing.T) {
+	t.Run("should create dirs, save config, and save state when no clone URL", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			ExistsVal: false,
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{
+				"claude": {Path: "~/.claude", Enabled: true},
+			},
+		}
+		gitRepo := &doubles.MockGitRepository{}
+
+		// Create a fake identity file so the command does not try to generate a key
+		identityDir := filepath.Join(tmpDir, ".config", "aisync")
+		require.NoError(t, os.MkdirAll(identityDir, 0700))
+		identityPath := filepath.Join(identityDir, "key.txt")
+		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY-FAKE"), 0600))
+
+		// Override HOME so ExpandHome("~/.config/aisync/key.txt") resolves to our temp dir
+		origHome := os.Getenv("HOME")
+		t.Setenv("HOME", tmpDir)
+		defer func() { _ = os.Setenv("HOME", origHome) }()
+
+		encryptionService := &doubles.MockEncryptionService{
+			GeneratedPublicKey: "age1testkey",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, configRepo.SaveCalls)
+		assert.Equal(t, 1, stateRepo.SaveCalls)
+		assert.Equal(t, 1, gitRepo.InitCalls)
+		assert.Equal(t, repoPath, gitRepo.InitDir)
+		assert.Equal(t, 1, toolDetector.DetectCalls)
+
+		// Verify directories were created
+		sharedClaudeRules := filepath.Join(repoPath, "shared", "claude", "rules")
+		_, statErr := os.Stat(sharedClaudeRules)
+		assert.NoError(t, statErr)
+	})
+
+	t.Run("should call gitRepo.Clone with correct URL when github user is provided", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/nonexistent-key.txt",
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, gitRepo.CloneCalls)
+		assert.Equal(t, "git@github.com:testuser/aifiles.git", gitRepo.CloneURL)
+		assert.Equal(t, repoPath, gitRepo.CloneDir)
+		assert.Equal(t, "main", gitRepo.CloneBranch)
+	})
+
+	t.Run("should call gitRepo.Clone with remote URL when remoteURL is provided", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/nonexistent-key.txt",
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, gitRepo.CloneCalls)
+		assert.Equal(t, "https://github.com/user/aifiles.git", gitRepo.CloneURL)
+	})
+
+	t.Run("should return error when config already exists for create mode", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			ExistsVal: true,
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "already exists")
+	})
+
+	t.Run("should return error when clone fails", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{
+			CloneErr: assert.AnError,
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", "")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to clone repository")
+	})
+
+	t.Run("should import key when keyPath is provided during clone", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: filepath.Join(tmpDir, "identity", "key.txt"),
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// Create a source key file to import from
+		sourceKeyPath := filepath.Join(tmpDir, "source-key.txt")
+		require.NoError(t, os.WriteFile(sourceKeyPath, []byte("AGE-SECRET-KEY-TEST"), 0600))
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", sourceKeyPath)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, gitRepo.CloneCalls)
+		assert.Equal(t, 1, encryptionService.ImportCalls)
+		assert.Equal(t, sourceKeyPath, encryptionService.ImportSourcePath)
+	})
+
+	t.Run("should auto-generate age key when identity file does not exist on create", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		// Override HOME so ExpandHome resolves to temp dir
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{
+			ExistsVal: false,
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{
+				"claude": {Path: "~/.claude", Enabled: true},
+			},
+		}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{
+			GeneratedPublicKey: "age1generatedkey123",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, encryptionService.GenerateCalls)
+		assert.Equal(t, 1, toolDetector.DetectCalls)
+		// Config should be saved twice: once initially, once with the new recipient
+		assert.Equal(t, 2, configRepo.SaveCalls)
+	})
+
+	t.Run("should return error when import key fails during clone", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: filepath.Join(tmpDir, "identity", "key.txt"),
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{
+			ImportErr: assert.AnError,
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", "/tmp/key.txt")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to import age identity")
+	})
+
+	t.Run("should return error when generate key fails on create", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{
+			ExistsVal: false,
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{},
+		}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{
+			GenerateErr: assert.AnError,
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to generate age key")
+	})
+
+	t.Run("should return error when git init fails on create", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		// Create a fake identity file so the command does not try to generate a key
+		identityDir := filepath.Join(tmpDir, ".config", "aisync")
+		require.NoError(t, os.MkdirAll(identityDir, 0700))
+		identityPath := filepath.Join(identityDir, "key.txt")
+		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY-FAKE"), 0600))
+
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{ExistsVal: false}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{},
+		}
+		gitRepo := &doubles.MockGitRepository{
+			InitErr: assert.AnError,
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to initialize git repository")
+	})
+
+	t.Run("should prefer remoteURL over githubUser for clone URL", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/nonexistent-key.txt",
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "https://custom.git/repo.git", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "https://custom.git/repo.git", gitRepo.CloneURL)
+	})
+}
