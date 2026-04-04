@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -36,6 +35,7 @@ type PullCommand struct {
 	settingsMerger    repositories.Merger
 	sectionMerger     repositories.Merger
 	applyService      repositories.ApplyService
+	promptService     repositories.PromptService
 }
 
 // NewPullCommand creates a new PullCommand.
@@ -51,6 +51,7 @@ func NewPullCommand(
 	settingsMerger repositories.Merger,
 	sectionMerger repositories.Merger,
 	applyService repositories.ApplyService,
+	promptService repositories.PromptService,
 ) *PullCommand {
 	return &PullCommand{
 		configRepo:        configRepo,
@@ -64,6 +65,7 @@ func NewPullCommand(
 		settingsMerger:    settingsMerger,
 		sectionMerger:     sectionMerger,
 		applyService:      applyService,
+		promptService:     promptService,
 	}
 }
 
@@ -220,8 +222,11 @@ func (c *PullCommand) fetchSources(
 
 		logger.Infof("fetching source '%s' (%s@%s)", source.Name, source.Repo, source.Branch)
 
-		cachedETag := state.GetETag(source.Name)
-		result, fetchErr := c.sourceRepo.Fetch(&source, cachedETag)
+		hints := repositories.CacheHints{
+			ETag:         state.GetETag(source.Name),
+			LastModified: state.GetLastModified(source.Name),
+		}
+		result, fetchErr := c.sourceRepo.Fetch(&source, hints)
 		if fetchErr != nil {
 			logger.Warnf("failed to fetch source '%s': %v", source.Name, fetchErr)
 			continue
@@ -231,9 +236,12 @@ func (c *PullCommand) fetchSources(
 			continue
 		}
 
-		// Store returned ETag for future cache validation.
+		// Store returned cache headers for future conditional requests.
 		if result.ETag != "" {
 			state.SetETag(source.Name, result.ETag)
+		}
+		if result.LastModified != "" {
+			state.SetLastModified(source.Name, result.LastModified)
 		}
 
 		for relPath, content := range result.Files {
@@ -445,17 +453,17 @@ func (c *PullCommand) applyToToolDir(
 	if !opts.Force {
 		c.printDiffSummary(toolName, pendingFiles, deletions, toolDir)
 		for {
-			action := promptToolAction(toolName)
+			action := c.promptService.PromptToolAction(toolName)
 			switch action {
-			case actionSkip:
+			case "skip":
 				fmt.Printf("Skipped tool %s.\n", toolName)
 				return nil
-			case actionAbort:
+			case "abort":
 				return fmt.Errorf("aborted by user")
-			case actionDiff:
+			case "diff":
 				c.printDryRun(toolName, pendingFiles, deletions, toolDir)
 				continue
-			case actionApply:
+			case "apply":
 				// Break out of the loop to proceed with apply.
 			}
 			break
@@ -747,53 +755,6 @@ func (c *PullCommand) loadEncryptPatterns(repoPath string) *entities.EncryptPatt
 	return entities.ParseEncryptPatterns(content)
 }
 
-// toolAction represents the user's choice at a per-tool confirmation prompt.
-type toolAction int
-
-const (
-	actionApply toolAction = iota
-	actionAbort
-	actionDiff
-	actionSkip
-)
-
-// promptToolAction displays a per-tool confirmation prompt that supports
-// y(es), n(o/abort), d(iff), and s(kip). When the user chooses "d", the
-// provided diffFn is called to display details, and the prompt repeats.
-func promptToolAction(toolName string) toolAction {
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Printf("Apply changes to %s? [y/n/d(iff)/s(kip)]: ", toolName)
-		if !scanner.Scan() {
-			return actionAbort
-		}
-		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-		switch answer {
-		case "y", "yes":
-			return actionApply
-		case "n", "no":
-			return actionAbort
-		case "d", "diff":
-			return actionDiff
-		case "s", "skip":
-			return actionSkip
-		default:
-			fmt.Println("Please enter y, n, d, or s.")
-		}
-	}
-}
-
-// promptConfirmation reads a yes/no answer from stdin.
-func promptConfirmation(prompt string) bool {
-	fmt.Printf("%s [y/N]: ", prompt)
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-		return answer == "y" || answer == "yes"
-	}
-	return false
-}
-
 // checksumBytes computes a sha256 checksum string for the given data.
 func checksumBytes(data []byte) string {
 	h := sha256.Sum256(data)
@@ -864,11 +825,9 @@ func (c *PullCommand) resolveConflicts(
 	force bool,
 ) []entities.Conflict {
 	var remoteWins []entities.Conflict
-	scanner := bufio.NewScanner(os.Stdin)
 
 	for _, conflict := range conflicts {
 		if force {
-			// Force mode: remote wins, apply incoming content.
 			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "remote"); err != nil {
 				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
 			} else {
@@ -877,34 +836,21 @@ func (c *PullCommand) resolveConflicts(
 			continue
 		}
 
-		fmt.Printf("\nConflict: %s\n", conflict.Path)
-		fmt.Printf("  Local version differs from incoming (from device '%s')\n", conflict.RemoteDevice)
+		choice := c.promptService.PromptConflictResolution(conflict.Path, conflict.RemoteDevice)
 
-		for {
-			fmt.Print("  [l]ocal / [r]emote / [s]kip: ")
-			if !scanner.Scan() {
-				break
+		switch choice {
+		case "local":
+			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "local"); err != nil {
+				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
 			}
-			answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
-
-			switch answer {
-			case "l", "local":
-				if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "local"); err != nil {
-					logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
-				}
-			case "r", "remote":
-				if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "remote"); err != nil {
-					logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
-				} else {
-					remoteWins = append(remoteWins, conflict)
-				}
-			case "s", "skip":
-				fmt.Printf("  Skipped conflict for %s (conflict file preserved)\n", conflict.Path)
-			default:
-				fmt.Println("  Please enter l, r, or s.")
-				continue
+		case "remote":
+			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "remote"); err != nil {
+				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
+			} else {
+				remoteWins = append(remoteWins, conflict)
 			}
-			break
+		case "skip":
+			fmt.Printf("  Skipped conflict for %s (conflict file preserved)\n", conflict.Path)
 		}
 	}
 
@@ -919,6 +865,10 @@ func ExpandHome(path string) string {
 			return path
 		}
 		return filepath.Join(home, path[2:])
+	}
+	// Expand Windows environment variables like %APPDATA% and %USERPROFILE%.
+	if strings.Contains(path, "%") {
+		return os.ExpandEnv(path)
 	}
 	return path
 }

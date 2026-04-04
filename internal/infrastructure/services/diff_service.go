@@ -295,6 +295,9 @@ func expandHomePath(path string) string {
 		}
 		return filepath.Join(home, path[2:])
 	}
+	if strings.Contains(path, "%") {
+		return os.ExpandEnv(path)
+	}
 	return path
 }
 

@@ -437,3 +437,84 @@ func TestReadExistingChecksum_ShouldReturnChecksumForExistingFile(t *testing.T) 
 	assert.NotEmpty(t, result)
 	assert.Equal(t, services.ComputeChecksum(content), result)
 }
+
+func TestNormalizeLineEndings_ShouldConvertCRLFToLF(t *testing.T) {
+	// given
+	input := []byte("line one\r\nline two\r\nline three\r\n")
+
+	// when
+	result := services.NormalizeLineEndings(input)
+
+	// then
+	assert.Equal(t, []byte("line one\nline two\nline three\n"), result)
+}
+
+func TestNormalizeLineEndings_ShouldPreserveLFOnly(t *testing.T) {
+	// given
+	input := []byte("line one\nline two\n")
+
+	// when
+	result := services.NormalizeLineEndings(input)
+
+	// then
+	assert.Equal(t, input, result)
+}
+
+func TestNormalizeLineEndings_ShouldNotModifyBinaryContent(t *testing.T) {
+	// given
+	input := []byte("binary\x00data\r\nwith CRLF")
+
+	// when
+	result := services.NormalizeLineEndings(input)
+
+	// then
+	assert.Equal(t, input, result)
+}
+
+func TestIsBinaryContent_ShouldReturnTrueWhenNullBytePresent(t *testing.T) {
+	// given
+	data := []byte("contains\x00null")
+
+	// when
+	result := services.IsBinaryContent(data)
+
+	// then
+	assert.True(t, result)
+}
+
+func TestIsBinaryContent_ShouldReturnFalseForTextContent(t *testing.T) {
+	// given
+	data := []byte("plain text content\nwith newlines\n")
+
+	// when
+	result := services.IsBinaryContent(data)
+
+	// then
+	assert.False(t, result)
+}
+
+func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
+	// given
+	tmpDir := t.TempDir()
+	targetDir := filepath.Join(tmpDir, "target")
+	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+
+	repo := newInMemoryJournalRepo()
+	svc := services.NewAtomicApplyService(repo, tmpDir)
+
+	targetPath := filepath.Join(targetDir, "rules.md")
+	files := map[string][]byte{
+		targetPath: []byte("# Rule\r\n\r\nSome content\r\n"),
+	}
+
+	// when
+	journal, err := svc.Stage(files)
+
+	// then
+	assert.NoError(t, err)
+	assert.NotNil(t, journal)
+
+	stagedContent, readErr := os.ReadFile(journal.Operations[0].SourcePath)
+	assert.NoError(t, readErr)
+	assert.Equal(t, []byte("# Rule\n\nSome content\n"), stagedContent)
+}

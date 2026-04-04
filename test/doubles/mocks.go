@@ -79,17 +79,23 @@ func (m *MockStateRepository) Exists(repoPath string) bool {
 
 // MockSourceRepository is a manual stub for repositories.SourceRepository.
 type MockSourceRepository struct {
-	Result    *repositories.FetchResult
-	FetchErr  error
-	FetchedSources []*entities.Source
-	FetchCalls int
+	Result           *repositories.FetchResult
+	ResultsBySource  map[string]*repositories.FetchResult // keyed by source name
+	FetchErr         error
+	FetchedSources   []*entities.Source
+	FetchCalls       int
 }
 
-func (m *MockSourceRepository) Fetch(source *entities.Source, cachedETag string) (*repositories.FetchResult, error) {
+func (m *MockSourceRepository) Fetch(source *entities.Source, hints repositories.CacheHints) (*repositories.FetchResult, error) {
 	m.FetchCalls++
 	m.FetchedSources = append(m.FetchedSources, source)
 	if m.FetchErr != nil {
 		return nil, m.FetchErr
+	}
+	if m.ResultsBySource != nil {
+		if result, ok := m.ResultsBySource[source.Name]; ok {
+			return result, nil
+		}
 	}
 	return m.Result, nil
 }
@@ -144,13 +150,21 @@ type MockGitRepository struct {
 	PushErr        error
 	IsCleanVal     bool
 	IsCleanErr     error
-	HasRemoteVal   bool
-	CloneCalls     int
-	InitCalls      int
-	OpenCalls      int
-	PullCalls      int
-	CommitAllCalls int
-	PushCalls      int
+	HasRemoteVal    bool
+	AddRemoteName    string
+	AddRemoteURL     string
+	AddRemoteErr     error
+	AddRemoteCalls   int
+	SetConfigKey     string
+	SetConfigValue   string
+	SetConfigErr     error
+	SetConfigCalls   int
+	CloneCalls      int
+	InitCalls       int
+	OpenCalls       int
+	PullCalls       int
+	CommitAllCalls  int
+	PushCalls       int
 }
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
@@ -195,6 +209,20 @@ func (m *MockGitRepository) IsClean() (bool, error) {
 
 func (m *MockGitRepository) HasRemote() bool {
 	return m.HasRemoteVal
+}
+
+func (m *MockGitRepository) AddRemote(name, url string) error {
+	m.AddRemoteCalls++
+	m.AddRemoteName = name
+	m.AddRemoteURL = url
+	return m.AddRemoteErr
+}
+
+func (m *MockGitRepository) SetConfig(key, value string) error {
+	m.SetConfigCalls++
+	m.SetConfigKey = key
+	m.SetConfigValue = value
+	return m.SetConfigErr
 }
 
 // MockEncryptionService is a manual stub for repositories.EncryptionService.
@@ -444,4 +472,29 @@ func (m *MockJournalRepository) Exists() bool {
 func (m *MockJournalRepository) Clear() error {
 	m.ClearCalls++
 	return m.ClearErr
+}
+
+// MockPromptService is a manual stub for repositories.PromptService.
+type MockPromptService struct {
+	ToolAction         string // preconfigured return for PromptToolAction
+	Confirmation       bool   // preconfigured return for PromptConfirmation
+	ConflictResolution string // preconfigured return for PromptConflictResolution
+	ToolActionCalls    int
+	ConfirmationCalls  int
+	ConflictCalls      int
+}
+
+func (m *MockPromptService) PromptToolAction(_ string) string {
+	m.ToolActionCalls++
+	return m.ToolAction
+}
+
+func (m *MockPromptService) PromptConfirmation(_ string) bool {
+	m.ConfirmationCalls++
+	return m.Confirmation
+}
+
+func (m *MockPromptService) PromptConflictResolution(_, _ string) string {
+	m.ConflictCalls++
+	return m.ConflictResolution
 }

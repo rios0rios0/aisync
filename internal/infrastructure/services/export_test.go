@@ -24,6 +24,12 @@ var ComputeChecksum = computeChecksum
 // ReadExistingChecksum exposes readExistingChecksum for black-box testing.
 var ReadExistingChecksum = readExistingChecksum
 
+// NormalizeLineEndings exposes normalizeLineEndings for black-box testing.
+var NormalizeLineEndings = normalizeLineEndings
+
+// IsBinaryContent exposes isBinaryContent for black-box testing.
+var IsBinaryContent = isBinaryContent
+
 // ExpandHomePath exposes expandHomePath for black-box testing.
 var ExpandHomePath = expandHomePath
 

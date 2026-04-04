@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -52,7 +53,8 @@ func (s *AtomicApplyService) Stage(files map[string][]byte) (*entities.Journal, 
 			return nil, fmt.Errorf("failed to create staging subdirectory for %s: %w", relPath, err)
 		}
 
-		if err := os.WriteFile(stagingPath, content, 0644); err != nil {
+		normalized := normalizeLineEndings(content)
+		if err := os.WriteFile(stagingPath, normalized, 0644); err != nil {
 			return nil, fmt.Errorf("failed to write staged file %s: %w", stagingPath, err)
 		}
 
@@ -175,4 +177,23 @@ func readExistingChecksum(path string) string {
 func computeChecksum(data []byte) string {
 	hash := sha256.Sum256(data)
 	return fmt.Sprintf("%x", hash)
+}
+
+// normalizeLineEndings converts CRLF line endings to LF. Binary files (detected
+// by the presence of null bytes in the first 8 KB) are returned unchanged.
+func normalizeLineEndings(data []byte) []byte {
+	if isBinaryContent(data) {
+		return data
+	}
+	return bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+}
+
+// isBinaryContent returns true if the data likely represents a binary file by
+// checking for null bytes in the first 8 KB — the same heuristic Git uses.
+func isBinaryContent(data []byte) bool {
+	limit := len(data)
+	if limit > 8192 {
+		limit = 8192
+	}
+	return bytes.ContainsRune(data[:limit], 0)
 }

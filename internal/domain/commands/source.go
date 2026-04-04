@@ -121,6 +121,8 @@ func (c *SourceCommand) Update(configPath, repoPath, name string) error {
 	}
 
 	updated := 0
+	fileOwnership := make(map[string]string) // relPath -> sourceName
+
 	for _, source := range config.Sources {
 		if name != "" && source.Name != name {
 			continue
@@ -128,7 +130,7 @@ func (c *SourceCommand) Update(configPath, repoPath, name string) error {
 
 		logger.Infof("updating source '%s' (%s@%s)", source.Name, source.Repo, source.Branch)
 
-		result, fetchErr := c.sourceRepo.Fetch(&source, "")
+		result, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
 		if fetchErr != nil {
 			logger.Warnf("failed to fetch source '%s': %v", source.Name, fetchErr)
 			continue
@@ -140,6 +142,13 @@ func (c *SourceCommand) Update(configPath, repoPath, name string) error {
 
 		written := 0
 		for relPath, content := range result.Files {
+			if existingSource, ok := fileOwnership[relPath]; ok {
+				logger.Warnf(
+					"file '%s' provided by both '%s' and '%s' (last source wins)",
+					relPath, existingSource, source.Name,
+				)
+			}
+			fileOwnership[relPath] = source.Name
 			destPath := filepath.Join(repoPath, relPath)
 			destDir := filepath.Dir(destPath)
 

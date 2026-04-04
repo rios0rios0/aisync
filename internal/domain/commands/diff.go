@@ -70,7 +70,7 @@ func (c *DiffCommand) Execute(configPath, repoPath string, opts DiffOptions) err
 				if opts.SourceFilter != "" && source.Name != opts.SourceFilter {
 					continue
 				}
-				fetched, fetchErr := c.sourceRepo.Fetch(&source, "")
+				fetched, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
 				if fetchErr != nil || fetched == nil {
 					continue
 				}

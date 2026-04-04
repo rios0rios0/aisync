@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-aisync is a Go CLI tool that synchronizes AI coding assistant configurations (rules, agents, commands, hooks, skills, memories, settings) across multiple devices and multiple AI tools. It pulls shared rules from public external sources via Git tarball downloads, syncs personal configurations via a private Git repository, and encrypts sensitive data with age. It supports 30+ AI tools including Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, Windsurf, and more.
+aisync is a Go CLI tool that synchronizes AI coding assistant configurations (rules, agents, commands, hooks, skills, memories, settings) across multiple devices and 30+ AI tools. It pulls shared rules from public external sources via Git tarball downloads, syncs personal configurations via a private Git repository, and encrypts sensitive data with age.
 
 ## Build & Development Commands
 
 ```bash
-make build          # Compile to bin/aisync (stripped)
-make debug          # Compile with debug symbols
+make build          # Compile to bin/aisync (stripped with -s -w)
+make debug          # Compile with debug symbols (-gcflags "-N -l")
 make run            # go run ./cmd/aisync
 make install        # Build and copy to ~/.local/bin/aisync
 make lint           # golangci-lint (always use this, never call golangci-lint directly)
@@ -23,86 +23,91 @@ Run a single test during development:
 go test -tags unit -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
 ```
 
-All unit test files use the `//go:build unit` build tag. Build times are ~2 seconds. Test suite runs in ~2 seconds.
+All unit test files require the `//go:build unit` build tag. Build and test suite each run in ~2 seconds.
 
 ## Architecture
 
-Clean Architecture with Hexagonal (Ports & Adapters) design. No dependency injection framework — manual constructor wiring in the controller layer.
+Clean Architecture with Hexagonal (Ports & Adapters) design. Dependencies always point inward: infrastructure depends on domain interfaces, never the reverse. No DI framework — manual constructor wiring in `controllers/root.go`.
 
-### Layer Structure
+### Layer Boundaries
 
-- **`cmd/aisync/`** — Entry point (`main.go`), sets up logrus and cobra root command
-- **`internal/domain/`** — Business logic and contracts (no framework dependencies)
-  - `commands/` — Use cases: `InitCommand`, `PullCommand`, `PushCommand`, `SyncCommand`, `DiffCommand`, `WatchCommand`, `StatusCommand`, `SourceCommand`, `KeyCommand`, `DeviceCommand`, `DoctorCommand`, `MigrateCommand`
-  - `entities/` — Domain types: `Config`, `Source`, `Tool`, `Manifest`, `State`, `Journal`, `FileChange`, `Conflict`, `EncryptPatterns`, `IgnorePatterns`, `Formatter`
-  - `repositories/` — Interfaces: `ConfigRepository`, `SourceRepository`, `ManifestRepository`, `StateRepository`, `GitRepository`, `JournalRepository`, `EncryptionService`, `ToolDetector`, `SecretScanner`, `DiffService`, `WatchService`, `Merger`, `ApplyService`, `ConflictDetector`
-- **`internal/infrastructure/`** — Implementations
-  - `controllers/root.go` — Cobra CLI wiring: creates all infrastructure instances, injects into domain commands, registers subcommands
-  - `repositories/` — `YAMLConfigRepository`, `HTTPSourceRepository` (tarball fetch), `JSONManifestRepository`, `JSONStateRepository`, `JSONJournalRepository`, `GoGitRepository` (go-git wrapper)
-  - `services/` — `AgeEncryptionService`, `HooksMerger`, `SettingsMerger`, `SectionMerger`, `AtomicApplyService`, `FSNotifyWatchService`, `PollingWatchService`, `FSDiffService`, `RegexSecretScanner`, `ConflictDetector`, `FSToolDetector`
-  - `ui/` — `LipglossFormatter` for colored terminal output
-- **`test/doubles/`** — Manual mock implementations of all domain interfaces
+- **`cmd/aisync/`** — Entry point. Sets up logrus, creates the cobra root command via `controllers.NewRootCommand(version)`, and calls `Execute()`.
+- **`internal/domain/`** — Zero framework dependencies. Contains commands (use cases), entities (value objects/aggregates), and repository interfaces (ports).
+- **`internal/infrastructure/`** — Implements domain interfaces. Contains `controllers/` (cobra wiring + DI), `repositories/` (YAML/JSON/HTTP/Git persistence), `services/` (encryption, merging, watching, scanning), and `ui/` (lipgloss formatter).
+- **`test/doubles/`** — Manual struct-based stubs for all domain interfaces. Each stub stores call counts and captured args for assertion — no mocking framework.
 
-### Dependency Flow
+### How Dependency Injection Works
+
+`controllers/root.go` is the composition root. `NewRootCommand(version)` creates every infrastructure instance, injects them into domain command constructors, and wires cobra subcommands. This is the only place where concrete types are referenced — domain commands accept only interfaces.
 
 ```
-main.go → controllers.NewRootCommand(version)
-             ├── creates all infrastructure repos/services
-             ├── creates all domain commands (injecting deps)
-             ├── wires cobra subcommands
-             └── returns root *cobra.Command
+main.go → NewRootCommand(version)
+             ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo
+             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, ...
+             ├── creates domain commands (injecting interface deps)
+             └── registers cobra subcommands → returns root *cobra.Command
 ```
 
-Dependencies always point inward: infrastructure → domain, never the reverse.
+### Adding a New Command
 
-### Key External Libraries
+Adding a command touches 4 locations:
 
-| Library | Purpose |
-|---------|---------|
-| `filippo.io/age` | age encryption/decryption for personal files |
-| `github.com/go-git/go-git/v5` | Pure Go git operations (clone, commit, push, pull) |
-| `github.com/fsnotify/fsnotify` | OS-native filesystem event watching |
-| `github.com/charmbracelet/lipgloss` | Colored terminal output |
-| `github.com/spf13/cobra` | CLI framework |
-| `github.com/sirupsen/logrus` | Structured logging |
-| `github.com/rios0rios0/cliforge` | Self-update from GitHub Releases |
-| `gopkg.in/yaml.v3` | YAML configuration parsing |
+1. **`internal/domain/commands/`** — Create `foo.go` with a `FooCommand` struct. Constructor accepts domain interfaces. Single `Execute()` method with business logic.
+2. **`internal/infrastructure/controllers/root.go`** — Instantiate `FooCommand` with infrastructure deps, create a `newFooSubcmd()` helper that wraps it in a `cobra.Command`, add to `root.AddCommand(...)`.
+3. **`test/doubles/mocks.go`** — Add stubs for any new domain interfaces (if introduced).
+4. **`internal/domain/commands/foo_test.go`** — Unit tests using stubs from `test/doubles/`.
 
-### CLI Commands
+### Merger Polymorphism
 
-| Command | Domain Command | Description |
-|---------|---------------|-------------|
-| `aisync init [user]` | `InitCommand` | Create or clone aifiles repo |
-| `aisync source add/remove/list/update/pin` | `SourceCommand` | Manage external sources |
-| `aisync pull` | `PullCommand` | Fetch sources, merge, apply atomically |
-| `aisync push` | `PushCommand` | Collect personal files, encrypt, commit, push |
-| `aisync sync` | `SyncCommand` | Pull then push |
-| `aisync diff` | `DiffCommand` | Preview changes with recency detection |
-| `aisync watch` | `WatchCommand` | Real-time file monitoring with auto-push |
-| `aisync status` | `StatusCommand` | Show sync state and tool status |
-| `aisync key generate/import/export/add-recipient` | `KeyCommand` | Age encryption key management |
-| `aisync device list/rename/remove` | `DeviceCommand` | Device registry management |
-| `aisync doctor` | `DoctorCommand` | Diagnose configuration issues |
-| `aisync migrate` | `MigrateCommand` | Import existing files into aifiles structure |
-| `aisync self-update` | cliforge | Update binary from GitHub Releases |
+The `Merger` interface has three implementations, each handling a different single-file merge strategy:
 
-### Key Design Patterns
+| Implementation | File Type | Strategy |
+|---------------|-----------|----------|
+| `HooksMerger` | `hooks.json` | Array concatenation per event key + deduplication by `(event, matcher, command)` tuple. Personal hooks always last. |
+| `SettingsMerger` | `settings.json` | Recursive deep merge. Array values (e.g., `allowedTools`) merged by union. Personal keys win on collision. |
+| `SectionMerger` | `CLAUDE.md`, `AGENTS.md` | Shared content first, then `<!-- aisync: personal content below -->` separator, then personal content. |
 
-- **Merge strategies**: `hooks.json` uses array concatenation with deduplication; `settings.json` uses deep merge; `CLAUDE.md`/`AGENTS.md` use section concatenation with `<!-- aisync: personal content below -->` separator
-- **Atomic apply**: Two-phase commit with journal — stage files to temp dir, write journal, then move to final destinations. Recovery on next invocation if interrupted.
-- **Deny-list**: Compiled-in patterns for credentials/sessions/plugins that cannot be overridden by the user
-- **Precedence**: Personal files override shared files with the same name. Last source in config wins on collision.
-- **Encryption**: Files matching `.aisyncencrypt` patterns are encrypted with age before git commit and decrypted after git pull
+`HooksMerger` also implements `ExcludeAware` — an interface that allows the `PullCommand` to inject `hooks_exclude` entries from `config.yaml` after the merger is constructed (since config is loaded at pull time, not at startup).
+
+### Atomic Apply (Two-Phase Commit)
+
+The `AtomicApplyService` prevents partial updates to AI tool directories:
+
+1. **Stage** — Write all incoming files to `~/.config/aisync/staging/<timestamp>/`.
+2. **Journal** — Record pending operations (source paths, target paths, old/new SHA-256 checksums) in `journal.json`.
+3. **Apply** — Move files from staging to final destinations via `os.Rename()`.
+4. **Clear** — Delete journal after success.
+
+On interruption, the next invocation detects the incomplete journal and resumes from where it left off. The `PullCommand` checks for pending journal recovery before starting a new pull.
+
+### Platform-Specific Watch Service
+
+`controllers/root.go` selects the watch implementation at startup:
+
+- **Desktop (Linux/macOS/Windows)** — `FSNotifyWatchService` using OS-native events (`inotify`, `FSEvents`, `ReadDirectoryChangesW`).
+- **Termux (Android)** — `PollingWatchService` with 30-second interval. Detected via `runtime.GOOS == "android"` or `ANDROID_ROOT` env var.
+
+### Two-Tier Ignore System
+
+- **Tier 1: Compiled-in deny-list** (`entities/denylist.go`) — Hardcoded patterns for credentials, OAuth tokens, session transcripts, plugin caches. Cannot be overridden. Safety net against accidental secret leaks.
+- **Tier 2: User-configurable `.aisyncignore`** — Gitignore-syntax file for additional exclusions. Additive with the deny-list.
+
+The `RegexSecretScanner` (15 compiled regex patterns) runs before every push and blocks if secrets are found in non-encrypted files.
+
+### Precedence Order
+
+When applying files to local AI tool directories: personal files > last-listed source in `config.yaml` > earlier sources. A personal file with the same name as a shared file always wins.
 
 ## Testing Conventions
 
-- BDD structure with `// given`, `// when`, `// then` comment blocks
-- Test names: descriptive function names like `TestHooksMerger_Merge_ConcatenatesArrays`
-- Unit tests use `//go:build unit` build tag
-- Assertions via `testify/assert`
-- Mock doubles in `test/doubles/mocks.go` — manual struct-based stubs storing call counts and captured args
-- 377 tests, 80%+ coverage on all business logic packages
+- `//go:build unit` tag on all unit test files — run with `go test -tags unit`
+- BDD structure: `// given`, `// when`, `// then` comment blocks in every test
+- Test names: `TestTypeName_MethodName_DescriptiveBehavior` (e.g., `TestHooksMerger_Merge_ConcatenatesArrays`)
+- External test packages (e.g., `package commands_test`) — tests only access exported API
+- `testify/assert` for assertions, `testify/require` for fatal preconditions
+- Manual stubs in `test/doubles/mocks.go` — no mocking framework. Each stub captures call counts and arguments
+- Unit tests use `t.Parallel()` with `t.Run()` subtests
 
 ## Configuration
 
-The `aifiles` repo convention: users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config is at `<repo>/config.yaml` with sections for sync, encryption, tools (30+), sources, watch, and hooks_exclude. The `.aisyncencrypt` file at repo root declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions.
+Users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config lives at `<repo>/config.yaml` with sections for sync, encryption, tools (30+ AI tools auto-detected on init), sources, watch, and `hooks_exclude`. The `.aisyncencrypt` file declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions. External sources are fetched as GitHub tarballs (zero API calls, no rate limiting) with ETag caching in `.aisync/state.json`.

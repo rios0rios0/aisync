@@ -35,6 +35,7 @@ func newTestPullCommand(
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		applyService,
+		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
 	)
 }
 

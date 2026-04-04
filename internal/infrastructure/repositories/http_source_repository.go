@@ -29,7 +29,7 @@ func NewHTTPSourceRepository() *HTTPSourceRepository {
 }
 
 // Fetch downloads the tarball for the source, extracts mapped files, and returns them.
-func (r *HTTPSourceRepository) Fetch(source *entities.Source, cachedETag string) (*domainRepos.FetchResult, error) {
+func (r *HTTPSourceRepository) Fetch(source *entities.Source, hints domainRepos.CacheHints) (*domainRepos.FetchResult, error) {
 	url := source.TarballURL()
 	logger.Debugf("fetching tarball from %s", url)
 
@@ -38,8 +38,11 @@ func (r *HTTPSourceRepository) Fetch(source *entities.Source, cachedETag string)
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if cachedETag != "" {
-		req.Header.Set("If-None-Match", cachedETag)
+	if hints.ETag != "" {
+		req.Header.Set("If-None-Match", hints.ETag)
+	}
+	if hints.LastModified != "" {
+		req.Header.Set("If-Modified-Since", hints.LastModified)
 	}
 
 	resp, err := r.client.Do(req)
@@ -57,6 +60,7 @@ func (r *HTTPSourceRepository) Fetch(source *entities.Source, cachedETag string)
 	}
 
 	etag := resp.Header.Get("ETag")
+	lastModified := resp.Header.Get("Last-Modified")
 
 	files, err := r.extractMappedFiles(resp.Body, source)
 	if err != nil {
@@ -64,8 +68,9 @@ func (r *HTTPSourceRepository) Fetch(source *entities.Source, cachedETag string)
 	}
 
 	return &domainRepos.FetchResult{
-		Files: files,
-		ETag:  etag,
+		Files:        files,
+		ETag:         etag,
+		LastModified: lastModified,
 	}, nil
 }
 

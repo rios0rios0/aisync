@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
+	domainRepos "github.com/rios0rios0/aisync/internal/domain/repositories"
 	repositories "github.com/rios0rios0/aisync/internal/infrastructure/repositories"
 )
 
@@ -99,7 +100,7 @@ func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -146,7 +147,7 @@ func TestHTTPSourceRepository_Fetch_NotModified(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "\"cached-etag\"")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{ETag: "\"cached-etag\""})
 
 	// then
 	assert.NoError(t, err)
@@ -175,7 +176,7 @@ func TestHTTPSourceRepository_Fetch_NonOKStatus(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.Error(t, err)
@@ -211,7 +212,7 @@ func TestHTTPSourceRepository_Fetch_ETagCaptured(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -250,7 +251,7 @@ func TestHTTPSourceRepository_Fetch_MultipleMappings(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -292,7 +293,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSendIfNoneMatchHeader(t *testing.T) {
 	})
 
 	// when
-	_, _ = repo.Fetch(source, "\"my-cached-etag\"")
+	_, _ = repo.Fetch(source, domainRepos.CacheHints{ETag: "\"my-cached-etag\""})
 
 	// then
 	assert.Equal(t, "\"my-cached-etag\"", receivedETag)
@@ -321,7 +322,7 @@ func TestHTTPSourceRepository_Fetch_ShouldReturnErrorForInvalidGzip(t *testing.T
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.Error(t, err)
@@ -358,7 +359,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTarEntriesWithNoMatchingMapping(t 
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -465,7 +466,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTopLevelOnlyEntries(t *testing.T) 
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -524,7 +525,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -558,7 +559,7 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleEmptyTarball(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)
@@ -594,7 +595,7 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleExactFileMapping(t *testing.T) {
 	})
 
 	// when
-	result, err := repo.Fetch(source, "")
+	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
 	assert.NoError(t, err)

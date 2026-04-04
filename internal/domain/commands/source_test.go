@@ -256,4 +256,41 @@ func TestSourceCommand_Update(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "source repository not configured")
 	})
+
+	t.Run("should complete without error when two sources map to same target", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Sources: []entities.Source{
+					{Name: "source-a", Repo: "org/repo-a", Branch: "main"},
+					{Name: "source-b", Repo: "org/repo-b", Branch: "main"},
+				},
+			},
+		}
+		sourceRepo := &doubles.MockSourceRepository{
+			ResultsBySource: map[string]*repositories.FetchResult{
+				"source-a": {
+					Files: map[string][]byte{
+						"shared/claude/rules/overlap.md": []byte("# From A"),
+					},
+					ETag: "etag-a",
+				},
+				"source-b": {
+					Files: map[string][]byte{
+						"shared/claude/rules/overlap.md": []byte("# From B"),
+					},
+					ETag: "etag-b",
+				},
+			},
+		}
+		cmd := commands.NewSourceCommand(configRepo, sourceRepo)
+
+		// when
+		err := cmd.Update("/tmp/config.yaml", tmpDir, "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 2, sourceRepo.FetchCalls)
+	})
 }
