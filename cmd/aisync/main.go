@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/rios0rios0/cliforge/pkg/selfupdate"
 	logger "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -41,6 +42,8 @@ func main() {
 			setGitImpl(repo)
 		}
 	}
+
+	selfupdate.NewCommand("rios0rios0", "aisync", "aisync", version).CheckForUpdates()
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

@@ -17,6 +17,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ## [Unreleased]
 
 ### Added
+- added automatic version check on CLI startup using `CheckForUpdates`
 - added `aisync init` command to create or clone an `aifiles` repository
 - added `aisync source add/remove/list/update/pin` commands to manage external sources
 - added `aisync pull` command to fetch from external sources and apply to AI tool directories
