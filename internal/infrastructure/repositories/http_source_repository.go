@@ -131,7 +131,7 @@ func (r *HTTPSourceRepository) processTarEntry(
 	}
 	entryPath := filepath.Clean(parts[1])
 
-	if strings.HasPrefix(entryPath, "..") || strings.Contains(entryPath, "/..") {
+	if !filepath.IsLocal(entryPath) {
 		logger.Warnf("skipping potentially unsafe tar entry: %s", header.Name)
 		return
 	}
