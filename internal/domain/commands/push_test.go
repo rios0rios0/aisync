@@ -21,14 +21,14 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "CLAUDE.md"),
 			[]byte("# My Config"),
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{
@@ -72,7 +72,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -121,7 +121,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -157,7 +157,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{
 			Tools:      map[string]entities.Tool{},
@@ -190,14 +190,14 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "secrets.md"),
 			[]byte("API_KEY=sk-12345"),
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
@@ -240,7 +240,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -281,7 +281,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -317,7 +317,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -345,7 +345,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -377,20 +377,20 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(repoPath, ".aisyncencrypt"),
 			[]byte("*.secret"),
-			0644,
+			0600,
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "creds.secret"),
 			[]byte("my-secret"),
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{
@@ -441,7 +441,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -479,7 +479,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -515,7 +515,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -552,19 +552,19 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "rules/shared.md"),
 			[]byte("shared rule content"),
-			0644,
+			0600,
 		))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "rules/personal.md"),
 			[]byte("personal rule content"),
-			0644,
+			0600,
 		))
 
 		manifest := entities.NewManifest("0.1.0", "host")
@@ -621,11 +621,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "my-rule.md"), []byte("personal"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "my-rule.md"), []byte("personal"), 0600))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -658,19 +658,19 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		// Create .aisyncignore
 		require.NoError(t, os.WriteFile(
 			filepath.Join(repoPath, ".aisyncignore"),
 			[]byte("*.log"),
-			0644,
+			0600,
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "debug.log"), []byte("log data"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("rule content"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "debug.log"), []byte("log data"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("rule content"), 0600))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -717,11 +717,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "safe.md"), []byte("safe content"), 0644))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "safe.md"), []byte("safe content"), 0600))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -758,16 +758,16 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("same content"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("same content"), 0600))
 
 		// Pre-populate the personal directory with the same content
 		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "rule.md"), []byte("same content"), 0644))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "rule.md"), []byte("same content"), 0600))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -807,11 +807,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "creds.age"), []byte("encrypted"), 0644))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "creds.age"), []byte("encrypted"), 0600))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -848,7 +848,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -885,7 +885,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{Tools: map[string]entities.Tool{}}
 		configRepo := &doubles.MockConfigRepository{Config: config}
@@ -922,19 +922,19 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		// Create .aisyncencrypt
 		require.NoError(t, os.WriteFile(
 			filepath.Join(repoPath, ".aisyncencrypt"),
 			[]byte("*.secret"),
-			0644,
+			0600,
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "creds.secret"), []byte("secret"), 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("rule"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "creds.secret"), []byte("secret"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("rule"), 0600))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -969,11 +969,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "shared.md"), []byte("shared"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "shared.md"), []byte("shared"), 0600))
 
 		manifest := entities.NewManifest("0.1.0", "host")
 		manifest.SetFile("shared.md", "guide", "shared", "checksum")

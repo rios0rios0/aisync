@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -36,7 +37,11 @@ func NewWatchCommand(
 }
 
 // Execute starts watching AI tool directories for changes.
-func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debounce, pollingInterval time.Duration) error {
+func (c *WatchCommand) Execute(
+	configPath, repoPath string,
+	autoPush bool,
+	debounce, pollingInterval time.Duration,
+) error {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -46,6 +51,39 @@ func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debou
 		c.watchService.SetInterval(pollingInterval)
 	}
 
+	dirs := c.collectWatchDirs(config)
+	if len(dirs) == 0 {
+		return errors.New("no enabled AI tool directories found")
+	}
+
+	c.loadAndApplyIgnorePatterns(config, repoPath)
+
+	fmt.Fprintf(os.Stdout, "Watching %d directories for changes...\n", len(dirs))
+	if autoPush && c.pushCmd == nil {
+		return errors.New("auto-push is enabled but no push command is configured")
+	}
+
+	if autoPush {
+		fmt.Fprintf(os.Stdout, "Auto-push enabled (debounce: %s)\n", debounce)
+	}
+
+	callback := c.buildWatchCallback(configPath, repoPath, autoPush, debounce)
+
+	if err = c.watchService.Watch(dirs, callback); err != nil {
+		return fmt.Errorf("failed to start watcher: %w", err)
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	fmt.Fprintln(os.Stdout, "\nStopping watcher...")
+	c.watchService.Stop()
+	return nil
+}
+
+// collectWatchDirs returns the list of existing enabled AI tool directories.
+func (c *WatchCommand) collectWatchDirs(config *entities.Config) []string {
 	var dirs []string
 	for _, tool := range config.Tools {
 		if !tool.Enabled {
@@ -56,22 +94,20 @@ func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debou
 			dirs = append(dirs, dir)
 		}
 	}
+	return dirs
+}
 
-	if len(dirs) == 0 {
-		return fmt.Errorf("no enabled AI tool directories found")
-	}
-
-	// Load ignore patterns from both .aisyncignore and config.Watch.IgnoredPatterns.
+// loadAndApplyIgnorePatterns combines ignore patterns from .aisyncignore and
+// config.Watch.IgnoredPatterns, then applies them to the watch service.
+func (c *WatchCommand) loadAndApplyIgnorePatterns(config *entities.Config, repoPath string) {
 	var allPatterns []string
 
-	// Patterns from .aisyncignore file at repo root
 	ignorePath := filepath.Join(repoPath, ".aisyncignore")
 	if content, readErr := os.ReadFile(ignorePath); readErr == nil {
 		filePatterns := entities.ParseIgnorePatterns(content)
 		allPatterns = append(allPatterns, filePatterns.Patterns...)
 	}
 
-	// Patterns from config.yaml watch.ignored_patterns
 	allPatterns = append(allPatterns, config.Watch.IgnoredPatterns...)
 
 	if len(allPatterns) > 0 {
@@ -80,17 +116,20 @@ func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debou
 		logger.Infof("loaded %d ignore patterns (%d from .aisyncignore, %d from config)",
 			len(allPatterns), len(allPatterns)-len(config.Watch.IgnoredPatterns), len(config.Watch.IgnoredPatterns))
 	}
+}
 
-	fmt.Printf("Watching %d directories for changes...\n", len(dirs))
-	if autoPush {
-		fmt.Printf("Auto-push enabled (debounce: %s)\n", debounce)
-	}
-
+// buildWatchCallback creates the callback function for the watch service,
+// including debounced auto-push when enabled.
+func (c *WatchCommand) buildWatchCallback(
+	configPath, repoPath string,
+	autoPush bool,
+	debounce time.Duration,
+) func(event repositories.FileEvent) {
 	var mu sync.Mutex
 	var pending []repositories.FileEvent
 	var debounceTimer *time.Timer
 
-	callback := func(event repositories.FileEvent) {
+	return func(event repositories.FileEvent) {
 		logger.Infof("detected: %s %s", event.Op, event.Path)
 
 		if !autoPush {
@@ -122,17 +161,4 @@ func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debou
 			}
 		})
 	}
-
-	if err := c.watchService.Watch(dirs, callback); err != nil {
-		return fmt.Errorf("failed to start watcher: %w", err)
-	}
-
-	// Wait for interrupt signal
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	fmt.Println("\nStopping watcher...")
-	c.watchService.Stop()
-	return nil
 }

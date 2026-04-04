@@ -17,7 +17,7 @@ import (
 // clean/smudge filters for transparent encryption. These commands read from
 // stdin and write to stdout, conforming to git's filter protocol.
 func newFilterSubcmds(encSvc repositories.EncryptionService) []*cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cleanCmd := &cobra.Command{
 		Use:    "_clean",
 		Short:  "Git clean filter: encrypt stdin to stdout",
@@ -45,7 +45,7 @@ func newFilterSubcmds(encSvc repositories.EncryptionService) []*cobra.Command {
 		},
 	}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	smudgeCmd := &cobra.Command{
 		Use:    "_smudge",
 		Short:  "Git smudge filter: decrypt stdin to stdout",
@@ -74,6 +74,8 @@ func newFilterSubcmds(encSvc repositories.EncryptionService) []*cobra.Command {
 
 // findIdentityPath discovers the age identity file by walking up from the
 // current directory looking for config.yaml, or falling back to the default.
+//
+//nolint:unparam // error return reserved for future config parsing failures
 func findIdentityPath() (string, error) {
 	// Check AISYNC_KEY_FILE env var first.
 	if envKey := os.Getenv("AISYNC_KEY_FILE"); envKey != "" {
@@ -83,7 +85,7 @@ func findIdentityPath() (string, error) {
 	// Walk up from CWD looking for config.yaml to read the identity path.
 	dir, err := os.Getwd()
 	if err != nil {
-		return defaultIdentityPath(), nil
+		return defaultIdentityPath(), nil //nolint:nilerr // non-fatal: fall back to default path
 	}
 	for {
 		candidate := filepath.Join(dir, "config.yaml")
@@ -117,9 +119,31 @@ func expandIdentityPath(path string) string {
 		return filepath.Join(home, path[2:])
 	}
 	if strings.Contains(path, "%") {
-		return os.ExpandEnv(path)
+		return expandWindowsEnvVars(path)
 	}
-	return path
+	return os.ExpandEnv(path)
+}
+
+// expandWindowsEnvVars expands Windows-style %VAR% environment variables by
+// replacing each %VAR% with the corresponding [os.Getenv] value, then falls
+// back to [os.ExpandEnv] for any remaining $VAR/${VAR} patterns.
+func expandWindowsEnvVars(path string) string {
+	result := path
+	for {
+		start := strings.Index(result, "%")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(result[start+1:], "%")
+		if end < 0 {
+			break
+		}
+		end += start + 1
+		varName := result[start+1 : end]
+		value := os.Getenv(varName)
+		result = result[:start] + value + result[end+1:]
+	}
+	return os.ExpandEnv(result)
 }
 
 func defaultIdentityPath() string {

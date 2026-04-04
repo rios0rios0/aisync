@@ -89,15 +89,24 @@ func (s *State) GetLastModified(sourceName string) string {
 	return s.SourceLastModified[sourceName]
 }
 
+const (
+	uuidVersion4Bits = 0x40 // UUID version 4 marker (bits 12-15)
+	uuidVariantBits  = 0x80 // UUID RFC 4122 variant marker (bits 6-7)
+	uuidVersionMask  = 0x0f // mask to clear version bits before setting version 4
+	uuidVariantMask  = 0x3f // mask to clear variant bits before setting RFC 4122 variant
+)
+
 // generateUUID produces a v4 UUID string using crypto/rand.
 func generateUUID() string {
 	var uuid [16]byte
-	_, _ = rand.Read(uuid[:])
+	if _, err := rand.Read(uuid[:]); err != nil {
+		panic(fmt.Sprintf("crypto/rand.Read failed: %v", err))
+	}
 
 	// Set version 4 (bits 12-15 of time_hi_and_version)
-	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	uuid[6] = (uuid[6] & uuidVersionMask) | uuidVersion4Bits
 	// Set variant to RFC 4122 (bits 6-7 of clock_seq_hi_and_reserved)
-	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	uuid[8] = (uuid[8] & uuidVariantMask) | uuidVariantBits
 
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])

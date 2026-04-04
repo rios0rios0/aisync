@@ -146,8 +146,8 @@ func TestFSNotifyWatchService_Stop_ShouldBeIdempotent(t *testing.T) {
 func TestPollingWatchService_ScanDir_ShouldPopulateState(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
-	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("a"), 0644))
-	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("b"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("a"), 0600))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("b"), 0600))
 
 	svc := services.NewPollingWatchService(1 * time.Second)
 
@@ -165,7 +165,7 @@ func TestPollingWatchService_PollDir_ShouldDetectNewFile(t *testing.T) {
 	services.PollingScanDir(svc,tmpDir) // empty state initially
 
 	// Create a new file
-	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "new.txt"), []byte("new"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "new.txt"), []byte("new"), 0600))
 
 	var mu sync.Mutex
 	var events []repositories.FileEvent
@@ -189,7 +189,7 @@ func TestPollingWatchService_PollDir_ShouldDetectRemovedFile(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "remove-me.txt")
-	assert.NoError(t, os.WriteFile(filePath, []byte("data"), 0644))
+	assert.NoError(t, os.WriteFile(filePath, []byte("data"), 0600))
 
 	svc := services.NewPollingWatchService(1 * time.Second)
 	services.PollingScanDir(svc,tmpDir)
@@ -220,13 +220,13 @@ func TestPollingWatchService_PollDir_ShouldDetectModifiedFile(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "modify-me.txt")
-	assert.NoError(t, os.WriteFile(filePath, []byte("original"), 0644))
+	assert.NoError(t, os.WriteFile(filePath, []byte("original"), 0600))
 
 	svc := services.NewPollingWatchService(1 * time.Second)
 	services.PollingScanDir(svc,tmpDir)
 
 	// Modify with a future mtime
-	assert.NoError(t, os.WriteFile(filePath, []byte("modified content"), 0644))
+	assert.NoError(t, os.WriteFile(filePath, []byte("modified content"), 0600))
 	future := time.Now().Add(10 * time.Second)
 	assert.NoError(t, os.Chtimes(filePath, future, future))
 
@@ -251,7 +251,7 @@ func TestPollingWatchService_PollDir_ShouldDetectModifiedFile(t *testing.T) {
 func TestPollingWatchService_Watch_ShouldStartAndStop(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
-	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("data"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("data"), 0600))
 
 	svc := services.NewPollingWatchService(50 * time.Millisecond)
 

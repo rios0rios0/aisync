@@ -70,17 +70,11 @@ func (c *InitCommand) resolveCloneURL(githubUser, remoteURL string) string {
 // imported from that path into the configured identity location. Falls back to
 // the AISYNC_KEY_FILE environment variable when keyPath is empty.
 func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
-	// Fall back to AISYNC_KEY_FILE env var when no explicit key path is given.
-	if keyPath == "" {
-		if envKey := os.Getenv("AISYNC_KEY_FILE"); envKey != "" {
-			logger.Infof("using key file from AISYNC_KEY_FILE environment variable: %s", envKey)
-			keyPath = envKey
-		}
-	}
+	keyPath = c.resolveKeyPath(keyPath)
 
 	logger.Infof("cloning aifiles repo from %s into %s", cloneURL, repoPath)
 
-	if err := os.MkdirAll(filepath.Dir(repoPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(repoPath), 0700); err != nil {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
@@ -88,56 +82,92 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	// Import age identity if a key path was provided
 	if keyPath != "" {
-		configPath := filepath.Join(repoPath, "config.yaml")
-		config, loadErr := c.configRepo.Load(configPath)
-		if loadErr != nil {
-			logger.Warnf("failed to load config for key import: %v", loadErr)
-		} else {
-			destPath := ExpandHome(config.Encryption.Identity)
-			if err := os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {
-				return fmt.Errorf("failed to create identity directory: %w", err)
-			}
-			if err := c.encryptionService.ImportKey(keyPath, destPath); err != nil {
-				return fmt.Errorf("failed to import age identity: %w", err)
-			}
-			logger.Infof("imported age identity from %s to %s", keyPath, destPath)
+		if err := c.importAgeKey(repoPath, keyPath); err != nil {
+			return err
 		}
 	}
 
-	// Detect installed AI tools and update config for this device
-	configPath := filepath.Join(repoPath, "config.yaml")
-	if config, loadErr := c.configRepo.Load(configPath); loadErr == nil {
-		detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
-		if config.Tools == nil {
-			config.Tools = make(map[string]entities.Tool)
-		}
-		for name, tool := range detected {
-			if _, exists := config.Tools[name]; !exists {
-				config.Tools[name] = tool
-			}
-		}
-		if saveErr := c.configRepo.Save(configPath, config); saveErr != nil {
-			logger.Warnf("failed to update config with detected tools: %v", saveErr)
-		}
-	}
-
-	// Ensure state file exists for this device
-	hostname, _ := os.Hostname()
-	if !c.stateRepo.Exists(repoPath) {
-		state := entities.NewState(hostname)
-		if err := c.stateRepo.Save(repoPath, state); err != nil {
-			return fmt.Errorf("failed to write state: %w", err)
-		}
+	c.detectAndUpdateTools(repoPath)
+	if err := c.ensureStateExists(repoPath); err != nil {
+		return err
 	}
 
 	logger.Info("aifiles repo cloned successfully")
-	fmt.Printf("\nSync repo cloned to %s\n\n", repoPath)
-	fmt.Println("Next steps:")
-	fmt.Println("  aisync pull")
-	fmt.Println()
+	fmt.Fprintf(os.Stdout, "\nSync repo cloned to %s\n\n", repoPath)
+	fmt.Fprintln(os.Stdout, "Next steps:")
+	fmt.Fprintln(os.Stdout, "  aisync pull")
+	fmt.Fprintln(os.Stdout)
 
+	return nil
+}
+
+// resolveKeyPath falls back to the AISYNC_KEY_FILE env var when no explicit key
+// path is given.
+func (c *InitCommand) resolveKeyPath(keyPath string) string {
+	if keyPath == "" {
+		if envKey := os.Getenv("AISYNC_KEY_FILE"); envKey != "" {
+			logger.Infof("using key file from AISYNC_KEY_FILE environment variable: %s", envKey)
+			return envKey
+		}
+	}
+	return keyPath
+}
+
+// importAgeKey loads the config to determine the identity destination and imports
+// the age key from keyPath.
+func (c *InitCommand) importAgeKey(repoPath, keyPath string) error {
+	configPath := filepath.Join(repoPath, "config.yaml")
+	config, loadErr := c.configRepo.Load(configPath)
+	if loadErr != nil {
+		logger.Warnf("failed to load config for key import: %v", loadErr)
+		return nil
+	}
+
+	destPath := ExpandHome(config.Encryption.Identity)
+	if err := os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {
+		return fmt.Errorf("failed to create identity directory: %w", err)
+	}
+	if err := c.encryptionService.ImportKey(keyPath, destPath); err != nil {
+		return fmt.Errorf("failed to import age identity: %w", err)
+	}
+	logger.Infof("imported age identity from %s to %s", keyPath, destPath)
+	return nil
+}
+
+// detectAndUpdateTools detects installed AI tools and merges them into the config.
+func (c *InitCommand) detectAndUpdateTools(repoPath string) {
+	configPath := filepath.Join(repoPath, "config.yaml")
+	config, loadErr := c.configRepo.Load(configPath)
+	if loadErr != nil {
+		return
+	}
+
+	detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
+	if config.Tools == nil {
+		config.Tools = make(map[string]entities.Tool)
+	}
+	for name, tool := range detected {
+		if _, exists := config.Tools[name]; !exists {
+			config.Tools[name] = tool
+		}
+	}
+	if saveErr := c.configRepo.Save(configPath, config); saveErr != nil {
+		logger.Warnf("failed to update config with detected tools: %v", saveErr)
+	}
+}
+
+// ensureStateExists creates the state file for this device if it does not exist.
+func (c *InitCommand) ensureStateExists(repoPath string) error {
+	if c.stateRepo.Exists(repoPath) {
+		return nil
+	}
+
+	hostname, _ := os.Hostname()
+	state := entities.NewState(hostname)
+	if err := c.stateRepo.Save(repoPath, state); err != nil {
+		return fmt.Errorf("failed to write state: %w", err)
+	}
 	return nil
 }
 
@@ -151,6 +181,45 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 
 	logger.Infof("initializing aifiles repo at %s", repoPath)
 
+	if err := c.scaffoldDirectories(repoPath); err != nil {
+		return err
+	}
+
+	config := c.buildDefaultConfig()
+	if err := c.configRepo.Save(configPath, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	if err := c.generateAgeKeyIfMissing(configPath, config); err != nil {
+		return err
+	}
+
+	hostname, _ := os.Hostname()
+	state := entities.NewState(hostname)
+	if err := c.stateRepo.Save(repoPath, state); err != nil {
+		return fmt.Errorf("failed to write state: %w", err)
+	}
+
+	if err := c.initGitRepo(repoPath); err != nil {
+		return err
+	}
+
+	c.promptRemoteSetup()
+
+	logger.Info("aifiles repo initialized successfully")
+	fmt.Fprintf(os.Stdout, "\nSync repo initialized at %s\n\n", repoPath)
+	fmt.Fprintln(os.Stdout, "Next steps:")
+	fmt.Fprintln(os.Stdout, "  aisync source add <name> --repo <owner/repo> --branch <branch>")
+	fmt.Fprintln(os.Stdout, "  aisync pull")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "Browse curated sources at https://github.com/rios0rios0/guide")
+
+	return nil
+}
+
+// scaffoldDirectories creates the standard aifiles directory structure with
+// .gitkeep files in each directory.
+func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	dirs := []string{
 		"shared/claude/rules", "shared/claude/commands", "shared/claude/agents",
 		"shared/claude/hooks", "shared/claude/skills",
@@ -167,17 +236,21 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 
 	for _, dir := range dirs {
 		fullPath := filepath.Join(repoPath, dir)
-		if err := os.MkdirAll(fullPath, 0755); err != nil {
+		if err := os.MkdirAll(fullPath, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", fullPath, err)
 		}
 		gitkeep := filepath.Join(fullPath, ".gitkeep")
-		if err := os.WriteFile(gitkeep, []byte{}, 0644); err != nil {
+		if err := os.WriteFile(gitkeep, []byte{}, 0600); err != nil {
 			return fmt.Errorf("failed to create .gitkeep in %s: %w", fullPath, err)
 		}
 	}
+	return nil
+}
 
+// buildDefaultConfig creates the default aifiles config with detected tools.
+func (c *InitCommand) buildDefaultConfig() *entities.Config {
 	detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
-	config := &entities.Config{
+	return &entities.Config{
 		Sync: entities.SyncConfig{
 			Remote:       "",
 			Branch:       "main",
@@ -196,49 +269,46 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 			IgnoredPatterns: []string{"*.tmp", "*.swp"},
 		},
 	}
+}
 
-	if err := c.configRepo.Save(configPath, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	// Auto-generate age key pair if the identity file does not exist
+// generateAgeKeyIfMissing auto-generates an age key pair when the identity file
+// does not exist and updates the config with the public key as a recipient.
+func (c *InitCommand) generateAgeKeyIfMissing(configPath string, config *entities.Config) error {
 	identityPath := ExpandHome(config.Encryption.Identity)
-	if _, statErr := os.Stat(identityPath); os.IsNotExist(statErr) {
-		if err := os.MkdirAll(filepath.Dir(identityPath), 0700); err != nil {
-			return fmt.Errorf("failed to create identity directory: %w", err)
-		}
-
-		publicKey, genErr := c.encryptionService.GenerateKey(identityPath)
-		if genErr != nil {
-			return fmt.Errorf("failed to generate age key: %w", genErr)
-		}
-
-		config.Encryption.Recipients = []string{publicKey}
-		if err := c.configRepo.Save(configPath, config); err != nil {
-			return fmt.Errorf("failed to update config with recipient: %w", err)
-		}
-		logger.Infof("generated age key pair at %s", identityPath)
+	if _, statErr := os.Stat(identityPath); !os.IsNotExist(statErr) {
+		return nil
 	}
 
-	hostname, _ := os.Hostname()
-	state := entities.NewState(hostname)
-	if err := c.stateRepo.Save(repoPath, state); err != nil {
-		return fmt.Errorf("failed to write state: %w", err)
+	if err := os.MkdirAll(filepath.Dir(identityPath), 0700); err != nil {
+		return fmt.Errorf("failed to create identity directory: %w", err)
 	}
 
-	// Create .gitattributes: enforce LF line endings and configure encryption filter.
+	publicKey, genErr := c.encryptionService.GenerateKey(identityPath)
+	if genErr != nil {
+		return fmt.Errorf("failed to generate age key: %w", genErr)
+	}
+
+	config.Encryption.Recipients = []string{publicKey}
+	if err := c.configRepo.Save(configPath, config); err != nil {
+		return fmt.Errorf("failed to update config with recipient: %w", err)
+	}
+	logger.Infof("generated age key pair at %s", identityPath)
+	return nil
+}
+
+// initGitRepo initializes the Git repository, creates .gitattributes, and
+// configures the clean/smudge encryption filter.
+func (c *InitCommand) initGitRepo(repoPath string) error {
 	gitattributesContent := "* text=auto eol=lf\npersonal/*/memories/** filter=aisync-crypt diff=aisync-crypt\npersonal/*/settings.local.json filter=aisync-crypt diff=aisync-crypt\n"
 	gitattributesPath := filepath.Join(repoPath, ".gitattributes")
-	if err := os.WriteFile(gitattributesPath, []byte(gitattributesContent), 0644); err != nil {
+	if err := os.WriteFile(gitattributesPath, []byte(gitattributesContent), 0600); err != nil {
 		return fmt.Errorf("failed to create .gitattributes: %w", err)
 	}
 
-	// Initialize as a Git repository
 	if err := c.gitRepo.Init(repoPath); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
 	}
 
-	// Configure clean/smudge filter for transparent encryption.
 	filterConfigs := map[string]string{
 		"filter.aisync-crypt.clean":    "aisync _clean",
 		"filter.aisync-crypt.smudge":   "aisync _smudge",
@@ -249,10 +319,13 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 			logger.Warnf("failed to set %s: %v", key, err)
 		}
 	}
+	return nil
+}
 
-	// Offer to set up a remote for cross-device sync
-	fmt.Println("Tip: create a repo with \"gh repo create aifiles --private\" then paste the URL below")
-	fmt.Print("Remote Git URL (leave empty to skip): ")
+// promptRemoteSetup offers the user to configure a remote for cross-device sync.
+func (c *InitCommand) promptRemoteSetup() {
+	fmt.Fprintln(os.Stdout, "Tip: create a repo with \"gh repo create aifiles --private\" then paste the URL below")
+	fmt.Fprint(os.Stdout, "Remote Git URL (leave empty to skip): ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		if remoteURL := strings.TrimSpace(scanner.Text()); remoteURL != "" {
@@ -263,14 +336,4 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 			}
 		}
 	}
-
-	logger.Info("aifiles repo initialized successfully")
-	fmt.Printf("\nSync repo initialized at %s\n\n", repoPath)
-	fmt.Println("Next steps:")
-	fmt.Println("  aisync source add <name> --repo <owner/repo> --branch <branch>")
-	fmt.Println("  aisync pull")
-	fmt.Println()
-	fmt.Println("Browse curated sources at https://github.com/rios0rios0/guide")
-
-	return nil
 }

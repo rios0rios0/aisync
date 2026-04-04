@@ -207,8 +207,8 @@ func TestJSONStateRepository_Load_InvalidJSON(t *testing.T) {
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
 	aisyncDir := filepath.Join(repoPath, ".aisync")
-	assert.NoError(t, os.MkdirAll(aisyncDir, 0755))
-	assert.NoError(t, os.WriteFile(filepath.Join(aisyncDir, "state.json"), []byte("{bad json"), 0644))
+	assert.NoError(t, os.MkdirAll(aisyncDir, 0700))
+	assert.NoError(t, os.WriteFile(filepath.Join(aisyncDir, "state.json"), []byte("{bad json"), 0600))
 
 	// when
 	state, err := repo.Load(repoPath)

@@ -39,6 +39,12 @@ func (m *SectionMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, 
 
 	personalContent := extractPersonalContent(personal, m.separator)
 
+	// If there is no actual personal content after extraction, omit the separator.
+	trimmedPersonal := bytes.TrimSpace(personalContent)
+	if len(trimmedPersonal) == 0 {
+		return sharedContent, nil
+	}
+
 	var result bytes.Buffer
 	result.Write(bytes.TrimRight(sharedContent, "\n"))
 	result.WriteByte('\n')
@@ -57,12 +63,11 @@ func (m *SectionMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, 
 // returned. Otherwise, the entire content is treated as personal.
 func extractPersonalContent(content []byte, separator string) []byte {
 	sepBytes := []byte(separator)
-	idx := bytes.Index(content, sepBytes)
-	if idx == -1 {
+	_, after, ok := bytes.Cut(content, sepBytes)
+	if !ok {
 		return content
 	}
 
-	after := content[idx+len(sepBytes):]
 	trimmed := bytes.TrimLeft(after, "\n")
 	if len(trimmed) == 0 {
 		return nil

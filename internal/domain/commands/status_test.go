@@ -125,7 +125,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		manifest := entities.NewManifest("0.1.0", "test-host")
 		manifest.SetFile("rules/test.md", "guide", "shared", "checksum")
@@ -255,13 +255,13 @@ func TestStatusCommand_Execute(t *testing.T) {
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
 		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "my-rule.md"), []byte("local content"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "my-rule.md"), []byte("local content"), 0600))
 
 		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-rule.md"), []byte("repo content"), 0644))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-rule.md"), []byte("repo content"), 0600))
 
 		config := &entities.Config{
 			Sync: entities.SyncConfig{Branch: "main"},
@@ -289,11 +289,11 @@ func TestStatusCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules/shared.md"), []byte("shared rule"), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules/shared.md"), []byte("shared rule"), 0600))
 
 		manifest := entities.NewManifest("0.1.0", "host")
 		manifest.SetFile("rules/shared.md", "guide", "shared", "checksum")

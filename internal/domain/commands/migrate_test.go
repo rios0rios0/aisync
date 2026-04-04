@@ -21,15 +21,15 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		// Create a tool directory with a file
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "CLAUDE.md"),
 			[]byte("# My Personal Config"),
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{
@@ -63,17 +63,17 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		sharedContent := []byte("# Shared Rule Content")
 
 		// Create a tool directory with a file matching the source
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "rules", "test.md"),
 			sharedContent,
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{
@@ -146,11 +146,11 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "test.md"), []byte("content"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "test.md"), []byte("content"), 0600))
 
 		config := &entities.Config{
 			Sources: []entities.Source{},
@@ -175,15 +175,15 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		sharedContent := []byte("# Shared Rule")
 		personalContent := []byte("# My Personal Rule")
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules/shared.md"), sharedContent, 0644))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules/personal.md"), personalContent, 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules/shared.md"), sharedContent, 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules/personal.md"), personalContent, 0600))
 
 		config := &entities.Config{
 			Sources: []entities.Source{
@@ -228,7 +228,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		config := &entities.Config{
 			Sources: []entities.Source{},
@@ -253,11 +253,11 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "test.md"), []byte("content"), 0644))
+		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "test.md"), []byte("content"), 0600))
 
 		config := &entities.Config{
 			Sources: []entities.Source{

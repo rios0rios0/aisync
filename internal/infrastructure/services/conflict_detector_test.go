@@ -17,10 +17,10 @@ func TestConflictDetector_DetectConflicts_ShouldDetectConflictWhenBothSidesDiver
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version of the file")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "settings.json"), localContent, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "settings.json"), localContent, 0600))
 
 	incomingContent := []byte("remote version from another device")
 	incomingFiles := map[string][]byte{
@@ -60,10 +60,10 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalIsUnchanged(
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("unchanged content")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules.md"), localContent, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules.md"), localContent, 0600))
 
 	localChecksum := services.ChecksumContent(localContent)
 
@@ -93,7 +93,7 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalFileDoesNotE
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	incomingFiles := map[string][]byte{
 		"new-file.md": []byte("brand new file from remote"),
@@ -114,10 +114,10 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenBothSidesHaveSame
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	content := []byte("identical content on both sides")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), content, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), content, 0600))
 
 	incomingFiles := map[string][]byte{
 		"same.md": content,
@@ -138,10 +138,10 @@ func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLo
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
 
 	conflict := entities.Conflict{
 		Path:          "file.md",
@@ -152,7 +152,7 @@ func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLo
 	}
 
 	conflictPath := filepath.Join(toolDir, conflict.ConflictFileName())
-	assert.NoError(t, os.WriteFile(conflictPath, conflict.RemoteContent, 0644))
+	assert.NoError(t, os.WriteFile(conflictPath, conflict.RemoteContent, 0600))
 
 	detector := services.NewConflictDetector()
 
@@ -176,11 +176,11 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version")
 	remoteContent := []byte("remote version that wins")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
 
 	conflict := entities.Conflict{
 		Path:          "file.md",
@@ -191,7 +191,7 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 	}
 
 	conflictPath := filepath.Join(toolDir, conflict.ConflictFileName())
-	assert.NoError(t, os.WriteFile(conflictPath, remoteContent, 0644))
+	assert.NoError(t, os.WriteFile(conflictPath, remoteContent, 0600))
 
 	detector := services.NewConflictDetector()
 
@@ -233,10 +233,10 @@ func TestConflictDetector_DetectConflicts_ShouldDetectMultipleConflictsInOneCall
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file1.md"), []byte("local1"), 0644))
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file2.json"), []byte("local2"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file1.md"), []byte("local1"), 0600))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file2.json"), []byte("local2"), 0600))
 
 	incomingFiles := map[string][]byte{
 		"file1.md":   []byte("remote1"),
@@ -268,10 +268,10 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalFileIsEmpty(
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0755))
+	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	// Create an empty local file
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "empty.md"), []byte(""), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "empty.md"), []byte(""), 0600))
 
 	emptyChecksum := services.ChecksumContent([]byte(""))
 

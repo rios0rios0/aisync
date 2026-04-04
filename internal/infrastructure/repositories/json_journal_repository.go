@@ -31,7 +31,7 @@ func (r *JSONJournalRepository) Load() (*entities.Journal, error) {
 	}
 
 	var journal entities.Journal
-	if err := json.Unmarshal(data, &journal); err != nil {
+	if err = json.Unmarshal(data, &journal); err != nil {
 		return nil, fmt.Errorf("failed to parse journal file: %w", err)
 	}
 
@@ -41,7 +41,7 @@ func (r *JSONJournalRepository) Load() (*entities.Journal, error) {
 // Save writes the journal to <basePath>/journal.json, creating the directory
 // if it does not exist.
 func (r *JSONJournalRepository) Save(journal *entities.Journal) error {
-	if err := os.MkdirAll(r.basePath, 0755); err != nil {
+	if err := os.MkdirAll(r.basePath, 0700); err != nil {
 		return fmt.Errorf("failed to create journal directory: %w", err)
 	}
 
@@ -51,7 +51,7 @@ func (r *JSONJournalRepository) Save(journal *entities.Journal) error {
 	}
 
 	path := filepath.Join(r.basePath, journalFileName)
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err = os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write journal file: %w", err)
 	}
 
@@ -70,15 +70,15 @@ func (r *JSONJournalRepository) Exists() bool {
 func (r *JSONJournalRepository) Clear() error {
 	path := filepath.Join(r.basePath, journalFileName)
 
-	journal, err := r.Load()
-	if err == nil && journal.StagingDir != "" {
+	journal, loadErr := r.Load()
+	if loadErr == nil && journal.StagingDir != "" {
 		if removeErr := os.RemoveAll(journal.StagingDir); removeErr != nil {
 			return fmt.Errorf("failed to remove staging directory %s: %w", journal.StagingDir, removeErr)
 		}
 	}
 
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove journal file: %w", err)
+	if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+		return fmt.Errorf("failed to remove journal file: %w", removeErr)
 	}
 
 	return nil

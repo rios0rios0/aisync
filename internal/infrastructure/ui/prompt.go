@@ -10,6 +10,10 @@ import (
 	"golang.org/x/term"
 )
 
+const actionAbort = "abort"
+const actionSkipValue = "skip"
+const actionApplyValue = "apply"
+
 // HuhPromptService provides interactive prompts using charmbracelet/huh for
 // TTY environments, falling back to simple stdin/stdout otherwise.
 type HuhPromptService struct{}
@@ -29,16 +33,16 @@ func (s *HuhPromptService) PromptToolAction(toolName string) string {
 	err := huh.NewSelect[string]().
 		Title(fmt.Sprintf("Apply changes to %s?", toolName)).
 		Options(
-			huh.NewOption("Apply", "apply"),
-			huh.NewOption("Skip", "skip"),
+			huh.NewOption("Apply", actionApplyValue),
+			huh.NewOption("Skip", actionSkipValue),
 			huh.NewOption("Show diff", "diff"),
-			huh.NewOption("Abort", "abort"),
+			huh.NewOption("Abort", actionAbort),
 		).
 		Value(&choice).
 		Run()
 
 	if err != nil {
-		return "abort"
+		return actionAbort
 	}
 	return choice
 }
@@ -81,7 +85,7 @@ func (s *HuhPromptService) PromptConflictResolution(path, remoteDevice string) s
 		Run()
 
 	if err != nil {
-		return "skip"
+		return actionSkipValue
 	}
 	return choice
 }
@@ -96,21 +100,21 @@ func (s *HuhPromptService) PromptFileAction(path, direction string) string {
 	err := huh.NewSelect[string]().
 		Title(fmt.Sprintf("[%s] %s", direction, path)).
 		Options(
-			huh.NewOption("Apply", "apply"),
-			huh.NewOption("Skip", "skip"),
+			huh.NewOption("Apply", actionApplyValue),
+			huh.NewOption("Skip", actionSkipValue),
 		).
 		Value(&choice).
 		Run()
 
 	if err != nil {
-		return "apply"
+		return actionApplyValue
 	}
 	return choice
 }
 
 // isInteractive returns true if stdin is a terminal.
 func isInteractive() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	return term.IsTerminal(int(os.Stdin.Fd())) //nolint:gosec // fd conversion is safe on all supported platforms
 }
 
 // Fallback prompts for non-interactive environments.
@@ -118,27 +122,27 @@ func isInteractive() bool {
 func promptToolActionFallback(toolName string) string {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Printf("Apply changes to %s? [y/n/d(iff)/s(kip)]: ", toolName)
+		fmt.Fprintf(os.Stdout, "Apply changes to %s? [y/n/d(iff)/s(kip)]: ", toolName)
 		if !scanner.Scan() {
-			return "abort"
+			return actionAbort
 		}
 		switch strings.TrimSpace(strings.ToLower(scanner.Text())) {
 		case "y", "yes":
-			return "apply"
+			return actionApplyValue
 		case "n", "no":
-			return "abort"
+			return actionAbort
 		case "d", "diff":
 			return "diff"
 		case "s", "skip":
-			return "skip"
+			return actionSkipValue
 		default:
-			fmt.Println("Please enter y, n, d, or s.")
+			fmt.Fprintln(os.Stdout, "Please enter y, n, d, or s.")
 		}
 	}
 }
 
 func promptConfirmationFallback(prompt string) bool {
-	fmt.Printf("%s [y/N]: ", prompt)
+	fmt.Fprintf(os.Stdout, "%s [y/N]: ", prompt)
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
@@ -148,25 +152,25 @@ func promptConfirmationFallback(prompt string) bool {
 }
 
 func promptFileActionFallback(path, direction string) string {
-	fmt.Printf("  [%s] %s — apply? [Y/n]: ", direction, path)
+	fmt.Fprintf(os.Stdout, "  [%s] %s — apply? [Y/n]: ", direction, path)
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if answer == "n" || answer == "no" {
-			return "skip"
+			return actionSkipValue
 		}
 	}
-	return "apply"
+	return actionApplyValue
 }
 
 func promptConflictFallback(path, remoteDevice string) string {
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Printf("\nConflict: %s\n", path)
-	fmt.Printf("  Local version differs from incoming (from device '%s')\n", remoteDevice)
+	fmt.Fprintf(os.Stdout, "\nConflict: %s\n", path)
+	fmt.Fprintf(os.Stdout, "  Local version differs from incoming (from device '%s')\n", remoteDevice)
 	for {
-		fmt.Print("  [l]ocal / [r]emote / [s]kip: ")
+		fmt.Fprint(os.Stdout, "  [l]ocal / [r]emote / [s]kip: ")
 		if !scanner.Scan() {
-			return "skip"
+			return actionSkipValue
 		}
 		switch strings.TrimSpace(strings.ToLower(scanner.Text())) {
 		case "l", "local":
@@ -174,9 +178,9 @@ func promptConflictFallback(path, remoteDevice string) string {
 		case "r", "remote":
 			return "remote"
 		case "s", "skip":
-			return "skip"
+			return actionSkipValue
 		default:
-			fmt.Println("  Please enter l, r, or s.")
+			fmt.Fprintln(os.Stdout, "  Please enter l, r, or s.")
 		}
 	}
 }

@@ -53,9 +53,9 @@ func (c *FileChange) HasClockSkew() bool {
 
 // DiffResult holds the complete set of detected changes grouped by category.
 type DiffResult struct {
-	SharedChanges      []FileChange
-	PersonalChanges    []FileChange
-	LocalUncommitted   []FileChange
+	SharedChanges    []FileChange
+	PersonalChanges  []FileChange
+	LocalUncommitted []FileChange
 }
 
 // HasChanges returns true if any changes were detected.

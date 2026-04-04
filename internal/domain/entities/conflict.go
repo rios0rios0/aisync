@@ -2,10 +2,10 @@ package entities
 
 // Conflict represents a divergent change on a personal file between two devices.
 type Conflict struct {
-	Path         string
-	LocalDevice  string
-	RemoteDevice string
-	LocalContent []byte
+	Path          string
+	LocalDevice   string
+	RemoteDevice  string
+	LocalContent  []byte
 	RemoteContent []byte
 }
 

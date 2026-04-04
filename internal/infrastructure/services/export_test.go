@@ -13,31 +13,31 @@ import (
 const DefaultSeparator = defaultSeparator
 
 // ChecksumContent exposes checksumContent for black-box testing.
-var ChecksumContent = checksumContent
+var ChecksumContent = checksumContent //nolint:gochecknoglobals // test export for black-box testing
 
 // MoveFile exposes moveFile for black-box testing.
-var MoveFile = moveFile
+var MoveFile = moveFile //nolint:gochecknoglobals // test export for black-box testing
 
 // ComputeChecksum exposes computeChecksum for black-box testing.
-var ComputeChecksum = computeChecksum
+var ComputeChecksum = computeChecksum //nolint:gochecknoglobals // test export for black-box testing
 
 // ReadExistingChecksum exposes readExistingChecksum for black-box testing.
-var ReadExistingChecksum = readExistingChecksum
+var ReadExistingChecksum = readExistingChecksum //nolint:gochecknoglobals // test export for black-box testing
 
 // NormalizeLineEndings exposes normalizeLineEndings for black-box testing.
-var NormalizeLineEndings = normalizeLineEndings
+var NormalizeLineEndings = normalizeLineEndings //nolint:gochecknoglobals // test export for black-box testing
 
 // IsBinaryContent exposes isBinaryContent for black-box testing.
-var IsBinaryContent = isBinaryContent
+var IsBinaryContent = isBinaryContent //nolint:gochecknoglobals // test export for black-box testing
 
 // ExpandHomePath exposes expandHomePath for black-box testing.
-var ExpandHomePath = expandHomePath
+var ExpandHomePath = expandHomePath //nolint:gochecknoglobals // test export for black-box testing
 
 // SourceFromIncoming exposes sourceFromIncoming for black-box testing.
-var SourceFromIncoming = sourceFromIncoming
+var SourceFromIncoming = sourceFromIncoming //nolint:gochecknoglobals // test export for black-box testing
 
 // ChecksumData exposes checksumData for black-box testing.
-var ChecksumData = checksumData
+var ChecksumData = checksumData //nolint:gochecknoglobals // test export for black-box testing
 
 // MapOp exposes mapOp for black-box testing.
 func MapOp(op fsnotify.Op) string {

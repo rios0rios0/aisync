@@ -98,7 +98,7 @@ func TestExecGitRepository_IsClean_ShouldReturnTrueForFreshRepo(t *testing.T) {
 func TestExecGitRepository_IsClean_ShouldReturnFalseWithUnstagedChanges(t *testing.T) {
 	// given
 	repo, dir := initTempRepo(t)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0600))
 
 	// when
 	clean, err := repo.IsClean()
@@ -111,7 +111,7 @@ func TestExecGitRepository_IsClean_ShouldReturnFalseWithUnstagedChanges(t *testi
 func TestExecGitRepository_CommitAll_ShouldMakeRepoClean(t *testing.T) {
 	// given
 	repo, dir := initTempRepo(t)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0600))
 
 	// when
 	err := repo.CommitAll("test commit")
@@ -173,7 +173,7 @@ func TestExecGitRepository_Clone_ShouldCloneFromLocalRepo(t *testing.T) {
 	require.NoError(t, repo.Init(srcDir))
 	_ = exec.Command("git", "-C", srcDir, "config", "user.email", "test@test.com").Run() //nolint:gosec
 	_ = exec.Command("git", "-C", srcDir, "config", "user.name", "Test").Run()           //nolint:gosec
-	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("# Test"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("# Test"), 0600))
 	require.NoError(t, repo.CommitAll("initial commit"))
 
 	// when

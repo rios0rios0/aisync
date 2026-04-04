@@ -71,7 +71,7 @@ func TestYAMLConfigRepository_Load_InvalidYAML(t *testing.T) {
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	err := os.WriteFile(path, []byte(":\tinvalid:\n\t- [yaml broken"), 0644)
+	err := os.WriteFile(path, []byte(":\tinvalid:\n\t- [yaml broken"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -101,7 +101,7 @@ func TestYAMLConfigRepository_Exists_ExistingFile(t *testing.T) {
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	err := os.WriteFile(path, []byte("sync:\n  branch: main\n"), 0644)
+	err := os.WriteFile(path, []byte("sync:\n  branch: main\n"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -231,7 +231,7 @@ tools:
     path: "~/.claude"
     enabled: true
 `
-	err := os.WriteFile(path, []byte(content), 0644)
+	err := os.WriteFile(path, []byte(content), 0600)
 	assert.NoError(t, err)
 
 	// when

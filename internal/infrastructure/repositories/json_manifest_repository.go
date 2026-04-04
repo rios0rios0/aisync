@@ -28,7 +28,7 @@ func (r *JSONManifestRepository) Load(toolDir string) (*entities.Manifest, error
 	}
 
 	var manifest entities.Manifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	if err = json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("failed to parse manifest: %w", err)
 	}
 
@@ -43,11 +43,11 @@ func (r *JSONManifestRepository) Save(toolDir string, manifest *entities.Manifes
 		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 
-	if err := os.MkdirAll(toolDir, 0755); err != nil {
+	if err = os.MkdirAll(toolDir, 0700); err != nil {
 		return fmt.Errorf("failed to create tool directory: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err = os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write manifest: %w", err)
 	}
 

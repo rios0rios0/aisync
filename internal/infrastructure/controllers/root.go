@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,12 @@ import (
 	"github.com/rios0rios0/aisync/internal/infrastructure/ui"
 
 	"github.com/rios0rios0/cliforge/pkg/selfupdate"
+)
+
+const (
+	pollingWatchInterval = 30 * time.Second
+	defaultDebounce      = 60 * time.Second
+	deviceRenameArgs     = 2
 )
 
 // DefaultRepoPath returns the default aifiles repo location.
@@ -36,20 +43,20 @@ type gitRepoProxy struct {
 	impl repositories.GitRepository
 }
 
-func (p *gitRepoProxy) Clone(url, dir, branch string) error  { return p.impl.Clone(url, dir, branch) }
-func (p *gitRepoProxy) Init(dir string) error                { return p.impl.Init(dir) }
-func (p *gitRepoProxy) Open(dir string) error                { return p.impl.Open(dir) }
-func (p *gitRepoProxy) Pull() error                          { return p.impl.Pull() }
-func (p *gitRepoProxy) CommitAll(message string) error        { return p.impl.CommitAll(message) }
-func (p *gitRepoProxy) Push() error                          { return p.impl.Push() }
-func (p *gitRepoProxy) IsClean() (bool, error)               { return p.impl.IsClean() }
-func (p *gitRepoProxy) HasRemote() bool                      { return p.impl.HasRemote() }
-func (p *gitRepoProxy) AddRemote(name, url string) error     { return p.impl.AddRemote(name, url) }
-func (p *gitRepoProxy) SetConfig(key, value string) error    { return p.impl.SetConfig(key, value) }
+func (p *gitRepoProxy) Clone(url, dir, branch string) error { return p.impl.Clone(url, dir, branch) }
+func (p *gitRepoProxy) Init(dir string) error               { return p.impl.Init(dir) }
+func (p *gitRepoProxy) Open(dir string) error               { return p.impl.Open(dir) }
+func (p *gitRepoProxy) Pull() error                         { return p.impl.Pull() }
+func (p *gitRepoProxy) CommitAll(message string) error      { return p.impl.CommitAll(message) }
+func (p *gitRepoProxy) Push() error                         { return p.impl.Push() }
+func (p *gitRepoProxy) IsClean() (bool, error)              { return p.impl.IsClean() }
+func (p *gitRepoProxy) HasRemote() bool                     { return p.impl.HasRemote() }
+func (p *gitRepoProxy) AddRemote(name, url string) error    { return p.impl.AddRemote(name, url) }
+func (p *gitRepoProxy) SetConfig(key, value string) error   { return p.impl.SetConfig(key, value) }
 
 // NewExecGitRepository re-exports the infrastructure constructor so that main.go
 // can create it when --use-system-git is set.
-var NewExecGitRepository = infraRepos.NewExecGitRepository
+var NewExecGitRepository = infraRepos.NewExecGitRepository //nolint:gochecknoglobals // re-exported constructor for main.go
 
 // NewRootCommand builds the root cobra command with all subcommands. It returns
 // the root command and a function that swaps the git implementation to the
@@ -74,7 +81,7 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	// Watch service: fsnotify on desktop, polling on Android
 	var watchSvc repositories.WatchService
 	if runtime.GOOS == "android" || os.Getenv("ANDROID_ROOT") != "" {
-		watchSvc = services.NewPollingWatchService(30 * time.Second)
+		watchSvc = services.NewPollingWatchService(pollingWatchInterval)
 	} else {
 		watchSvc = services.NewFSNotifyWatchService()
 	}
@@ -107,7 +114,7 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	migrateCmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 	watchCmd := commands.NewWatchCommand(configRepo, watchSvc, pushCmd)
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	root := &cobra.Command{
 		Use:   "aisync",
 		Short: "Sync AI coding assistant configurations across devices",
@@ -183,7 +190,7 @@ func resolveRepoPath(cmd *cobra.Command) string {
 // --- Subcommands ---
 
 func newInitSubcmd(initCmd *commands.InitCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "init [github-user]",
 		Short: "Initialize a new aifiles repository or clone an existing one",
@@ -205,13 +212,13 @@ func newInitSubcmd(initCmd *commands.InitCommand) *cobra.Command {
 }
 
 func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	parent := &cobra.Command{
 		Use:   "source",
 		Short: "Manage external sources",
 	}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	addCmd := &cobra.Command{
 		Use:   "add [name]",
 		Short: "Add an external source",
@@ -224,7 +231,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 			}
 
 			if len(args) == 0 {
-				return fmt.Errorf("name is required when --from-url is not specified")
+				return errors.New("name is required when --from-url is not specified")
 			}
 
 			repo, _ := cmd.Flags().GetString("source-repo")
@@ -256,7 +263,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 	addCmd.Flags().String("path", "", "subdirectory within the source repo to restrict mappings")
 	addCmd.Flags().String("from-url", "", "import source definition from a remote YAML URL")
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	removeCmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove an external source",
@@ -266,7 +273,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 		},
 	}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List configured external sources",
@@ -276,7 +283,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 		},
 	}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	updateCmd := &cobra.Command{
 		Use:   "update [name]",
 		Short: "Re-fetch external sources (ignoring refresh interval)",
@@ -290,7 +297,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 		},
 	}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	pinCmd := &cobra.Command{
 		Use:   "pin <name>",
 		Short: "Pin a source to a specific tag or SHA",
@@ -308,7 +315,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 }
 
 func newPullSubcmd(pullCmd *commands.PullCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "pull",
 		Short: "Pull shared rules from external sources and apply to AI tool directories",
@@ -331,7 +338,7 @@ func newPullSubcmd(pullCmd *commands.PullCommand) *cobra.Command {
 }
 
 func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push personal file changes to the sync repo",
@@ -350,7 +357,7 @@ func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
 }
 
 func newSyncSubcmd(syncCmd *commands.SyncCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Pull then push (daily workflow)",
@@ -365,7 +372,7 @@ func newSyncSubcmd(syncCmd *commands.SyncCommand) *cobra.Command {
 }
 
 func newDiffSubcmd(diffCmd *commands.DiffCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "diff",
 		Short: "Preview what would change on pull",
@@ -399,7 +406,7 @@ func newDiffSubcmd(diffCmd *commands.DiffCommand) *cobra.Command {
 }
 
 func newWatchSubcmd(watchCmd *commands.WatchCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "watch",
 		Short: "Monitor file changes in real-time",
@@ -408,7 +415,7 @@ func newWatchSubcmd(watchCmd *commands.WatchCommand) *cobra.Command {
 			autoPush, _ := cmd.Flags().GetBool("auto-push")
 			interval, _ := cmd.Flags().GetString("interval")
 			pollingStr, _ := cmd.Flags().GetString("polling-interval")
-			debounce := 60 * time.Second
+			debounce := defaultDebounce
 			if d, err := time.ParseDuration(interval); err == nil {
 				debounce = d
 			}
@@ -426,7 +433,7 @@ func newWatchSubcmd(watchCmd *commands.WatchCommand) *cobra.Command {
 }
 
 func newStatusSubcmd(statusCmd *commands.StatusCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show sync state, managed files, and source freshness",
@@ -439,15 +446,19 @@ func newStatusSubcmd(statusCmd *commands.StatusCommand) *cobra.Command {
 }
 
 func newKeySubcmd(keyCmd *commands.KeyCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	parent := &cobra.Command{Use: "key", Short: "Manage age encryption keys"}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	parent.AddCommand(
 		&cobra.Command{Use: "generate", Short: "Generate a new age key pair", Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return keyCmd.Generate(resolveConfigPath(cmd)) }},
-		&cobra.Command{Use: "import <path>", Short: "Import an existing age key", Args: cobra.ExactArgs(1),
-			RunE: func(cmd *cobra.Command, args []string) error { return keyCmd.Import(resolveConfigPath(cmd), args[0]) }},
+		&cobra.Command{
+			Use:   "import <path>",
+			Short: "Import an existing age key",
+			Args:  cobra.ExactArgs(1),
+			RunE:  func(cmd *cobra.Command, args []string) error { return keyCmd.Import(resolveConfigPath(cmd), args[0]) },
+		},
 		&cobra.Command{Use: "export", Short: "Export the public key", Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return keyCmd.Export(resolveConfigPath(cmd)) }},
 		&cobra.Command{Use: "add-recipient <public-key>", Short: "Add an age recipient", Args: cobra.ExactArgs(1),
@@ -459,14 +470,14 @@ func newKeySubcmd(keyCmd *commands.KeyCommand) *cobra.Command {
 }
 
 func newDeviceSubcmd(deviceCmd *commands.DeviceCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	parent := &cobra.Command{Use: "device", Short: "Manage registered devices"}
 
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	parent.AddCommand(
 		&cobra.Command{Use: "list", Short: "List registered devices", Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return deviceCmd.List(resolveRepoPath(cmd)) }},
-		&cobra.Command{Use: "rename <old> <new>", Short: "Rename a device", Args: cobra.ExactArgs(2),
+		&cobra.Command{Use: "rename <old> <new>", Short: "Rename a device", Args: cobra.ExactArgs(deviceRenameArgs),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return deviceCmd.Rename(resolveRepoPath(cmd), args[0], args[1])
 			}},
@@ -479,7 +490,7 @@ func newDeviceSubcmd(deviceCmd *commands.DeviceCommand) *cobra.Command {
 }
 
 func newDoctorSubcmd(doctorCmd *commands.DoctorCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	return &cobra.Command{
 		Use: "doctor", Short: "Diagnose common issues", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -489,7 +500,7 @@ func newDoctorSubcmd(doctorCmd *commands.DoctorCommand) *cobra.Command {
 }
 
 func newMigrateSubcmd(migrateCmd *commands.MigrateCommand) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	cmd := &cobra.Command{
 		Use: "migrate", Short: "Migrate from legacy setups", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -503,7 +514,7 @@ func newMigrateSubcmd(migrateCmd *commands.MigrateCommand) *cobra.Command {
 
 func newSelfUpdateSubcmd(version string) *cobra.Command {
 	updateCmd := selfupdate.NewCommand("rios0rios0", "aisync", "aisync", version)
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	return &cobra.Command{
 		Use: "self-update", Short: "Update aisync to the latest version", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -515,10 +526,10 @@ func newSelfUpdateSubcmd(version string) *cobra.Command {
 }
 
 func newVersionSubcmd(version string) *cobra.Command {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	return &cobra.Command{
 		Use: "version", Short: "Print aisync version", Args: cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) { println("aisync " + version) },
+		Run: func(_ *cobra.Command, _ []string) { fmt.Fprintln(os.Stdout, "aisync "+version) },
 	}
 }
 

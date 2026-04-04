@@ -8,7 +8,7 @@ func SetHTTPSourceClient(r *HTTPSourceRepository, c *http.Client) {
 }
 
 // MatchesMapping exposes matchesMapping for black-box testing.
-var MatchesMapping = matchesMapping
+var MatchesMapping = matchesMapping //nolint:gochecknoglobals // test export for black-box testing
 
 // RemapPath exposes remapPath for black-box testing.
-var RemapPath = remapPath
+var RemapPath = remapPath //nolint:gochecknoglobals // test export for black-box testing

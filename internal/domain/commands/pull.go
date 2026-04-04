@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
+
+const actionSkip = "skip"
 
 // PullOptions holds the flags that modify pull behavior.
 type PullOptions struct {
@@ -94,18 +97,18 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	}
 
 	if len(config.Sources) == 0 {
-		fmt.Println("No external sources configured. Add one with: aisync source add")
+		fmt.Fprintln(os.Stdout, "No external sources configured. Add one with: aisync source add")
 		return nil
 	}
 
 	// Step 1: Pull personal changes from the sync repo (other devices).
-	if err := c.pullGitRepo(repoPath); err != nil {
-		logger.Warnf("git pull skipped: %v", err)
+	if pullErr := c.pullGitRepo(repoPath); pullErr != nil {
+		logger.Warnf("git pull skipped: %v", pullErr)
 	}
 
 	// Step 2: Recover any incomplete atomic apply from a previous run.
-	if err := c.applyService.Recover(); err != nil {
-		logger.Warnf("failed to recover incomplete apply: %v", err)
+	if recoverErr := c.applyService.Recover(); recoverErr != nil {
+		logger.Warnf("failed to recover incomplete apply: %v", recoverErr)
 	}
 
 	// Step 3: Load state for ETag caching.
@@ -123,19 +126,19 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	allFiles, sourceFileMap := c.fetchSources(config, state, opts.SourceFilter)
 
 	// Step 5: Save updated ETags back to state.
-	if err := c.stateRepo.Save(repoPath, state); err != nil {
-		logger.Warnf("failed to save state after fetching sources: %v", err)
+	if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
+		logger.Warnf("failed to save state after fetching sources: %v", saveErr)
 	}
 
 	if len(allFiles) == 0 {
-		fmt.Println("All sources are up to date.")
+		fmt.Fprintln(os.Stdout, "All sources are up to date.")
 		return nil
 	}
 
 	// Step 5b: Per-file checksum verification against previous sync repo contents.
 	// Warn when a file's content changed but the source ETag did not, which may
 	// indicate a force-push or silent upstream modification.
-	if err := c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
+	if err = c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
 		return err
 	}
 
@@ -151,11 +154,11 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 			continue
 		}
 
-		if err := c.applyToToolDir(
+		if applyErr := c.applyToToolDir(
 			config, repoPath, toolName, tool, allFiles, sourceFileMap,
 			encryptPatterns, opts,
-		); err != nil {
-			logger.Warnf("failed to apply to tool %s: %v", toolName, err)
+		); applyErr != nil {
+			logger.Warnf("failed to apply to tool %s: %v", toolName, applyErr)
 		}
 	}
 
@@ -165,11 +168,11 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	if device := state.FindDevice(hostname); device != nil {
 		device.LastSync = time.Now()
 	}
-	if err := c.stateRepo.Save(repoPath, state); err != nil {
-		logger.Warnf("failed to update state after pull: %v", err)
+	if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
+		logger.Warnf("failed to update state after pull: %v", saveErr)
 	}
 
-	fmt.Println("Pull complete.")
+	fmt.Fprintln(os.Stdout, "Pull complete.")
 	return nil
 }
 
@@ -180,7 +183,7 @@ func (c *PullCommand) pullGitRepo(repoPath string) error {
 	}
 
 	if !c.gitRepo.HasRemote() {
-		return fmt.Errorf("no remote configured")
+		return errors.New("no remote configured")
 	}
 
 	if err := c.gitRepo.Pull(); err != nil {
@@ -330,7 +333,7 @@ func (c *PullCommand) writeToSyncRepo(repoPath string, allFiles map[string]fileE
 		destPath := filepath.Join(repoPath, relPath)
 		destDir := filepath.Dir(destPath)
 
-		if err := os.MkdirAll(destDir, 0755); err != nil {
+		if err := os.MkdirAll(destDir, 0700); err != nil {
 			logger.Warnf("failed to create directory %s: %v", destDir, err)
 			continue
 		}
@@ -341,7 +344,7 @@ func (c *PullCommand) writeToSyncRepo(repoPath string, allFiles map[string]fileE
 			continue
 		}
 
-		if err := os.WriteFile(destPath, entry.content, 0644); err != nil {
+		if err := os.WriteFile(destPath, entry.content, 0600); err != nil {
 			logger.Warnf("failed to write %s: %v", destPath, err)
 			continue
 		}
@@ -367,18 +370,86 @@ func (c *PullCommand) applyToToolDir(
 	prefix := "shared/" + toolName + "/"
 	hostname, _ := os.Hostname()
 
-	// Load existing manifest for deletion detection.
-	var oldManifest *entities.Manifest
-	if c.manifestRepo.Exists(toolDir) {
-		loaded, err := c.manifestRepo.Load(toolDir)
-		if err == nil {
-			oldManifest = loaded
+	oldManifest := c.loadOldManifest(toolDir)
+	manifest := entities.NewManifest("0.1.0", hostname)
+
+	pendingFiles := c.collectSharedFiles(
+		config, repoPath, toolName, toolDir, prefix, allFiles,
+		sourceFileMap, encryptPatterns, manifest, opts,
+	)
+
+	c.applyPersonalOnlyFiles(
+		repoPath, toolName, toolDir, prefix, allFiles,
+		pendingFiles, manifest, encryptPatterns, config,
+	)
+
+	c.detectAndResolveConflicts(
+		repoPath, toolName, toolDir, hostname, oldManifest,
+		encryptPatterns, config, pendingFiles, manifest, opts,
+	)
+
+	deletions := c.detectDeletions(oldManifest, manifest, toolDir)
+
+	if len(pendingFiles) == 0 && len(deletions) == 0 {
+		logger.Infof("tool %s: no changes", toolName)
+		return nil
+	}
+
+	if opts.DryRun {
+		c.printDryRun(toolName, pendingFiles, deletions, toolDir)
+		return nil
+	}
+
+	if !opts.Force {
+		proceed, confirmErr := c.confirmToolApply(toolName, pendingFiles, deletions, toolDir)
+		if confirmErr != nil {
+			return confirmErr
+		}
+		if !proceed {
+			return nil
 		}
 	}
 
-	manifest := entities.NewManifest("0.1.0", hostname)
+	c.filterPerFileSkips(toolDir, pendingFiles, opts)
 
-	// Collect files destined for this tool, respecting merge strategies.
+	if err := c.atomicApply(toolName, pendingFiles); err != nil {
+		return err
+	}
+
+	c.processDeletions(deletions)
+
+	if err := c.manifestRepo.Save(toolDir, manifest); err != nil {
+		logger.Warnf("failed to save manifest for %s: %v", toolName, err)
+	}
+
+	logger.Infof("tool %s: applied %d files, deleted %d files", toolName, len(pendingFiles), len(deletions))
+	return nil
+}
+
+// loadOldManifest loads the existing manifest from a tool directory for deletion
+// detection. Returns nil if no manifest exists.
+func (c *PullCommand) loadOldManifest(toolDir string) *entities.Manifest {
+	if !c.manifestRepo.Exists(toolDir) {
+		return nil
+	}
+	loaded, err := c.manifestRepo.Load(toolDir)
+	if err != nil {
+		return nil
+	}
+	return loaded
+}
+
+// collectSharedFiles iterates over all shared files destined for a tool,
+// applies merge strategies and personal overrides, and populates the manifest.
+func (c *PullCommand) collectSharedFiles(
+	config *entities.Config,
+	repoPath, toolName, toolDir, prefix string,
+	allFiles map[string]fileEntry,
+	sourceFileMap map[string]map[string][]byte,
+	encryptPatterns *entities.EncryptPatterns,
+	manifest *entities.Manifest,
+	opts PullOptions,
+) map[string][]byte {
 	pendingFiles := make(map[string][]byte)
 
 	for relPath, entry := range allFiles {
@@ -393,27 +464,12 @@ func (c *PullCommand) applyToToolDir(
 			continue
 		}
 
-		// Determine if this file needs a merge strategy.
-		content, mergeErr := c.applyMergeStrategy(
+		content := c.resolveFileContent(
 			config, repoPath, toolName, localRel, relPath,
 			entry, sourceFileMap, encryptPatterns,
 		)
-		if mergeErr != nil {
-			logger.Warnf("merge failed for %s: %v", relPath, mergeErr)
-			content = entry.content
-		}
 
-		// Check for personal file override from the sync repo.
-		personalContent := c.readPersonalFile(
-			repoPath, toolName, localRel, encryptPatterns, config,
-		)
-		if personalContent != nil {
-			logger.Warnf("personal file shadows shared file: %s/%s", toolName, localRel)
-			content = personalContent
-		}
-
-		// Recency check: warn if local file differs from incoming.
-		if !opts.Force {
+		if !opts.Force { //nolint:nestif // confirmation flow requires nested conditions
 			if existing, readErr := os.ReadFile(destPath); readErr == nil {
 				if checksumBytes(existing) != checksumBytes(content) {
 					msg := fmt.Sprintf("Local file '%s' differs from incoming. Overwrite?", localRel)
@@ -429,92 +485,146 @@ func (c *PullCommand) applyToToolDir(
 		manifest.SetFile(localRel, entry.source, "shared", checksumBytes(content))
 	}
 
-	// Also apply personal-only files (files in personal/ that have no shared counterpart).
-	c.applyPersonalOnlyFiles(
-		repoPath, toolName, toolDir, prefix, allFiles,
-		pendingFiles, manifest, encryptPatterns, config,
+	return pendingFiles
+}
+
+// resolveFileContent applies merge strategies and personal file overrides to
+// determine the final content for a shared file.
+func (c *PullCommand) resolveFileContent(
+	config *entities.Config,
+	repoPath, toolName, localRel, relPath string,
+	entry fileEntry,
+	sourceFileMap map[string]map[string][]byte,
+	encryptPatterns *entities.EncryptPatterns,
+) []byte {
+	content, mergeErr := c.applyMergeStrategy(
+		config, repoPath, toolName, localRel, relPath,
+		entry, sourceFileMap, encryptPatterns,
 	)
-
-	// Conflict detection: compare incoming personal files against the local tool dir.
-	// If both local and incoming changed since last sync, prompt the user to resolve.
-	if c.conflictDetector != nil && oldManifest != nil {
-		incomingPersonal := c.collectIncomingPersonalFiles(repoPath, toolName, encryptPatterns, config)
-		if len(incomingPersonal) > 0 {
-			conflicts, detectErr := c.conflictDetector.DetectConflicts(toolDir, incomingPersonal, oldManifest, hostname)
-			if detectErr != nil {
-				logger.Warnf("conflict detection failed for %s: %v", toolName, detectErr)
-			} else if len(conflicts) > 0 {
-				resolved := c.resolveConflicts(toolDir, conflicts, opts.Force)
-				// Apply resolved remote choices to pending files.
-				for _, rc := range resolved {
-					destPath := filepath.Join(toolDir, rc.Path)
-					pendingFiles[destPath] = rc.RemoteContent
-					manifest.SetFile(rc.Path, "personal", "personal", checksumBytes(rc.RemoteContent))
-				}
-			}
-		}
+	if mergeErr != nil {
+		logger.Warnf("merge failed for %s: %v", relPath, mergeErr)
+		content = entry.content
 	}
 
-	// Deletion detection: files in old manifest but not in the new set.
-	deletions := c.detectDeletions(oldManifest, manifest, toolDir)
+	personalContent := c.readPersonalFile(
+		repoPath, toolName, localRel, encryptPatterns, config,
+	)
+	if personalContent != nil {
+		logger.Warnf("personal file shadows shared file: %s/%s", toolName, localRel)
+		content = personalContent
+	}
 
-	if len(pendingFiles) == 0 && len(deletions) == 0 {
-		logger.Infof("tool %s: no changes", toolName)
+	return content
+}
+
+// detectAndResolveConflicts runs conflict detection for incoming personal files
+// and applies resolved remote choices to the pending files and manifest.
+func (c *PullCommand) detectAndResolveConflicts(
+	repoPath, toolName, toolDir, hostname string,
+	oldManifest *entities.Manifest,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+	pendingFiles map[string][]byte,
+	manifest *entities.Manifest,
+	opts PullOptions,
+) {
+	if c.conflictDetector == nil || oldManifest == nil {
+		return
+	}
+
+	incomingPersonal := c.collectIncomingPersonalFiles(repoPath, toolName, encryptPatterns, config)
+	if len(incomingPersonal) == 0 {
+		return
+	}
+
+	conflicts, detectErr := c.conflictDetector.DetectConflicts(toolDir, incomingPersonal, oldManifest, hostname)
+	if detectErr != nil {
+		logger.Warnf("conflict detection failed for %s: %v", toolName, detectErr)
+		return
+	}
+
+	if len(conflicts) == 0 {
+		return
+	}
+
+	resolved := c.resolveConflicts(toolDir, conflicts, opts.Force)
+	for _, rc := range resolved {
+		destPath := filepath.Join(toolDir, rc.Path)
+		pendingFiles[destPath] = rc.RemoteContent
+		manifest.SetFile(rc.Path, "personal", "personal", checksumBytes(rc.RemoteContent))
+	}
+}
+
+// confirmToolApply prompts the user for confirmation before applying changes to
+// a tool directory. Returns (true, nil) to proceed, (false, nil) if the user
+// skipped, or (false, error) if the user aborted.
+func (c *PullCommand) confirmToolApply(
+	toolName string,
+	pendingFiles map[string][]byte,
+	deletions []string,
+	toolDir string,
+) (bool, error) {
+	c.printDiffSummary(toolName, pendingFiles, deletions, toolDir)
+	for {
+		action := c.promptService.PromptToolAction(toolName)
+		switch action {
+		case actionSkip:
+			fmt.Fprintf(os.Stdout, "Skipped tool %s.\n", toolName)
+			return false, nil
+		case "abort":
+			return false, errors.New("aborted by user")
+		case "diff":
+			c.printDryRun(toolName, pendingFiles, deletions, toolDir)
+			continue
+		case "apply":
+			// proceed
+		}
+		break
+	}
+	return true, nil
+}
+
+// filterPerFileSkips allows the user to exclude individual files when not forced
+// and there are multiple pending files.
+func (c *PullCommand) filterPerFileSkips(
+	toolDir string,
+	pendingFiles map[string][]byte,
+	opts PullOptions,
+) {
+	if opts.Force || len(pendingFiles) <= 1 {
+		return
+	}
+
+	for destPath := range pendingFiles {
+		relPath, _ := filepath.Rel(toolDir, destPath)
+		action := c.promptService.PromptFileAction(relPath, "incoming")
+		if action == actionSkip {
+			delete(pendingFiles, destPath)
+			logger.Infof("skipped file '%s' (user choice)", relPath)
+		}
+	}
+}
+
+// atomicApply stages pending files and then moves them to their final destinations.
+func (c *PullCommand) atomicApply(toolName string, pendingFiles map[string][]byte) error {
+	if len(pendingFiles) == 0 {
 		return nil
 	}
 
-	// Dry-run mode: print what would change and return.
-	if opts.DryRun {
-		c.printDryRun(toolName, pendingFiles, deletions, toolDir)
-		return nil
+	journal, stageErr := c.applyService.Stage(pendingFiles)
+	if stageErr != nil {
+		return fmt.Errorf("failed to stage files for %s: %w", toolName, stageErr)
 	}
 
-	// Confirmation prompt when not forced.
-	if !opts.Force {
-		c.printDiffSummary(toolName, pendingFiles, deletions, toolDir)
-		for {
-			action := c.promptService.PromptToolAction(toolName)
-			switch action {
-			case "skip":
-				fmt.Printf("Skipped tool %s.\n", toolName)
-				return nil
-			case "abort":
-				return fmt.Errorf("aborted by user")
-			case "diff":
-				c.printDryRun(toolName, pendingFiles, deletions, toolDir)
-				continue
-			case "apply":
-				// Break out of the loop to proceed with apply.
-			}
-			break
-		}
+	if applyErr := c.applyService.Apply(journal); applyErr != nil {
+		return fmt.Errorf("failed to apply staged files for %s: %w", toolName, applyErr)
 	}
+	return nil
+}
 
-	// Per-file skip: allow the user to exclude individual files.
-	if !opts.Force && len(pendingFiles) > 1 {
-		for destPath := range pendingFiles {
-			relPath, _ := filepath.Rel(toolDir, destPath)
-			action := c.promptService.PromptFileAction(relPath, "incoming")
-			if action == "skip" {
-				delete(pendingFiles, destPath)
-				logger.Infof("skipped file '%s' (user choice)", relPath)
-			}
-		}
-	}
-
-	// Atomic apply: stage files, then move to final destinations.
-	if len(pendingFiles) > 0 {
-		journal, stageErr := c.applyService.Stage(pendingFiles)
-		if stageErr != nil {
-			return fmt.Errorf("failed to stage files for %s: %w", toolName, stageErr)
-		}
-
-		if applyErr := c.applyService.Apply(journal); applyErr != nil {
-			return fmt.Errorf("failed to apply staged files for %s: %w", toolName, applyErr)
-		}
-	}
-
-	// Process deletions.
+// processDeletions removes files that were present in the old manifest but not
+// in the new one.
+func (c *PullCommand) processDeletions(deletions []string) {
 	for _, delPath := range deletions {
 		if err := os.Remove(delPath); err != nil && !os.IsNotExist(err) {
 			logger.Warnf("failed to delete %s: %v", delPath, err)
@@ -522,14 +632,6 @@ func (c *PullCommand) applyToToolDir(
 			logger.Infof("deleted: %s", delPath)
 		}
 	}
-
-	// Save updated manifest.
-	if err := c.manifestRepo.Save(toolDir, manifest); err != nil {
-		logger.Warnf("failed to save manifest for %s: %v", toolName, err)
-	}
-
-	logger.Infof("tool %s: applied %d files, deleted %d files", toolName, len(pendingFiles), len(deletions))
-	return nil
 }
 
 // applyMergeStrategy detects single-file merge targets by filename and routes
@@ -653,20 +755,18 @@ func (c *PullCommand) applyPersonalOnlyFiles(
 
 	_ = filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info.IsDir() {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		relPath, err := filepath.Rel(personalDir, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		// Skip .age files; they are handled via the decrypt path.
 		if strings.HasSuffix(relPath, ".age") {
 			return nil
 		}
 
-		// Check if a shared version already exists (already handled above).
 		sharedKey := sharedPrefix + relPath
 		if _, exists := allFiles[sharedKey]; exists {
 			return nil
@@ -677,31 +777,44 @@ func (c *PullCommand) applyPersonalOnlyFiles(
 			return nil
 		}
 
-		content, readErr := os.ReadFile(path)
-		if readErr != nil {
-			logger.Warnf("failed to read personal file %s: %v", path, readErr)
+		content := c.readAndDecryptPersonalFile(path, relPath, encryptPatterns, config)
+		if content == nil {
 			return nil
-		}
-
-		// Decrypt if this file matches encrypt patterns and an encrypted version exists.
-		if encryptPatterns.Matches(relPath) && config.Encryption.Identity != "" {
-			encryptedPath := path + ".age"
-			encrypted, encErr := os.ReadFile(encryptedPath)
-			if encErr == nil {
-				identityPath := ExpandHome(config.Encryption.Identity)
-				decrypted, decErr := c.encryptionService.Decrypt(encrypted, identityPath)
-				if decErr == nil {
-					content = decrypted
-				} else {
-					logger.Warnf("failed to decrypt %s: %v", encryptedPath, decErr)
-				}
-			}
 		}
 
 		pendingFiles[destPath] = content
 		manifest.SetFile(relPath, "personal", "personal", checksumBytes(content))
 		return nil
 	})
+}
+
+// readAndDecryptPersonalFile reads a personal file and decrypts it if it matches
+// encrypt patterns and an encrypted version exists.
+func (c *PullCommand) readAndDecryptPersonalFile(
+	path, relPath string,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+) []byte {
+	content, readErr := os.ReadFile(path)
+	if readErr != nil {
+		logger.Warnf("failed to read personal file %s: %v", path, readErr)
+		return nil
+	}
+
+	if encryptPatterns.Matches(relPath) && config.Encryption.Identity != "" {
+		encryptedPath := path + ".age"
+		encrypted, encErr := os.ReadFile(encryptedPath)
+		if encErr == nil {
+			identityPath := ExpandHome(config.Encryption.Identity)
+			decrypted, decErr := c.encryptionService.Decrypt(encrypted, identityPath)
+			if decErr == nil {
+				return decrypted
+			}
+			logger.Warnf("failed to decrypt %s: %v", encryptedPath, decErr)
+		}
+	}
+
+	return content
 }
 
 // detectDeletions compares the old manifest against the new manifest and returns
@@ -733,27 +846,28 @@ func (c *PullCommand) printDryRun(
 	deletions []string,
 	toolDir string,
 ) {
-	fmt.Printf("[dry-run] Tool %s:\n", toolName)
+	fmt.Fprintf(os.Stdout, "[dry-run] Tool %s:\n", toolName)
 	for destPath, content := range pendingFiles {
 		relPath, _ := filepath.Rel(toolDir, destPath)
 		existing, err := os.ReadFile(destPath)
-		if err != nil {
-			fmt.Printf("  + %s (%s, new)\n", relPath, formatSize(int64(len(content))))
-		} else if checksumBytes(existing) != checksumBytes(content) {
+		switch {
+		case err != nil:
+			fmt.Fprintf(os.Stdout, "  + %s (%s, new)\n", relPath, formatSize(int64(len(content))))
+		case checksumBytes(existing) != checksumBytes(content):
 			detail := fmt.Sprintf("%s → %s", formatSize(int64(len(existing))), formatSize(int64(len(content))))
 			oldLines := bytes.Count(existing, []byte("\n"))
 			newLines := bytes.Count(content, []byte("\n"))
 			if delta := newLines - oldLines; delta != 0 {
 				detail += fmt.Sprintf(", %+d lines", delta)
 			}
-			fmt.Printf("  ~ %s (%s)\n", relPath, detail)
-		} else {
-			fmt.Printf("  = %s (unchanged)\n", relPath)
+			fmt.Fprintf(os.Stdout, "  ~ %s (%s)\n", relPath, detail)
+		default:
+			fmt.Fprintf(os.Stdout, "  = %s (unchanged)\n", relPath)
 		}
 	}
 	for _, delPath := range deletions {
 		relPath, _ := filepath.Rel(toolDir, delPath)
-		fmt.Printf("  - %s (deleted)\n", relPath)
+		fmt.Fprintf(os.Stdout, "  - %s (deleted)\n", relPath)
 	}
 }
 
@@ -762,7 +876,7 @@ func (c *PullCommand) printDiffSummary(
 	toolName string,
 	pendingFiles map[string][]byte,
 	deletions []string,
-	toolDir string,
+	_ string,
 ) {
 	added := 0
 	modified := 0
@@ -770,16 +884,17 @@ func (c *PullCommand) printDiffSummary(
 
 	for destPath, content := range pendingFiles {
 		existing, err := os.ReadFile(destPath)
-		if err != nil {
+		switch {
+		case err != nil:
 			added++
-		} else if checksumBytes(existing) != checksumBytes(content) {
+		case checksumBytes(existing) != checksumBytes(content):
 			modified++
-		} else {
+		default:
 			unchanged++
 		}
 	}
 
-	fmt.Printf("Tool %s: %d new, %d modified, %d unchanged, %d deletions\n",
+	fmt.Fprintf(os.Stdout, "Tool %s: %d new, %d modified, %d unchanged, %d deletions\n",
 		toolName, added, modified, unchanged, len(deletions))
 }
 
@@ -815,12 +930,12 @@ func (c *PullCommand) collectIncomingPersonalFiles(
 	incoming := make(map[string][]byte)
 	_ = filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info.IsDir() {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		relPath, err := filepath.Rel(personalDir, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		// Skip .age files; they are handled via the decrypt path.
@@ -828,15 +943,15 @@ func (c *PullCommand) collectIncomingPersonalFiles(
 			return nil
 		}
 
-		content, readErr := os.ReadFile(path)
+		content, readErr := os.ReadFile(path) //nolint:gosec // paths are from trusted tool directories
 		if readErr != nil {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		// Decrypt if needed.
 		if encryptPatterns.Matches(relPath) && config.Encryption.Identity != "" {
 			encryptedPath := path + ".age"
-			encrypted, encErr := os.ReadFile(encryptedPath)
+			encrypted, encErr := os.ReadFile(encryptedPath) //nolint:gosec // paths are from trusted tool directories
 			if encErr == nil {
 				identityPath := ExpandHome(config.Encryption.Identity)
 				decrypted, decErr := c.encryptionService.Decrypt(encrypted, identityPath)
@@ -887,8 +1002,8 @@ func (c *PullCommand) resolveConflicts(
 			} else {
 				remoteWins = append(remoteWins, conflict)
 			}
-		case "skip":
-			fmt.Printf("  Skipped conflict for %s (conflict file preserved)\n", conflict.Path)
+		case actionSkip:
+			fmt.Fprintf(os.Stdout, "  Skipped conflict for %s (conflict file preserved)\n", conflict.Path)
 		}
 	}
 

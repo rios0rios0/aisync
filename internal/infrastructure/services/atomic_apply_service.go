@@ -3,9 +3,12 @@ package services
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	logger "github.com/sirupsen/logrus"
@@ -13,6 +16,8 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
+
+const binaryCheckLimit = 8192
 
 // AtomicApplyService stages files to a temporary directory and then atomically
 // moves them to their final targets. A journal tracks operations so that
@@ -35,31 +40,33 @@ func NewAtomicApplyService(journalRepo repositories.JournalRepository, basePath 
 // pending operations. The files map keys are final target paths and values
 // are the file contents.
 func (s *AtomicApplyService) Stage(files map[string][]byte) (*entities.Journal, error) {
-	stagingDir := filepath.Join(s.basePath, "staging", fmt.Sprintf("%d", time.Now().UnixNano()))
-	if err := os.MkdirAll(stagingDir, 0755); err != nil {
+	stagingDir := filepath.Join(s.basePath, "staging", strconv.FormatInt(time.Now().UnixNano(), 10))
+	if err := os.MkdirAll(stagingDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create staging directory: %w", err)
 	}
 
 	journal := entities.NewJournal(stagingDir)
 
 	for targetPath, content := range files {
-		relPath, err := filepath.Rel("/", targetPath)
-		if err != nil {
-			relPath = filepath.Base(targetPath)
-		}
+		// Normalize the target path for staging: strip volume/root prefix
+		// in a cross-platform way rather than using filepath.Rel("/", ...).
+		cleanPath := filepath.Clean(targetPath)
+		vol := filepath.VolumeName(cleanPath)
+		relPath := strings.TrimPrefix(cleanPath, vol)
+		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
 
 		stagingPath := filepath.Join(stagingDir, relPath)
-		if err := os.MkdirAll(filepath.Dir(stagingPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(stagingPath), 0700); err != nil {
 			return nil, fmt.Errorf("failed to create staging subdirectory for %s: %w", relPath, err)
 		}
 
 		normalized := normalizeLineEndings(content)
-		if err := os.WriteFile(stagingPath, normalized, 0644); err != nil {
+		if err := os.WriteFile(stagingPath, normalized, 0600); err != nil {
 			return nil, fmt.Errorf("failed to write staged file %s: %w", stagingPath, err)
 		}
 
 		oldChecksum := readExistingChecksum(targetPath)
-		newChecksum := computeChecksum(content)
+		newChecksum := computeChecksum(normalized)
 
 		journal.AddOperation(stagingPath, targetPath, oldChecksum, newChecksum)
 		logger.Debugf("staged file: %s -> %s", stagingPath, targetPath)
@@ -83,7 +90,7 @@ func (s *AtomicApplyService) Apply(journal *entities.Journal) error {
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(op.TargetPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(op.TargetPath), 0700); err != nil {
 			return fmt.Errorf("failed to create target directory for %s: %w", op.TargetPath, err)
 		}
 
@@ -135,7 +142,7 @@ func (s *AtomicApplyService) Recover() error {
 	return s.Apply(journal)
 }
 
-// moveFile moves a file from src to dst. It first attempts os.Rename for an
+// moveFile moves a file from src to dst. It first attempts [os.Rename] for an
 // atomic move. If that fails (e.g., cross-device), it falls back to copy + remove.
 func moveFile(src, dst string) error {
 	if err := os.Rename(src, dst); err == nil {
@@ -152,11 +159,11 @@ func moveFile(src, dst string) error {
 		return fmt.Errorf("failed to stat source file for copy: %w", err)
 	}
 
-	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
+	if err = os.WriteFile(filepath.Clean(dst), data, info.Mode()); err != nil { //nolint:gosec // dst is cleaned above
 		return fmt.Errorf("failed to write destination file: %w", err)
 	}
 
-	if err := os.Remove(src); err != nil {
+	if err = os.Remove(src); err != nil {
 		return fmt.Errorf("failed to remove source file after copy: %w", err)
 	}
 
@@ -176,7 +183,7 @@ func readExistingChecksum(path string) string {
 // computeChecksum returns the hex-encoded SHA-256 checksum of the given data.
 func computeChecksum(data []byte) string {
 	hash := sha256.Sum256(data)
-	return fmt.Sprintf("%x", hash)
+	return hex.EncodeToString(hash[:])
 }
 
 // normalizeLineEndings converts CRLF line endings to LF. Binary files (detected
@@ -191,9 +198,6 @@ func normalizeLineEndings(data []byte) []byte {
 // isBinaryContent returns true if the data likely represents a binary file by
 // checking for null bytes in the first 8 KB — the same heuristic Git uses.
 func isBinaryContent(data []byte) bool {
-	limit := len(data)
-	if limit > 8192 {
-		limit = 8192
-	}
+	limit := min(len(data), binaryCheckLimit)
 	return bytes.ContainsRune(data[:limit], 0)
 }

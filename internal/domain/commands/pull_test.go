@@ -329,7 +329,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -469,7 +469,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -508,7 +508,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -546,7 +546,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -584,11 +584,11 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0700))
 
 		// Create a file that will be deleted
 		deletedFile := filepath.Join(toolDir, "rules/old.md")
-		require.NoError(t, os.WriteFile(deletedFile, []byte("old"), 0644))
+		require.NoError(t, os.WriteFile(deletedFile, []byte("old"), 0600))
 
 		oldManifest := entities.NewManifest("0.1.0", "host")
 		oldManifest.SetFile("rules/old.md", "guide", "shared", "old-checksum")
@@ -631,12 +631,12 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create a personal file in the sync repo
 		personalDir := filepath.Join(tmpDir, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "custom.md"), []byte("my custom rule"), 0644))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "custom.md"), []byte("my custom rule"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -673,7 +673,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -746,7 +746,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -783,7 +783,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -821,15 +821,15 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create personal override in sync repo
 		personalDir := filepath.Join(tmpDir, "personal", "claude", "rules")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "test.md"),
 			[]byte("personal wins"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -867,11 +867,11 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate a file in the sync repo so verifyFileChecksums finds it
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, "shared/claude/rules/test.md"),
 			[]byte("old content"),
-			0644,
+			0600,
 		))
 
 		state := entities.NewState("test-device")
@@ -915,22 +915,22 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create encrypted personal file in sync repo
 		personalDir := filepath.Join(tmpDir, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "creds.secret.age"),
 			[]byte("ENCRYPTED-CONTENT"),
-			0644,
+			0600,
 		))
 
 		// Create .aisyncencrypt file
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, ".aisyncencrypt"),
 			[]byte("*.secret"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -971,11 +971,11 @@ func TestPullCommand_Execute(t *testing.T) {
 		unchangedContent := []byte("# Unchanged content")
 
 		// Pre-populate the file with exact same content
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, "shared/claude/rules/test.md"),
 			unchangedContent,
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1016,22 +1016,22 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create local file
 		require.NoError(t, os.WriteFile(
 			filepath.Join(toolDir, "custom.md"),
 			[]byte("local version"),
-			0644,
+			0600,
 		))
 
 		// Create incoming personal file
 		personalDir := filepath.Join(tmpDir, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "custom.md"),
 			[]byte("remote version"),
-			0644,
+			0600,
 		))
 
 		oldManifest := entities.NewManifest("0.1.0", "host")
@@ -1135,11 +1135,11 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate file
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, "shared/claude/rules/test.md"),
 			[]byte("old content"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1176,11 +1176,11 @@ func TestPullCommand_Execute(t *testing.T) {
 	t.Run("should handle ETag changed normally without warning", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, "shared/claude/rules/test.md"),
 			[]byte("old content"),
-			0644,
+			0600,
 		))
 
 		state := entities.NewState("test-device")
@@ -1220,7 +1220,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -1260,22 +1260,22 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create encrypted personal file that shadows a shared file
 		personalDir := filepath.Join(tmpDir, "personal", "claude", "rules")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "test.md.age"),
 			[]byte("ENCRYPTED"),
-			0644,
+			0600,
 		))
 
 		// Create .aisyncencrypt that matches the file
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, ".aisyncencrypt"),
 			[]byte("**/*.md"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1314,14 +1314,14 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		personalDir := filepath.Join(tmpDir, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		// This .age file should be skipped by applyPersonalOnlyFiles
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "creds.age"), []byte("encrypted"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "creds.age"), []byte("encrypted"), 0600))
 		// This file should be applied
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-config.md"), []byte("personal config"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-config.md"), []byte("personal config"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -1358,12 +1358,12 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create an existing file in tool dir for modified detection
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "existing.md"), []byte("old"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "existing.md"), []byte("old"), 0600))
 		// Create an existing file with unchanged content
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), []byte("unchanged"), 0644))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), []byte("unchanged"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
 			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
@@ -1431,11 +1431,11 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate with old content
-		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, "shared/claude/rules/old.md"),
 			[]byte("old version"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1481,15 +1481,15 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create personal file (unencrypted)
 		personalDir := filepath.Join(tmpDir, "personal", "claude", "rules")
-		require.NoError(t, os.MkdirAll(personalDir, 0755))
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(personalDir, "test.md"),
 			[]byte("personal override"),
-			0644,
+			0600,
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,

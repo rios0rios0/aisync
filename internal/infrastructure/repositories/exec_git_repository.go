@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -133,7 +134,10 @@ func (r *ExecGitRepository) AddRemote(name, url string) error {
 
 // run executes a git command and returns its combined stdout output.
 func (r *ExecGitRepository) run(dir string, args ...string) (string, error) {
-	cmd := exec.Command(r.gitPath, args...) //nolint:gosec
+	cmd := exec.CommandContext( //nolint:gosec // gitPath is validated at construction time via exec.LookPath
+		context.Background(),
+		r.gitPath,
+		args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -145,7 +149,7 @@ func (r *ExecGitRepository) run(dir string, args ...string) (string, error) {
 	logger.Debugf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(output))
 
 	if err != nil {
-		return output, fmt.Errorf("%s: %s", err, strings.TrimSpace(output))
+		return output, fmt.Errorf("%w: %s", err, strings.TrimSpace(output))
 	}
 	return output, nil
 }

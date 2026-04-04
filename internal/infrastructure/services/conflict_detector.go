@@ -2,6 +2,7 @@ package services
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,11 +71,11 @@ func (d *ConflictDetector) DetectConflicts(
 		// Write the .conflict.<device> file so the user can inspect it.
 		conflictPath := filepath.Join(toolDir, conflict.ConflictFileName())
 		conflictDir := filepath.Dir(conflictPath)
-		if err := os.MkdirAll(conflictDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create conflict directory %s: %w", conflictDir, err)
+		if mkdirErr := os.MkdirAll(conflictDir, 0700); mkdirErr != nil {
+			return nil, fmt.Errorf("failed to create conflict directory %s: %w", conflictDir, mkdirErr)
 		}
-		if err := os.WriteFile(conflictPath, incomingContent, 0644); err != nil {
-			return nil, fmt.Errorf("failed to write conflict file %s: %w", conflictPath, err)
+		if writeErr := os.WriteFile(conflictPath, incomingContent, 0600); writeErr != nil {
+			return nil, fmt.Errorf("failed to write conflict file %s: %w", conflictPath, writeErr)
 		}
 
 		conflicts = append(conflicts, conflict)
@@ -99,10 +100,10 @@ func (d *ConflictDetector) ResolveConflict(toolDir string, conflict entities.Con
 		}
 	case "remote":
 		localDir := filepath.Dir(localPath)
-		if err := os.MkdirAll(localDir, 0755); err != nil {
+		if err := os.MkdirAll(localDir, 0700); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", localDir, err)
 		}
-		if err := os.WriteFile(localPath, conflict.RemoteContent, 0644); err != nil {
+		if err := os.WriteFile(localPath, conflict.RemoteContent, 0600); err != nil {
 			return fmt.Errorf("failed to write resolved file %s: %w", localPath, err)
 		}
 		if err := os.Remove(conflictPath); err != nil && !os.IsNotExist(err) {
@@ -117,5 +118,5 @@ func (d *ConflictDetector) ResolveConflict(toolDir string, conflict entities.Con
 
 func checksumContent(data []byte) string {
 	h := sha256.Sum256(data)
-	return fmt.Sprintf("sha256:%x", h)
+	return hex.EncodeToString(h[:])
 }

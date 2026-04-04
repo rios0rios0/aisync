@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"context"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,123 +63,127 @@ func (c *DiffCommand) Execute(configPath, repoPath string, opts DiffOptions) err
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	result := &entities.DiffResult{}
-
-	if opts.Reverse {
-		// Reverse mode: show what would be pushed (local changes relative
-		// to the sync repo), swapping the perspective.
-		local, diffErr := c.diffService.ComputeLocalDiff(config, repoPath)
-		if diffErr == nil {
-			result.LocalUncommitted = local
-		}
-	} else {
-		// Compute shared changes (from external sources)
-		if !opts.Personal {
-			allFiles := make(map[string][]byte)
-			for _, source := range config.Sources {
-				if opts.SourceFilter != "" && source.Name != opts.SourceFilter {
-					continue
-				}
-				fetched, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
-				if fetchErr != nil || fetched == nil {
-					continue
-				}
-				for k, v := range fetched.Files {
-					allFiles[k] = v
-				}
-			}
-
-			shared, diffErr := c.diffService.ComputeSharedDiff(config, repoPath, allFiles)
-			if diffErr == nil {
-				result.SharedChanges = shared
-			}
-		}
-
-		// Compute personal changes from other devices (incoming from sync repo).
-		if !opts.Shared {
-			personal, personalErr := c.diffService.ComputePersonalDiff(config, repoPath)
-			if personalErr == nil {
-				result.PersonalChanges = personal
-			}
-		}
-
-		// Compute local uncommitted changes
-		if !opts.Shared {
-			local, diffErr := c.diffService.ComputeLocalDiff(config, repoPath)
-			if diffErr == nil {
-				result.LocalUncommitted = local
-			}
-		}
-	}
+	result := c.computeDiff(config, repoPath, opts)
 
 	if !result.HasChanges() {
-		fmt.Println("No changes detected.")
+		fmt.Fprintln(os.Stdout, "No changes detected.")
 		return nil
 	}
 
 	if opts.Reverse {
-		fmt.Println("(reverse: showing what would be pushed)")
+		fmt.Fprintln(os.Stdout, "(reverse: showing what would be pushed)")
 	}
 
+	c.renderOutput(result, opts)
+	return nil
+}
+
+// computeDiff gathers all change data based on the diff options.
+func (c *DiffCommand) computeDiff(config *entities.Config, repoPath string, opts DiffOptions) *entities.DiffResult {
+	result := &entities.DiffResult{}
+
+	if opts.Reverse {
+		local, diffErr := c.diffService.ComputeLocalDiff(config, repoPath)
+		if diffErr == nil {
+			result.LocalUncommitted = local
+		}
+		return result
+	}
+
+	if !opts.Personal {
+		result.SharedChanges = c.fetchSharedChanges(config, repoPath, opts.SourceFilter)
+	}
+	if !opts.Shared {
+		if personal, err := c.diffService.ComputePersonalDiff(config, repoPath); err == nil {
+			result.PersonalChanges = personal
+		}
+		if local, err := c.diffService.ComputeLocalDiff(config, repoPath); err == nil {
+			result.LocalUncommitted = local
+		}
+	}
+	return result
+}
+
+// fetchSharedChanges fetches files from external sources and computes the shared diff.
+func (c *DiffCommand) fetchSharedChanges(config *entities.Config, repoPath, sourceFilter string) []entities.FileChange {
+	allFiles := make(map[string][]byte)
+	for _, source := range config.Sources {
+		if sourceFilter != "" && source.Name != sourceFilter {
+			continue
+		}
+		fetched, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
+		if fetchErr != nil || fetched == nil {
+			continue
+		}
+		maps.Copy(allFiles, fetched.Files)
+	}
+
+	shared, diffErr := c.diffService.ComputeSharedDiff(config, repoPath, allFiles)
+	if diffErr != nil {
+		return nil
+	}
+	return shared
+}
+
+// renderOutput displays the diff result using the appropriate renderer.
+func (c *DiffCommand) renderOutput(result *entities.DiffResult, opts DiffOptions) {
 	if opts.Summary {
 		printSummary(result, c.formatter)
-	} else if c.viewer != nil && opts.Tool == "" {
-		if err := c.viewer.Show(result, c.formatter); err != nil {
-			// Fallback to plain output if TUI fails (e.g., non-TTY).
-			printDetailed(result, opts.Tool, c.formatter)
-		}
-	} else {
-		printDetailed(result, opts.Tool, c.formatter)
+		return
 	}
-
-	return nil
+	if c.viewer != nil && opts.Tool == "" {
+		if err := c.viewer.Show(result, c.formatter); err == nil {
+			return
+		}
+	}
+	printDetailed(result, opts.Tool, c.formatter)
 }
 
 func printSummary(result *entities.DiffResult, f entities.Formatter) {
 	if len(result.SharedChanges) > 0 {
-		fmt.Println(f.Bold("External sources:"))
+		fmt.Fprintln(os.Stdout, f.Bold("External sources:"))
 		for _, ch := range result.SharedChanges {
-			fmt.Printf("  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
+			fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
 		}
 	}
 	if len(result.PersonalChanges) > 0 {
-		fmt.Println(f.Bold("Personal (from other devices):"))
+		fmt.Fprintln(os.Stdout, f.Bold("Personal (from other devices):"))
 		for _, ch := range result.PersonalChanges {
-			fmt.Printf("  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
+			fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
 		}
 	}
 	if len(result.LocalUncommitted) > 0 {
-		fmt.Println(f.Bold("Local uncommitted changes:"))
+		fmt.Fprintln(os.Stdout, f.Bold("Local uncommitted changes:"))
 		for _, ch := range result.LocalUncommitted {
-			fmt.Printf("  %s %s\n", ch.Direction, ch.Path)
+			fmt.Fprintf(os.Stdout, "  %s %s\n", ch.Direction, ch.Path)
 		}
 	}
 }
 
 func printDetailed(result *entities.DiffResult, tool string, f entities.Formatter) {
 	if len(result.SharedChanges) > 0 {
-		fmt.Println(f.Bold("External sources:"))
+		fmt.Fprintln(os.Stdout, f.Bold("External sources:"))
 		for _, ch := range result.SharedChanges {
 			printChange(ch, f)
 			launchExternalTool(tool, ch)
 		}
-		fmt.Println()
+		fmt.Fprintln(os.Stdout)
 	}
 	if len(result.PersonalChanges) > 0 {
-		fmt.Println(f.Bold("Personal (from other devices):"))
+		fmt.Fprintln(os.Stdout, f.Bold("Personal (from other devices):"))
 		for _, ch := range result.PersonalChanges {
 			printChange(ch, f)
 			launchExternalTool(tool, ch)
 		}
-		fmt.Println()
+		fmt.Fprintln(os.Stdout)
 	}
 	if len(result.LocalUncommitted) > 0 {
-		fmt.Println(f.Bold("Local uncommitted changes:"))
+		fmt.Fprintln(os.Stdout, f.Bold("Local uncommitted changes:"))
 		for _, ch := range result.LocalUncommitted {
 			printChange(ch, f)
 			launchExternalTool(tool, ch)
 		}
-		fmt.Println()
+		fmt.Fprintln(os.Stdout)
 	}
 }
 
@@ -198,7 +204,10 @@ func printChange(ch entities.FileChange, f entities.Formatter) {
 		details = append(details, fmt.Sprintf("local: %s -> remote: %s (%+d B)",
 			formatSize(ch.LocalSize), formatSize(ch.RemoteSize), ch.SizeDelta()))
 		if ch.HasClockSkew() {
-			details = append(details, "clock skew detected -- timestamps match but content differs, manual review recommended")
+			details = append(
+				details,
+				"clock skew detected -- timestamps match but content differs, manual review recommended",
+			)
 		} else if !ch.LocalTimestamp.IsZero() && !ch.RemoteTimestamp.IsZero() {
 			if ch.IsRemoteNewer() {
 				details = append(details, "remote is newer")
@@ -214,18 +223,20 @@ func printChange(ch entities.FileChange, f entities.Formatter) {
 		details = append(details, "encrypted")
 	}
 
-	fmt.Printf("  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
-	fmt.Printf("      %s\n", f.Subtle(strings.Join(details, " | ")))
+	fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
+	fmt.Fprintf(os.Stdout, "      %s\n", f.Subtle(strings.Join(details, " | ")))
 }
 
+const bytesPerKB = 1024
+
 func formatSize(bytes int64) string {
-	if bytes < 1024 {
+	if bytes < bytesPerKB {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	if bytes < 1024*1024 {
-		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	if bytes < bytesPerKB*bytesPerKB {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/bytesPerKB)
 	}
-	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(bytesPerKB*bytesPerKB))
 }
 
 // launchExternalTool invokes an external diff tool for modified files that have
@@ -252,21 +263,21 @@ func launchExternalTool(tool string, ch entities.FileChange) {
 	localFile := filepath.Join(tmpDir, "local-"+base)
 	remoteFile := filepath.Join(tmpDir, "remote-"+base)
 
-	if err := os.WriteFile(localFile, ch.LocalContent, 0644); err != nil {
+	if err = os.WriteFile(localFile, ch.LocalContent, 0600); err != nil {
 		logger.Warnf("failed to write local temp file: %v", err)
 		return
 	}
-	if err := os.WriteFile(remoteFile, ch.RemoteContent, 0644); err != nil {
+	if err = os.WriteFile(remoteFile, ch.RemoteContent, 0600); err != nil {
 		logger.Warnf("failed to write remote temp file: %v", err)
 		return
 	}
 
-	cmd := exec.Command(tool, localFile, remoteFile) //nolint:gosec
+	cmd := exec.CommandContext(context.Background(), tool, localFile, remoteFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	if err := cmd.Run(); err != nil {
+	if err = cmd.Run(); err != nil {
 		// Many diff tools exit with code 1 when files differ; only warn on
 		// unexpected failures.
 		logger.Debugf("external diff tool exited: %v", err)

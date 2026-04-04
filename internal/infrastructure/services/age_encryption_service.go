@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,7 +27,7 @@ func (s *AgeEncryptionService) GenerateKey(outputPath string) (string, error) {
 		return "", fmt.Errorf("failed to generate age identity: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+	if err = os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
 		return "", fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 
@@ -36,7 +37,7 @@ func (s *AgeEncryptionService) GenerateKey(outputPath string) (string, error) {
 		identity.String(),
 	)
 
-	if err := os.WriteFile(outputPath, []byte(content), 0600); err != nil {
+	if err = os.WriteFile(outputPath, []byte(content), 0600); err != nil {
 		return "", fmt.Errorf("failed to write identity file: %w", err)
 	}
 
@@ -59,11 +60,15 @@ func (s *AgeEncryptionService) ImportKey(sourcePath, destPath string) error {
 		return fmt.Errorf("no valid age identities found in %s", sourcePath)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {
+	if err = os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {
 		return fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 
-	if err := os.WriteFile(destPath, data, 0600); err != nil {
+	if err = os.WriteFile( //nolint:gosec // destPath is cleaned via filepath.Clean
+		filepath.Clean(destPath),
+		data,
+		0600,
+	); err != nil {
 		return fmt.Errorf("failed to write identity file: %w", err)
 	}
 
@@ -97,7 +102,7 @@ func (s *AgeEncryptionService) ExportPublicKey(identityPath string) (string, err
 // Encrypt encrypts plaintext bytes for the given age recipients.
 func (s *AgeEncryptionService) Encrypt(plaintext []byte, recipients []string) ([]byte, error) {
 	if len(recipients) == 0 {
-		return nil, fmt.Errorf("at least one recipient is required for encryption")
+		return nil, errors.New("at least one recipient is required for encryption")
 	}
 
 	parsedRecipients := make([]age.Recipient, 0, len(recipients))
@@ -115,11 +120,11 @@ func (s *AgeEncryptionService) Encrypt(plaintext []byte, recipients []string) ([
 		return nil, fmt.Errorf("failed to create age encryption writer: %w", err)
 	}
 
-	if _, err := writer.Write(plaintext); err != nil {
+	if _, err = writer.Write(plaintext); err != nil {
 		return nil, fmt.Errorf("failed to write plaintext to age encryption writer: %w", err)
 	}
 
-	if err := writer.Close(); err != nil {
+	if err = writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to finalize age encryption: %w", err)
 	}
 
