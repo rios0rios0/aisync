@@ -17,8 +17,17 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ## [Unreleased]
 
 ### Added
+- added `aisync init` command to create or clone an `aifiles` repository
+- added `aisync source add/remove/list/update` commands to manage external sources
+- added `aisync pull` command to fetch from external sources and apply to AI tool directories
+- added `aisync status` command to show sync state and source freshness
+- added `aisync version` and `aisync self-update` commands
+- added Tier 1 AI tool detection (Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, Windsurf)
+- added manifest file (`.aisync-manifest.json`) for provenance tracking and deletion detection
+- added tarball-only external source fetching with HTTP ETag caching (zero API calls)
+- added shared/personal namespace separation with file-level precedence
+- added compiled-in deny-list for credentials, session transcripts, and plugin caches
 
 ### Changed
 
 ### Removed
-
