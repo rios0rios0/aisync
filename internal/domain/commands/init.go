@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	logger "github.com/sirupsen/logrus"
 
@@ -207,9 +209,41 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 		return fmt.Errorf("failed to write state: %w", err)
 	}
 
+	// Create .gitattributes: enforce LF line endings and configure encryption filter.
+	gitattributesContent := "* text=auto eol=lf\npersonal/*/memories/** filter=aisync-crypt diff=aisync-crypt\npersonal/*/settings.local.json filter=aisync-crypt diff=aisync-crypt\n"
+	gitattributesPath := filepath.Join(repoPath, ".gitattributes")
+	if err := os.WriteFile(gitattributesPath, []byte(gitattributesContent), 0644); err != nil {
+		return fmt.Errorf("failed to create .gitattributes: %w", err)
+	}
+
 	// Initialize as a Git repository
 	if err := c.gitRepo.Init(repoPath); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
+	}
+
+	// Configure clean/smudge filter for transparent encryption.
+	filterConfigs := map[string]string{
+		"filter.aisync-crypt.clean":    "aisync _clean",
+		"filter.aisync-crypt.smudge":   "aisync _smudge",
+		"filter.aisync-crypt.required": "true",
+	}
+	for key, value := range filterConfigs {
+		if err := c.gitRepo.SetConfig(key, value); err != nil {
+			logger.Warnf("failed to set %s: %v", key, err)
+		}
+	}
+
+	// Offer to set up a remote for cross-device sync
+	fmt.Print("Add a remote Git URL for syncing? (leave empty to skip): ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		if remoteURL := strings.TrimSpace(scanner.Text()); remoteURL != "" {
+			if err := c.gitRepo.AddRemote("origin", remoteURL); err != nil {
+				logger.Warnf("failed to add remote: %v", err)
+			} else {
+				logger.Infof("added remote 'origin' -> %s", remoteURL)
+			}
+		}
 	}
 
 	logger.Info("aifiles repo initialized successfully")

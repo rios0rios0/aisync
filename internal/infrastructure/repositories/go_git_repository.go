@@ -262,6 +262,35 @@ func (r *GoGitRepository) AddRemote(name, url string) error {
 	return nil
 }
 
+// SetConfig sets a git config key-value pair in the local repository config.
+// The key uses dot notation (e.g., "filter.aisync-crypt.clean").
+func (r *GoGitRepository) SetConfig(key, value string) error {
+	if r.repo == nil {
+		return fmt.Errorf("repository not opened; call Open or Init first")
+	}
+
+	cfg, err := r.repo.Config()
+	if err != nil {
+		return fmt.Errorf("failed to read git config: %w", err)
+	}
+
+	// Parse "section.subsection.key" or "section.key" from dot notation.
+	parts := strings.SplitN(key, ".", 3)
+	switch len(parts) {
+	case 3:
+		cfg.Raw.SetOption(parts[0], parts[1], parts[2], value)
+	case 2:
+		cfg.Raw.SetOption(parts[0], "", parts[1], value)
+	default:
+		return fmt.Errorf("invalid config key: %s", key)
+	}
+
+	if err := r.repo.SetConfig(cfg); err != nil {
+		return fmt.Errorf("failed to write git config: %w", err)
+	}
+	return nil
+}
+
 // sshAuthFromAgent creates SSH public keys auth using the SSH agent or the default
 // identity file (~/.ssh/id_rsa, ~/.ssh/id_ed25519, etc.).
 func sshAuthFromAgent() (*ssh.PublicKeys, error) {

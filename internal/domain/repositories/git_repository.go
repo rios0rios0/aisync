@@ -10,4 +10,6 @@ type GitRepository interface {
 	Push() error
 	IsClean() (bool, error)
 	HasRemote() bool
+	AddRemote(name, url string) error
+	SetConfig(key, value string) error
 }

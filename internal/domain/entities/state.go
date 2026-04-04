@@ -9,10 +9,11 @@ import (
 
 // State represents the sync state stored in .aisync/state.json.
 type State struct {
-	Devices     []Device          `json:"devices"`
-	SourceETags map[string]string `json:"source_etags"`
-	LastPull    time.Time         `json:"last_pull"`
-	LastPush    time.Time         `json:"last_push"`
+	Devices            []Device          `json:"devices"`
+	SourceETags        map[string]string `json:"source_etags"`
+	SourceLastModified map[string]string `json:"source_last_modified"`
+	LastPull           time.Time         `json:"last_pull"`
+	LastPush           time.Time         `json:"last_push"`
 }
 
 // Device identifies a machine that participates in the sync.
@@ -38,9 +39,10 @@ func NewState(deviceName string) *State {
 				LastSync: time.Now(),
 			},
 		},
-		SourceETags: make(map[string]string),
-		LastPull:    time.Time{},
-		LastPush:    time.Time{},
+		SourceETags:        make(map[string]string),
+		SourceLastModified: make(map[string]string),
+		LastPull:           time.Time{},
+		LastPush:           time.Time{},
 	}
 }
 
@@ -68,6 +70,23 @@ func (s *State) GetETag(sourceName string) string {
 		return ""
 	}
 	return s.SourceETags[sourceName]
+}
+
+// SetLastModified stores the Last-Modified value for a named source.
+func (s *State) SetLastModified(sourceName, lastModified string) {
+	if s.SourceLastModified == nil {
+		s.SourceLastModified = make(map[string]string)
+	}
+	s.SourceLastModified[sourceName] = lastModified
+}
+
+// GetLastModified returns the cached Last-Modified value for a named source, or
+// an empty string if none.
+func (s *State) GetLastModified(sourceName string) string {
+	if s.SourceLastModified == nil {
+		return ""
+	}
+	return s.SourceLastModified[sourceName]
 }
 
 // generateUUID produces a v4 UUID string using crypto/rand.

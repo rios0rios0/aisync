@@ -20,12 +20,9 @@ import (
 )
 
 // DefaultRepoPath returns the default aifiles repo location.
+// On Windows it uses %APPDATA%\aisync\repo; on other platforms ~/.config/aisync/repo.
 func DefaultRepoPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".", ".config", "aisync", "repo")
-	}
-	return filepath.Join(home, ".config", "aisync", "repo")
+	return filepath.Join(defaultConfigDir(), "repo")
 }
 
 // DefaultConfigPath returns the default config.yaml location inside the repo.
@@ -33,14 +30,40 @@ func DefaultConfigPath() string {
 	return filepath.Join(DefaultRepoPath(), "config.yaml")
 }
 
-// NewRootCommand builds the root cobra command with all subcommands.
-func NewRootCommand(version string) *cobra.Command {
+// gitRepoProxy delegates all GitRepository calls to an underlying implementation
+// that can be swapped at runtime (e.g., when --use-system-git is set).
+type gitRepoProxy struct {
+	impl repositories.GitRepository
+}
+
+func (p *gitRepoProxy) Clone(url, dir, branch string) error  { return p.impl.Clone(url, dir, branch) }
+func (p *gitRepoProxy) Init(dir string) error                { return p.impl.Init(dir) }
+func (p *gitRepoProxy) Open(dir string) error                { return p.impl.Open(dir) }
+func (p *gitRepoProxy) Pull() error                          { return p.impl.Pull() }
+func (p *gitRepoProxy) CommitAll(message string) error        { return p.impl.CommitAll(message) }
+func (p *gitRepoProxy) Push() error                          { return p.impl.Push() }
+func (p *gitRepoProxy) IsClean() (bool, error)               { return p.impl.IsClean() }
+func (p *gitRepoProxy) HasRemote() bool                      { return p.impl.HasRemote() }
+func (p *gitRepoProxy) AddRemote(name, url string) error     { return p.impl.AddRemote(name, url) }
+func (p *gitRepoProxy) SetConfig(key, value string) error    { return p.impl.SetConfig(key, value) }
+
+// NewExecGitRepository re-exports the infrastructure constructor so that main.go
+// can create it when --use-system-git is set.
+var NewExecGitRepository = infraRepos.NewExecGitRepository
+
+// NewRootCommand builds the root cobra command with all subcommands. It returns
+// the root command and a function that swaps the git implementation to the
+// system git binary (called from PersistentPreRun when --use-system-git is set).
+func NewRootCommand(version string) (*cobra.Command, func(repositories.GitRepository)) {
+	// Git repo wrapped in a proxy so --use-system-git can swap the implementation
+	// after flag parsing but before any command runs.
+	gitProxy := &gitRepoProxy{impl: infraRepos.NewGoGitRepository()}
+
 	// Infrastructure
 	configRepo := infraRepos.NewYAMLConfigRepository()
 	sourceRepo := infraRepos.NewHTTPSourceRepository()
 	manifestRepo := infraRepos.NewJSONManifestRepository()
 	stateRepo := infraRepos.NewJSONStateRepository()
-	gitRepo := infraRepos.NewGoGitRepository()
 	journalRepo := infraRepos.NewJSONJournalRepository(defaultConfigDir())
 	toolDetector := services.NewFSToolDetector()
 	encryptionSvc := services.NewAgeEncryptionService()
@@ -64,15 +87,16 @@ func NewRootCommand(version string) *cobra.Command {
 	formatter := ui.NewLipglossFormatter()
 
 	// Domain commands
-	initCmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionSvc)
+	initCmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitProxy, encryptionSvc)
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
+	promptSvc := ui.NewHuhPromptService()
 	pullCmd := commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo, manifestRepo,
-		gitRepo, encryptionSvc, conflictDetector,
+		gitProxy, encryptionSvc, conflictDetector,
 		hooksMerger, settingsMerger, sectionMerger,
-		atomicApplySvc,
+		atomicApplySvc, promptSvc,
 	)
-	pushCmd := commands.NewPushCommand(configRepo, stateRepo, gitRepo, encryptionSvc, manifestRepo, secretScanner)
+	pushCmd := commands.NewPushCommand(configRepo, stateRepo, gitProxy, encryptionSvc, manifestRepo, secretScanner)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter)
@@ -103,7 +127,9 @@ Quick start:
 	root.PersistentFlags().BoolP("verbose", "v", false, "enable verbose logging")
 	root.PersistentFlags().Bool("quiet", false, "suppress non-error output")
 	root.PersistentFlags().Bool("force", false, "skip confirmation prompts")
+	root.PersistentFlags().Bool("use-system-git", false, "use system git binary instead of built-in go-git")
 
+	root.AddCommand(newFilterSubcmds(encryptionSvc)...)
 	root.AddCommand(
 		newInitSubcmd(initCmd),
 		newSourceSubcmd(sourceCmd),
@@ -121,10 +147,18 @@ Quick start:
 		newVersionSubcmd(version),
 	)
 
-	return root
+	setGitImpl := func(impl repositories.GitRepository) {
+		gitProxy.impl = impl
+	}
+	return root, setGitImpl
 }
 
 func defaultConfigDir() string {
+	if runtime.GOOS == "windows" {
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "aisync")
+		}
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "aisync")
 }
@@ -195,6 +229,14 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 			repo, _ := cmd.Flags().GetString("source-repo")
 			branch, _ := cmd.Flags().GetString("branch")
 			ref, _ := cmd.Flags().GetString("ref")
+			pathFilter, _ := cmd.Flags().GetString("path")
+
+			var mappings []entities.SourceMapping
+			if pathFilter != "" {
+				mappings = inferMappingsForPath(pathFilter)
+			} else {
+				mappings = inferMappings()
+			}
 
 			source := entities.Source{
 				Name:     args[0],
@@ -202,7 +244,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 				Branch:   branch,
 				Ref:      ref,
 				Refresh:  "168h",
-				Mappings: inferMappings(),
+				Mappings: mappings,
 			}
 			return sourceCmd.Add(resolveConfigPath(cmd), source)
 		},
@@ -210,6 +252,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 	addCmd.Flags().String("source-repo", "", "repository in owner/repo format")
 	addCmd.Flags().String("branch", "main", "branch to pull from")
 	addCmd.Flags().String("ref", "", "pin to a specific tag or SHA")
+	addCmd.Flags().String("path", "", "subdirectory within the source repo to restrict mappings")
 	addCmd.Flags().String("from-url", "", "import source definition from a remote YAML URL")
 
 	//nolint:exhaustruct
@@ -466,6 +509,14 @@ func newVersionSubcmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use: "version", Short: "Print aisync version", Args: cobra.NoArgs,
 		Run: func(_ *cobra.Command, _ []string) { println("aisync " + version) },
+	}
+}
+
+// inferMappingsForPath generates a single source mapping for a specific
+// subdirectory within the source repo.
+func inferMappingsForPath(subpath string) []entities.SourceMapping {
+	return []entities.SourceMapping{
+		{Source: subpath, Target: "shared/" + subpath},
 	}
 }
 

@@ -52,7 +52,7 @@ func (c *MigrateCommand) Execute(configPath, repoPath string) error {
 	// and computing their checksums.
 	knownShared := make(map[string]knownSharedEntry)
 	for _, source := range config.Sources {
-		fetched, fetchErr := c.sourceRepo.Fetch(&source, "")
+		fetched, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
 		if fetchErr != nil || fetched == nil {
 			logger.Debugf("skipping source %s during migrate: %v", source.Name, fetchErr)
 			continue

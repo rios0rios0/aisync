@@ -22,14 +22,23 @@ func main() {
 		logger.SetLevel(logger.DebugLevel)
 	}
 
-	rootCmd := controllers.NewRootCommand(version)
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+	rootCmd, setGitImpl := controllers.NewRootCommand(version)
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		if verbose {
 			logger.SetLevel(logger.DebugLevel)
 		} else if quiet {
 			logger.SetLevel(logger.ErrorLevel)
+		}
+
+		useSystemGit, _ := cmd.Flags().GetBool("use-system-git")
+		if useSystemGit {
+			repo, err := controllers.NewExecGitRepository()
+			if err != nil {
+				logger.Fatalf("--use-system-git: %v", err)
+			}
+			setGitImpl(repo)
 		}
 	}
 
