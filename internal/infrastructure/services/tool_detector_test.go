@@ -18,8 +18,8 @@ func TestFSToolDetector_DetectInstalled_ShouldSetEnabledTrueWhenDirExists(t *tes
 	tmpDir := t.TempDir()
 	claudeDir := filepath.Join(tmpDir, "claude")
 	cursorDir := filepath.Join(tmpDir, "cursor")
-	assert.NoError(t, os.MkdirAll(claudeDir, 0755))
-	assert.NoError(t, os.MkdirAll(cursorDir, 0755))
+	assert.NoError(t, os.MkdirAll(claudeDir, 0700))
+	assert.NoError(t, os.MkdirAll(cursorDir, 0700))
 
 	defaults := map[string]entities.Tool{
 		"claude": {Path: claudeDir, Enabled: false},
@@ -56,7 +56,7 @@ func TestFSToolDetector_DetectInstalled_ShouldHandleMixedExistingAndMissing(t *t
 	// given
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(existingDir, 0755))
+	assert.NoError(t, os.MkdirAll(existingDir, 0700))
 
 	defaults := map[string]entities.Tool{
 		"claude": {Path: existingDir, Enabled: false},
@@ -76,7 +76,7 @@ func TestFSToolDetector_DetectInstalled_ShouldPreserveOriginalPaths(t *testing.T
 	// given
 	tmpDir := t.TempDir()
 	claudeDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(claudeDir, 0755))
+	assert.NoError(t, os.MkdirAll(claudeDir, 0700))
 
 	defaults := map[string]entities.Tool{
 		"claude": {Path: claudeDir, Enabled: false},
@@ -109,7 +109,7 @@ func TestFSToolDetector_DetectInstalled_ShouldExpandHomePath(t *testing.T) {
 
 	// Create a unique directory under the user's real home
 	testDir := filepath.Join(home, ".aisync-test-detect-"+t.Name())
-	assert.NoError(t, os.MkdirAll(testDir, 0755))
+	assert.NoError(t, os.MkdirAll(testDir, 0700))
 	defer os.RemoveAll(testDir)
 
 	defaults := map[string]entities.Tool{

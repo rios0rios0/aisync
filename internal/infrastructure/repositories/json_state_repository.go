@@ -28,7 +28,7 @@ func (r *JSONStateRepository) Load(repoPath string) (*entities.State, error) {
 	}
 
 	var state entities.State
-	if err := json.Unmarshal(data, &state); err != nil {
+	if err = json.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse state file: %w", err)
 	}
 
@@ -38,7 +38,7 @@ func (r *JSONStateRepository) Load(repoPath string) (*entities.State, error) {
 // Save writes the state to the .aisync/ directory inside the given repo path.
 func (r *JSONStateRepository) Save(repoPath string, state *entities.State) error {
 	dir := filepath.Join(repoPath, ".aisync")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("failed to create .aisync directory: %w", err)
 	}
 
@@ -48,7 +48,7 @@ func (r *JSONStateRepository) Save(repoPath string, state *entities.State) error
 	}
 
 	path := filepath.Join(dir, stateFileName)
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err = os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}
 

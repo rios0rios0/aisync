@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -8,6 +9,11 @@ import (
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
+)
+
+const (
+	cannotLoadConfig = "cannot load config"
+	httpCheckTimeout = 10 * time.Second
 )
 
 // DoctorCommand diagnoses common issues with the aisync setup.
@@ -41,8 +47,12 @@ func NewDoctorCommand(
 
 // Execute runs all diagnostic checks and prints a pass/fail table.
 func (c *DoctorCommand) Execute(configPath, repoPath string) error {
-	fmt.Println("Running diagnostics...")
-	fmt.Println()
+	if c.formatter == nil {
+		c.formatter = &entities.PlainFormatter{}
+	}
+
+	fmt.Fprintln(os.Stdout, "Running diagnostics...")
+	fmt.Fprintln(os.Stdout)
 
 	checks := []struct {
 		name string
@@ -64,14 +74,14 @@ func (c *DoctorCommand) Execute(configPath, repoPath string) error {
 		if !passed {
 			allPassed = false
 		}
-		fmt.Printf("  %s %-20s %s\n", tag, check.name, detail)
+		fmt.Fprintf(os.Stdout, "  %s %-20s %s\n", tag, check.name, detail)
 	}
 
-	fmt.Println()
+	fmt.Fprintln(os.Stdout)
 	if allPassed {
-		fmt.Println("All checks passed.")
+		fmt.Fprintln(os.Stdout, "All checks passed.")
 	} else {
-		fmt.Println("Some checks failed. See details above.")
+		fmt.Fprintln(os.Stdout, "Some checks failed. See details above.")
 	}
 
 	return nil
@@ -97,7 +107,7 @@ func (c *DoctorCommand) checkRepo(repoPath string) (string, bool) {
 		return "exists but is not a directory", false
 	}
 	gitDir := repoPath + "/.git"
-	if _, err := os.Stat(gitDir); err != nil {
+	if _, statErr := os.Stat(gitDir); statErr != nil {
 		return "exists but is not a git repository", false
 	}
 	return repoPath, true
@@ -117,11 +127,11 @@ func (c *DoctorCommand) checkState(repoPath string) (string, bool) {
 func (c *DoctorCommand) checkAgeKey(configPath string) (string, bool) {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
-		return "cannot load config", false
+		return cannotLoadConfig, false
 	}
 
 	identityPath := ExpandHome(config.Encryption.Identity)
-	if _, err := os.Stat(identityPath); err != nil {
+	if _, statErr := os.Stat(identityPath); statErr != nil {
 		return "identity file not found at " + identityPath + " (run 'aisync key generate')", false
 	}
 
@@ -150,22 +160,25 @@ func (c *DoctorCommand) checkTools() (string, bool) {
 func (c *DoctorCommand) checkSources(configPath string) (string, bool) {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
-		return "cannot load config", false
+		return cannotLoadConfig, false
 	}
 
 	if len(config.Sources) == 0 {
 		return "no sources configured", false
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: httpCheckTimeout}
 	reachable := 0
 	for _, source := range config.Sources {
 		url := source.TarballURL()
-		req, _ := http.NewRequest(http.MethodHead, url, nil)
-		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == http.StatusOK {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodHead, url, nil)
+		resp, reqErr := client.Do(req)
+		if reqErr != nil {
+			continue
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
 			reachable++
-			resp.Body.Close()
 		}
 	}
 
@@ -175,14 +188,14 @@ func (c *DoctorCommand) checkSources(configPath string) (string, bool) {
 func (c *DoctorCommand) checkGitConnectivity(configPath, repoPath string) (string, bool) {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
-		return "cannot load config", false
+		return cannotLoadConfig, false
 	}
 	if config.Sync.Remote == "" {
 		return "no remote configured (local only)", true
 	}
 
-	if err := c.gitRepo.Open(repoPath); err != nil {
-		return fmt.Sprintf("cannot open repo: %v", err), false
+	if openErr := c.gitRepo.Open(repoPath); openErr != nil {
+		return fmt.Sprintf("cannot open repo: %v", openErr), false
 	}
 	if !c.gitRepo.HasRemote() {
 		return "remote configured in config but not in git", false

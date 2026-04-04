@@ -47,7 +47,7 @@ func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T)
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -79,7 +79,7 @@ func TestAtomicApplyService_Apply_ShouldMoveFilesToTarget(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -111,7 +111,7 @@ func TestAtomicApplyService_Apply_ShouldHandleMultipleFiles(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -143,7 +143,7 @@ func TestAtomicApplyService_Recover_ShouldCompleteApplyWhenPendingJournalExists(
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -210,10 +210,10 @@ func TestAtomicApplyService_Stage_ShouldRecordOldChecksumWhenTargetExists(t *tes
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	targetPath := filepath.Join(targetDir, "existing.txt")
-	assert.NoError(t, os.WriteFile(targetPath, []byte("old content"), 0644))
+	assert.NoError(t, os.WriteFile(targetPath, []byte("old content"), 0600))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -240,7 +240,7 @@ func TestAtomicApplyService_Apply_ShouldFallbackToCopyWhenCrossDevice(t *testing
 
 	stagingFile := filepath.Join(stagingDir, "cross.txt")
 	content := []byte("cross-device content")
-	assert.NoError(t, os.WriteFile(stagingFile, content, 0644))
+	assert.NoError(t, os.WriteFile(stagingFile, content, 0600))
 
 	targetPath := filepath.Join(targetDir, "cross.txt")
 
@@ -270,16 +270,16 @@ func TestAtomicApplyService_Apply_ShouldSkipAlreadyAppliedOperations(t *testing.
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	stagingDir := filepath.Join(tmpDir, "staging", "test")
-	assert.NoError(t, os.MkdirAll(stagingDir, 0755))
+	assert.NoError(t, os.MkdirAll(stagingDir, 0700))
 
 	// Only create a staging file for the pending operation
 	pendingTarget := filepath.Join(targetDir, "pending.txt")
 	pendingContent := []byte("pending content")
 	pendingStagingFile := filepath.Join(stagingDir, "pending.txt")
-	assert.NoError(t, os.WriteFile(pendingStagingFile, pendingContent, 0644))
+	assert.NoError(t, os.WriteFile(pendingStagingFile, pendingContent, 0600))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -337,11 +337,11 @@ func TestAtomicApplyService_Apply_ShouldCreateTargetDirectoryIfMissing(t *testin
 	// given
 	tmpDir := t.TempDir()
 	stagingDir := filepath.Join(tmpDir, "staging", "test")
-	assert.NoError(t, os.MkdirAll(stagingDir, 0755))
+	assert.NoError(t, os.MkdirAll(stagingDir, 0700))
 
 	content := []byte("deep content")
 	stagingFile := filepath.Join(stagingDir, "deep.txt")
-	assert.NoError(t, os.WriteFile(stagingFile, content, 0644))
+	assert.NoError(t, os.WriteFile(stagingFile, content, 0600))
 
 	targetPath := filepath.Join(tmpDir, "deep", "nested", "dir", "deep.txt")
 
@@ -369,7 +369,7 @@ func TestMoveFile_ShouldMoveFileSuccessfully(t *testing.T) {
 	srcFile := filepath.Join(tmpDir, "source.txt")
 	dstFile := filepath.Join(tmpDir, "dest.txt")
 	content := []byte("move me")
-	assert.NoError(t, os.WriteFile(srcFile, content, 0644))
+	assert.NoError(t, os.WriteFile(srcFile, content, 0600))
 
 	// when
 	err := services.MoveFile(srcFile, dstFile)
@@ -428,7 +428,7 @@ func TestReadExistingChecksum_ShouldReturnChecksumForExistingFile(t *testing.T) 
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "existing.txt")
 	content := []byte("existing content")
-	assert.NoError(t, os.WriteFile(path, content, 0644))
+	assert.NoError(t, os.WriteFile(path, content, 0600))
 
 	// when
 	result := services.ReadExistingChecksum(path)
@@ -497,7 +497,7 @@ func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0755))
+	assert.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)

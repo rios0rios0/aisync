@@ -3,6 +3,7 @@ package repositories
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,19 +22,27 @@ type HTTPSourceRepository struct {
 	client *http.Client
 }
 
+const (
+	httpSourceTimeout = 120 * time.Second
+	tarSplitParts     = 2
+)
+
 // NewHTTPSourceRepository creates a new HTTPSourceRepository.
 func NewHTTPSourceRepository() *HTTPSourceRepository {
 	return &HTTPSourceRepository{
-		client: &http.Client{Timeout: 120 * time.Second},
+		client: &http.Client{Timeout: httpSourceTimeout},
 	}
 }
 
 // Fetch downloads the tarball for the source, extracts mapped files, and returns them.
-func (r *HTTPSourceRepository) Fetch(source *entities.Source, hints domainRepos.CacheHints) (*domainRepos.FetchResult, error) {
+func (r *HTTPSourceRepository) Fetch(
+	source *entities.Source,
+	hints domainRepos.CacheHints,
+) (*domainRepos.FetchResult, error) {
 	url := source.TarballURL()
 	logger.Debugf("fetching tarball from %s", url)
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -52,7 +61,7 @@ func (r *HTTPSourceRepository) Fetch(source *entities.Source, hints domainRepos.
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil result signals 304 Not Modified (cache hit)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -76,7 +85,10 @@ func (r *HTTPSourceRepository) Fetch(source *entities.Source, hints domainRepos.
 
 // extractMappedFiles reads a tar.gz stream and extracts files that match the
 // source mappings.
-func (r *HTTPSourceRepository) extractMappedFiles(reader io.Reader, source *entities.Source) (map[string][]byte, error) {
+func (r *HTTPSourceRepository) extractMappedFiles(
+	reader io.Reader,
+	source *entities.Source,
+) (map[string][]byte, error) {
 	gz, err := gzip.NewReader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
@@ -87,44 +99,58 @@ func (r *HTTPSourceRepository) extractMappedFiles(reader io.Reader, source *enti
 	files := make(map[string][]byte)
 
 	for {
-		header, err := tr.Next()
-		if err == io.EOF {
+		header, tarErr := tr.Next()
+		if tarErr == io.EOF {
 			break
 		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to read tar entry: %w", err)
+		if tarErr != nil {
+			return nil, fmt.Errorf("failed to read tar entry: %w", tarErr)
 		}
 
-		if header.Typeflag != tar.TypeReg {
-			continue
-		}
-
-		// GitHub tarballs have a top-level directory like "repo-branch/"
-		// Strip the first component to get the actual path.
-		parts := strings.SplitN(header.Name, "/", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		entryPath := parts[1]
-
-		for _, mapping := range source.Mappings {
-			if !matchesMapping(entryPath, mapping.Source) {
-				continue
-			}
-
-			relativePath := remapPath(entryPath, mapping.Source, mapping.Target)
-			content, readErr := io.ReadAll(tr)
-			if readErr != nil {
-				logger.Warnf("failed to read %s: %v", header.Name, readErr)
-				continue
-			}
-
-			files[relativePath] = content
-			break
-		}
+		r.processTarEntry(header, tr, source, files)
 	}
 
 	return files, nil
+}
+
+// processTarEntry handles a single tar entry, extracting it if it matches a
+// source mapping.
+func (r *HTTPSourceRepository) processTarEntry(
+	header *tar.Header,
+	tr *tar.Reader,
+	source *entities.Source,
+	files map[string][]byte,
+) {
+	if header.Typeflag != tar.TypeReg {
+		return
+	}
+
+	parts := strings.SplitN(header.Name, "/", tarSplitParts)
+	if len(parts) < tarSplitParts {
+		return
+	}
+	entryPath := filepath.Clean(parts[1])
+
+	if strings.HasPrefix(entryPath, "..") || strings.Contains(entryPath, "/..") {
+		logger.Warnf("skipping potentially unsafe tar entry: %s", header.Name)
+		return
+	}
+
+	for _, mapping := range source.Mappings {
+		if !matchesMapping(entryPath, mapping.Source) {
+			continue
+		}
+
+		relativePath := remapPath(entryPath, mapping.Source, mapping.Target)
+		content, readErr := io.ReadAll(tr)
+		if readErr != nil {
+			logger.Warnf("failed to read %s: %v", header.Name, readErr)
+			continue
+		}
+
+		files[relativePath] = content
+		break
+	}
 }
 
 // matchesMapping checks if a tarball entry path falls under a source mapping path.

@@ -13,7 +13,7 @@ import (
 func TestRegexSecretScanner_Scan_ShouldDetectAWSAccessKeyID(t *testing.T) {
 	// given
 	files := map[string][]byte{
-		"config.yaml": []byte("aws_key: AKIAIOSFODNN7EXAMPLE"),
+		"config.yaml": []byte("aws_key: AKIAIOSFODNN7EXAMPLE"), //nolint:gosec //gitleaks:allow
 	}
 	scanner := services.NewRegexSecretScanner()
 
@@ -29,7 +29,7 @@ func TestRegexSecretScanner_Scan_ShouldDetectAWSAccessKeyID(t *testing.T) {
 func TestRegexSecretScanner_Scan_ShouldDetectGitHubPAT(t *testing.T) {
 	// given
 	files := map[string][]byte{
-		"env.sh": []byte("export TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"),
+		"env.sh": []byte("export TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"), //nolint:gosec //gitleaks:allow
 	}
 	scanner := services.NewRegexSecretScanner()
 
@@ -92,7 +92,7 @@ func TestRegexSecretScanner_Scan_ShouldDetectOpenAIAPIKey(t *testing.T) {
 func TestRegexSecretScanner_Scan_ShouldDetectPrivateKeyHeader(t *testing.T) {
 	// given
 	files := map[string][]byte{
-		"key.pem": []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJ..."),
+		"key.pem": []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJ..."), //nolint:gosec //gitleaks:allow
 	}
 	scanner := services.NewRegexSecretScanner()
 
@@ -122,7 +122,7 @@ func TestRegexSecretScanner_Scan_ShouldDetectAgeSecretKey(t *testing.T) {
 
 func TestRegexSecretScanner_Scan_ShouldDetectJWTToken(t *testing.T) {
 	// given
-	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" //nolint:gosec //gitleaks:allow
 	files := map[string][]byte{
 		"auth.json": []byte(`{"token": "` + jwt + `"}`),
 	}
@@ -139,7 +139,7 @@ func TestRegexSecretScanner_Scan_ShouldDetectJWTToken(t *testing.T) {
 func TestRegexSecretScanner_Scan_ShouldDetectSlackToken(t *testing.T) {
 	// given
 	files := map[string][]byte{
-		"slack.env": []byte("SLACK_TOKEN=xoxb-1234567890-abcdefghij"),
+		"slack.env": []byte("SLACK_TOKEN=xoxb-1234567890-abcdefghij"), //nolint:gosec //gitleaks:allow
 	}
 	scanner := services.NewRegexSecretScanner()
 
@@ -169,7 +169,7 @@ func TestRegexSecretScanner_Scan_ShouldReturnNoFindingsForCleanFile(t *testing.T
 
 func TestRegexSecretScanner_Scan_ShouldReturnCorrectLineNumbers(t *testing.T) {
 	// given
-	content := "line one\nline two\nAKIAIOSFODNN7EXAMPLE\nline four\n"
+	content := "line one\nline two\nAKIAIOSFODNN7EXAMPLE\nline four\n" //gitleaks:allow
 	files := map[string][]byte{
 		"test.txt": []byte(content),
 	}
@@ -185,9 +185,9 @@ func TestRegexSecretScanner_Scan_ShouldReturnCorrectLineNumbers(t *testing.T) {
 
 func TestRegexSecretScanner_Scan_ShouldDetectMultipleFindingsInSameFile(t *testing.T) {
 	// given
-	content := "key1: AKIAIOSFODNN7EXAMPLE\n" +
-		"-----BEGIN RSA PRIVATE KEY-----\n" +
-		"token: xoxb-1234567890-abcdefghij\n"
+	content := "key1: AKIAIOSFODNN7EXAMPLE\n" + //gitleaks:allow
+		"-----BEGIN RSA PRIVATE KEY-----\n" + //gitleaks:allow
+		"token: xoxb-1234567890-abcdefghij\n" //gitleaks:allow
 	files := map[string][]byte{
 		"multi.env": []byte(content),
 	}
@@ -211,7 +211,7 @@ func TestRegexSecretScanner_Scan_ShouldDetectMultipleFindingsInSameFile(t *testi
 func TestRegexSecretScanner_Scan_ShouldDetectGoogleAPIKey(t *testing.T) {
 	// given
 	files := map[string][]byte{
-		"config.json": []byte(`{"api_key": "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"}`),
+		"config.json": []byte(`{"api_key": "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"}`), //nolint:gosec //gitleaks:allow
 	}
 	scanner := services.NewRegexSecretScanner()
 
@@ -271,12 +271,12 @@ func TestRegexSecretScanner_Scan_ShouldDetectHardcodedPassword(t *testing.T) {
 
 func TestRegexSecretScanner_Scan_ShouldDetectMultipleDifferentSecretTypesInOneFile(t *testing.T) {
 	// given
-	googleKey := "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"
-	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+	googleKey := "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q" //nolint:gosec //gitleaks:allow
+	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" //nolint:gosec //gitleaks:allow
 	content := "GOOGLE_KEY=" + googleKey + "\n" +
 		"TOKEN=" + jwt + "\n" +
 		`password = "verylongpassword123"` + "\n" +
-		"SLACK=xoxb-1234567890-abcdefghij\n"
+		"SLACK=xoxb-1234567890-abcdefghij\n" //gitleaks:allow
 	files := map[string][]byte{
 		"multi-secrets.env": []byte(content),
 	}

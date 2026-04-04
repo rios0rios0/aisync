@@ -13,7 +13,7 @@ import (
 var version = "dev"
 
 func main() {
-	//nolint:exhaustruct
+	//nolint:exhaustruct // cobra command does not require all fields
 	logger.SetFormatter(&logger.TextFormatter{
 		ForceColors:   true,
 		FullTimestamp: true,

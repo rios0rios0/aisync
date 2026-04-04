@@ -54,7 +54,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 	}
 
 	if !dryRun {
-		if err := c.gitRepo.Open(repoPath); err != nil {
+		if err = c.gitRepo.Open(repoPath); err != nil {
 			return fmt.Errorf("failed to open git repo: %w", err)
 		}
 	}
@@ -66,6 +66,29 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 		return c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns)
 	}
 
+	copied := c.collectAllPersonalFiles(config, repoPath, ignorePatterns, encryptPatterns)
+	logger.Infof("collected %d personal files into sync repo", copied)
+
+	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns); err != nil {
+		return err
+	}
+
+	if updateErr := c.updateState(repoPath); updateErr != nil {
+		logger.Warnf("failed to update state: %v", updateErr)
+	}
+
+	fmt.Fprintf(os.Stdout, "Push complete: %d files collected.\n", copied)
+	return nil
+}
+
+// collectAllPersonalFiles iterates over all enabled tools and collects personal
+// files from each tool directory into the sync repo.
+func (c *PushCommand) collectAllPersonalFiles(
+	config *entities.Config,
+	repoPath string,
+	ignorePatterns *entities.IgnorePatterns,
+	encryptPatterns *entities.EncryptPatterns,
+) int {
 	copied := 0
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled {
@@ -86,9 +109,15 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 		}
 		copied += n
 	}
+	return copied
+}
 
-	logger.Infof("collected %d personal files into sync repo", copied)
-
+// commitAndPush checks for changes, scans for secrets, commits, and pushes.
+func (c *PushCommand) commitAndPush(
+	repoPath, commitMsg string,
+	skipSecretScan bool,
+	encryptPatterns *entities.EncryptPatterns,
+) error {
 	clean, err := c.gitRepo.IsClean()
 	if err != nil {
 		return fmt.Errorf("failed to check git status: %w", err)
@@ -109,14 +138,14 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 		commitMsg = fmt.Sprintf("sync(%s): updated personal configurations", hostname)
 	}
 
-	if err := c.gitRepo.CommitAll(commitMsg); err != nil {
+	if err = c.gitRepo.CommitAll(commitMsg); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 	logger.Infof("committed: %s", commitMsg)
 
 	if c.gitRepo.HasRemote() {
-		if err := c.gitRepo.Push(); err != nil {
-			logger.Warnf("push failed (will retry on next sync): %v", err)
+		if pushErr := c.gitRepo.Push(); pushErr != nil {
+			logger.Warnf("push failed (will retry on next sync): %v", pushErr)
 		} else {
 			logger.Info("pushed to remote")
 		}
@@ -124,19 +153,20 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 		logger.Info("no remote configured, skipping push")
 	}
 
-	if err := c.updateState(repoPath); err != nil {
-		logger.Warnf("failed to update state: %v", err)
-	}
-
-	fmt.Printf("Push complete: %d files collected.\n", copied)
 	return nil
+}
+
+// dryRunToolResult holds the per-tool dry-run scan outcome.
+type dryRunToolResult struct {
+	files     int
+	encrypted int
 }
 
 // executeDryRun detects personal files that would be pushed and prints a summary
 // without modifying the sync repo, committing, or pushing.
 func (c *PushCommand) executeDryRun(
 	config *entities.Config,
-	repoPath string,
+	_ string,
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
 ) error {
@@ -144,7 +174,7 @@ func (c *PushCommand) executeDryRun(
 	encryptedFiles := 0
 	skippedTools := 0
 
-	fmt.Println("[dry-run] Push summary:")
+	fmt.Fprintln(os.Stdout, "[dry-run] Push summary:")
 
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled {
@@ -158,52 +188,57 @@ func (c *PushCommand) executeDryRun(
 			continue
 		}
 
-		manifest := c.loadManifest(toolDir)
-		toolFiles := 0
-
-		walkErr := filepath.Walk(toolDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return nil
-			}
-
-			relPath, relErr := filepath.Rel(toolDir, path)
-			if relErr != nil {
-				return nil
-			}
-
-			if entities.IsDenied(path) {
-				return nil
-			}
-
-			if ignorePatterns.Matches(relPath) {
-				return nil
-			}
-
-			if c.isSharedFile(relPath, manifest) {
-				return nil
-			}
-
-			encrypted := encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0
-			if encrypted {
-				encryptedFiles++
-				fmt.Printf("  %s/%s (encrypted)\n", toolName, relPath)
-			} else {
-				fmt.Printf("  %s/%s\n", toolName, relPath)
-			}
-
-			toolFiles++
-			return nil
-		})
-		if walkErr != nil {
-			logger.Warnf("failed to walk %s: %v", toolDir, walkErr)
-		}
-
-		totalFiles += toolFiles
+		result := c.dryRunScanTool(toolName, toolDir, ignorePatterns, encryptPatterns, config)
+		totalFiles += result.files
+		encryptedFiles += result.encrypted
 	}
 
-	fmt.Printf("\n[dry-run] %d file(s) to push, %d encrypted, %d tool(s) skipped\n",
+	fmt.Fprintf(os.Stdout, "\n[dry-run] %d file(s) to push, %d encrypted, %d tool(s) skipped\n",
 		totalFiles, encryptedFiles, skippedTools)
 	return nil
+}
+
+// dryRunScanTool walks a single tool directory and prints the files that would be
+// pushed, returning the count of files and encrypted files.
+func (c *PushCommand) dryRunScanTool(
+	toolName, toolDir string,
+	ignorePatterns *entities.IgnorePatterns,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+) dryRunToolResult {
+	manifest := c.loadManifest(toolDir)
+	var result dryRunToolResult
+
+	walkErr := filepath.Walk(toolDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
+		}
+
+		relPath, relErr := filepath.Rel(toolDir, path)
+		if relErr != nil {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
+		}
+
+		if entities.IsDenied(path) || ignorePatterns.Matches(relPath) || c.isSharedFile(relPath, manifest) {
+			return nil
+		}
+
+		encrypted := encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0
+		if encrypted {
+			result.encrypted++
+			fmt.Fprintf(os.Stdout, "  %s/%s (encrypted)\n", toolName, relPath)
+		} else {
+			fmt.Fprintf(os.Stdout, "  %s/%s\n", toolName, relPath)
+		}
+
+		result.files++
+		return nil
+	})
+	if walkErr != nil {
+		logger.Warnf("failed to walk %s: %v", toolDir, walkErr)
+	}
+
+	return result
 }
 
 // collectPersonalFiles walks a tool directory and copies files that are not tracked
@@ -216,79 +251,76 @@ func (c *PushCommand) collectPersonalFiles(
 	config *entities.Config,
 ) (int, error) {
 	personalDir := filepath.Join(repoPath, "personal", toolName)
-	if err := os.MkdirAll(personalDir, 0755); err != nil {
+	if err := os.MkdirAll(personalDir, 0700); err != nil {
 		return 0, fmt.Errorf("failed to create personal directory: %w", err)
 	}
 
 	copied := 0
 	err := filepath.Walk(toolDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return nil // skip files that cannot be read
-		}
-		if info.IsDir() {
-			return nil
+		if walkErr != nil || info.IsDir() {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		relPath, err := filepath.Rel(toolDir, path)
 		if err != nil {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
+		}
+
+		if entities.IsDenied(path) || ignorePatterns.Matches(relPath) || c.isSharedFile(relPath, manifest) {
 			return nil
 		}
 
-		// Skip files on the deny-list
-		if entities.IsDenied(path) {
-			return nil
+		if c.copyPersonalFile(path, relPath, personalDir, encryptPatterns, config) {
+			copied++
 		}
-
-		// Skip files matching user-defined ignore patterns
-		if ignorePatterns.Matches(relPath) {
-			return nil
-		}
-
-		// Skip files that are tracked as shared in the manifest
-		if c.isSharedFile(relPath, manifest) {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			logger.Warnf("failed to read %s: %v", path, err)
-			return nil
-		}
-
-		// Encrypt if the file matches encrypt patterns and recipients are configured
-		if encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0 {
-			encrypted, encErr := c.encryptionService.Encrypt(content, config.Encryption.Recipients)
-			if encErr != nil {
-				logger.Warnf("failed to encrypt %s: %v", relPath, encErr)
-				return nil
-			}
-			content = encrypted
-			relPath = relPath + ".age"
-		}
-
-		destPath := filepath.Join(personalDir, relPath)
-		destDir := filepath.Dir(destPath)
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			logger.Warnf("failed to create directory %s: %v", destDir, err)
-			return nil
-		}
-
-		existing, readErr := os.ReadFile(destPath)
-		if readErr == nil && checksumBytes(existing) == checksumBytes(content) {
-			return nil // unchanged
-		}
-
-		if err := os.WriteFile(destPath, content, 0644); err != nil {
-			logger.Warnf("failed to write %s: %v", destPath, err)
-			return nil
-		}
-
-		copied++
-		logger.Debugf("collected %s -> %s", relPath, destPath)
 		return nil
 	})
 
 	return copied, err
+}
+
+// copyPersonalFile reads a single file, optionally encrypts it, and writes it to
+// the personal directory if it has changed. Returns true if the file was copied.
+func (c *PushCommand) copyPersonalFile(
+	path, relPath, personalDir string,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+) bool {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		logger.Warnf("failed to read %s: %v", path, err)
+		return false
+	}
+
+	if encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0 {
+		encrypted, encErr := c.encryptionService.Encrypt(content, config.Encryption.Recipients)
+		if encErr != nil {
+			logger.Warnf("failed to encrypt %s: %v", relPath, encErr)
+			return false
+		}
+		content = encrypted
+		relPath += ".age"
+	}
+
+	destPath := filepath.Clean(filepath.Join(personalDir, relPath))
+	destDir := filepath.Dir(destPath)
+	if err = os.MkdirAll(destDir, 0700); err != nil {
+		logger.Warnf("failed to create directory %s: %v", destDir, err)
+		return false
+	}
+
+	existing, readErr := os.ReadFile(destPath)
+	if readErr == nil && checksumBytes(existing) == checksumBytes(content) {
+		return false
+	}
+
+	if err = os.WriteFile(destPath, content, 0600); err != nil { //nolint:gosec // destPath is filepath.Clean'd above
+		logger.Warnf("failed to write %s: %v", destPath, err)
+		return false
+	}
+
+	logger.Debugf("collected %s -> %s", relPath, destPath)
+	return true
 }
 
 // isSharedFile checks whether a relative path is tracked as "shared" in the manifest.
@@ -352,12 +384,12 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 	unencrypted := make(map[string][]byte)
 	err := filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info.IsDir() {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		relPath, relErr := filepath.Rel(repoPath, path)
 		if relErr != nil {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		// Skip files that are already encrypted (.age suffix)
@@ -371,9 +403,9 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 			return nil
 		}
 
-		content, readErr := os.ReadFile(path)
+		content, readErr := os.ReadFile(path) //nolint:gosec // paths are from trusted tool directories
 		if readErr != nil {
-			return nil
+			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
 		unencrypted[relPath] = content
@@ -392,9 +424,9 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 		return nil
 	}
 
-	fmt.Println("Secret scan findings:")
+	fmt.Fprintln(os.Stdout, "Secret scan findings:")
 	for _, f := range findings {
-		fmt.Printf("  %s:%d - %s\n", f.Path, f.Line, f.Description)
+		fmt.Fprintf(os.Stdout, "  %s:%d - %s\n", f.Path, f.Line, f.Description)
 	}
 
 	return fmt.Errorf(

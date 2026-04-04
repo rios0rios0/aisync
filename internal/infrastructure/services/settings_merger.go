@@ -19,10 +19,10 @@ func NewSettingsMerger() *SettingsMerger {
 // Deep merge is applied in order: earlier sources first, later override. Personal
 // keys win on collision. Arrays are merged by appending unique elements.
 func (m *SettingsMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, error) {
-	merged := make(map[string]interface{})
+	merged := make(map[string]any)
 
 	for i, source := range sharedSources {
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		if err := json.Unmarshal(source, &parsed); err != nil {
 			return nil, fmt.Errorf("failed to parse shared source %d: %w", i, err)
 		}
@@ -30,7 +30,7 @@ func (m *SettingsMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte,
 	}
 
 	if len(personal) > 0 {
-		var parsed map[string]interface{}
+		var parsed map[string]any
 		if err := json.Unmarshal(personal, &parsed); err != nil {
 			return nil, fmt.Errorf("failed to parse personal settings: %w", err)
 		}
@@ -48,7 +48,7 @@ func (m *SettingsMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte,
 // deepMerge recursively merges the src map into dst. For nested maps, the merge
 // recurses. For arrays, unique elements from src are appended to dst. For scalar
 // values, src overwrites dst.
-func deepMerge(dst, src map[string]interface{}) {
+func deepMerge(dst, src map[string]any) {
 	for key, srcVal := range src {
 		dstVal, exists := dst[key]
 		if !exists {
@@ -56,15 +56,15 @@ func deepMerge(dst, src map[string]interface{}) {
 			continue
 		}
 
-		srcMap, srcIsMap := srcVal.(map[string]interface{})
-		dstMap, dstIsMap := dstVal.(map[string]interface{})
+		srcMap, srcIsMap := srcVal.(map[string]any)
+		dstMap, dstIsMap := dstVal.(map[string]any)
 		if srcIsMap && dstIsMap {
 			deepMerge(dstMap, srcMap)
 			continue
 		}
 
-		srcArr, srcIsArr := srcVal.([]interface{})
-		dstArr, dstIsArr := dstVal.([]interface{})
+		srcArr, srcIsArr := srcVal.([]any)
+		dstArr, dstIsArr := dstVal.([]any)
 		if srcIsArr && dstIsArr {
 			dst[key] = mergeArraysByUnion(dstArr, srcArr)
 			continue
@@ -76,7 +76,7 @@ func deepMerge(dst, src map[string]interface{}) {
 
 // mergeArraysByUnion appends elements from src to dst, skipping elements whose
 // JSON serialization already exists in dst.
-func mergeArraysByUnion(dst, src []interface{}) []interface{} {
+func mergeArraysByUnion(dst, src []any) []any {
 	seen := make(map[string]struct{}, len(dst))
 	for _, item := range dst {
 		serialized, err := json.Marshal(item)
@@ -86,8 +86,8 @@ func mergeArraysByUnion(dst, src []interface{}) []interface{} {
 		seen[string(serialized)] = struct{}{}
 	}
 
-	result := make([]interface{}, len(dst))
-	copy(result, dst)
+	result := make([]any, 0, len(dst))
+	result = append(result, dst...)
 
 	for _, item := range src {
 		serialized, err := json.Marshal(item)

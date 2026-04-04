@@ -71,7 +71,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -97,13 +97,13 @@ func TestWatchCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(toolDir, 0755))
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		// Create .aisyncignore file
 		require.NoError(t, os.WriteFile(
 			filepath.Join(tmpDir, ".aisyncignore"),
 			[]byte("*.log\n*.bak"),
-			0644,
+			0600,
 		))
 
 		config := &entities.Config{

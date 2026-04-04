@@ -78,7 +78,7 @@ func TestGoGitRepository_IsClean_WithUnstagedChanges(t *testing.T) {
 	err := repo.Init(dir)
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -96,7 +96,7 @@ func TestGoGitRepository_CommitAll(t *testing.T) {
 	err := repo.Init(dir)
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Test"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Test"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -118,13 +118,13 @@ func TestGoGitRepository_CommitAll_MultipleFiles(t *testing.T) {
 	err := repo.Init(dir)
 	assert.NoError(t, err)
 
-	err = os.MkdirAll(filepath.Join(dir, "rules"), 0755)
+	err = os.MkdirAll(filepath.Join(dir, "rules"), 0700)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(dir, "rules", "arch.md"), []byte("architecture"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "rules", "arch.md"), []byte("architecture"), 0600)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(dir, "rules", "git.md"), []byte("git flow"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "rules", "git.md"), []byte("git flow"), 0600)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("sync: true"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("sync: true"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -212,7 +212,7 @@ func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create an initial commit so the branch exists
-	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
 	assert.NoError(t, err)
@@ -290,7 +290,7 @@ func TestGoGitRepository_Pull_AlreadyUpToDate(t *testing.T) {
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
 	assert.NoError(t, err)
@@ -332,7 +332,7 @@ func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
 	err := repo.Init(dir)
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
 	assert.NoError(t, err)
 	err = repo.CommitAll("chore: test commit")
 	assert.NoError(t, err)
@@ -350,7 +350,7 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
 	assert.NoError(t, err)
@@ -361,7 +361,7 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Add a new commit to the bare/origin repo
-	err = os.WriteFile(filepath.Join(bareDir, "second.txt"), []byte("second"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "second.txt"), []byte("second"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("feat: added second file")
 	assert.NoError(t, err)
@@ -385,7 +385,7 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
 	assert.NoError(t, err)
@@ -397,7 +397,7 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Add a new file and commit
-	err = os.WriteFile(filepath.Join(cloneDir, "new.txt"), []byte("new content"), 0644)
+	err = os.WriteFile(filepath.Join(cloneDir, "new.txt"), []byte("new content"), 0600)
 	assert.NoError(t, err)
 	err = cloneRepo.CommitAll("feat: added new file")
 	assert.NoError(t, err)
@@ -417,7 +417,7 @@ func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
 	err := initRepo.Init(dir)
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
 	assert.NoError(t, err)
 	err = initRepo.CommitAll("chore: initial file")
 	assert.NoError(t, err)
@@ -434,7 +434,7 @@ func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
 	assert.True(t, clean)
 
 	// when -- add a new file and commit through the opened repo
-	err = os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0600)
 	assert.NoError(t, err)
 
 	clean, err = openRepo.IsClean()
@@ -456,11 +456,11 @@ func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
 	err := bareRepo.Init(bareDir)
 	assert.NoError(t, err)
 
-	err = os.MkdirAll(filepath.Join(bareDir, "rules"), 0755)
+	err = os.MkdirAll(filepath.Join(bareDir, "rules"), 0700)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "rules", "arch.md"), []byte("architecture"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "rules", "arch.md"), []byte("architecture"), 0600)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "readme.md"), []byte("readme"), 0644)
+	err = os.WriteFile(filepath.Join(bareDir, "readme.md"), []byte("readme"), 0600)
 	assert.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial with multiple files")
 	assert.NoError(t, err)
@@ -513,7 +513,7 @@ func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
 	err = repo.AddRemote("origin", "https://localhost:1/nonexistent.git")
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "f.txt"), []byte("data"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "f.txt"), []byte("data"), 0600)
 	assert.NoError(t, err)
 	err = repo.CommitAll("chore: commit")
 	assert.NoError(t, err)
@@ -564,7 +564,7 @@ func TestGoGitRepository_Open_ExistingWithRemote(t *testing.T) {
 	err = initRepo.AddRemote("origin", "https://github.com/test/repo.git")
 	assert.NoError(t, err)
 
-	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("data"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("data"), 0600)
 	assert.NoError(t, err)
 	err = initRepo.CommitAll("chore: initial commit")
 	assert.NoError(t, err)

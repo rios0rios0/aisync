@@ -1,0 +1,17 @@
+# Test data in secret_scanner_test.go contains intentional example secrets
+# for testing the secret scanning functionality.
+internal/infrastructure/services/secret_scanner_test.go:AWS:16
+internal/infrastructure/services/secret_scanner_test.go:AWS:172
+internal/infrastructure/services/secret_scanner_test.go:AWS:188
+internal/infrastructure/services/secret_scanner_test.go:Github Personal Access Token:32
+internal/infrastructure/services/secret_scanner_test.go:RSA private key:189
+internal/infrastructure/services/secret_scanner_test.go:RSA private key:95
+internal/infrastructure/services/secret_scanner_test.go:Slack token:142
+internal/infrastructure/services/secret_scanner_test.go:Slack token:190
+internal/infrastructure/services/secret_scanner_test.go:Slack token:279
+internal/infrastructure/services/secret_scanner_test.go:jwt:125
+internal/infrastructure/services/secret_scanner_test.go:jwt:275
+internal/infrastructure/services/secret_scanner_test.go:gcp-api-key:214
+internal/infrastructure/services/secret_scanner_test.go:gcp-api-key:274
+internal/infrastructure/services/secret_scanner_test.go:generic-api-key:142
+internal/infrastructure/services/secret_scanner_test.go:generic-api-key:190

@@ -31,7 +31,7 @@ func (p *EncryptPatterns) Matches(relativePath string) bool {
 // trims whitespace, and filters out comments and blank lines.
 func parsePatternLines(content []byte) []string {
 	var patterns []string
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -43,6 +43,8 @@ func parsePatternLines(content []byte) []string {
 
 // matchesAnyPattern checks a path against a list of glob patterns.
 // For patterns containing "**", it also tries matching only the filename.
+// For simple patterns without path separators (e.g. "*.tmp"), the pattern
+// is also matched against the basename of the path.
 func matchesAnyPattern(path string, patterns []string) bool {
 	normalized := filepath.ToSlash(path)
 	base := filepath.Base(normalized)
@@ -52,6 +54,14 @@ func matchesAnyPattern(path string, patterns []string) bool {
 
 		if matched, _ := filepath.Match(pattern, normalized); matched {
 			return true
+		}
+
+		// For simple patterns without directory separators, also match
+		// against the basename so "*.tmp" matches "some/dir/file.tmp".
+		if !strings.Contains(pattern, "/") {
+			if matched, _ := filepath.Match(pattern, base); matched {
+				return true
+			}
 		}
 
 		// Handle "**" by also matching against just the filename component.

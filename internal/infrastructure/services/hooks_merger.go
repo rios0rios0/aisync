@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 )
@@ -28,8 +29,8 @@ func (m *HooksMerger) SetExcludes(excludes []entities.HooksExcludeEntry) {
 // personal content. Hooks are concatenated per event key, deduplicated by their
 // JSON serialization, and filtered by the configured exclude rules.
 func (m *HooksMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, error) {
-	merged := make(map[string]interface{})
-	hooks := make(map[string][]interface{})
+	merged := make(map[string]any)
+	hooks := make(map[string][]any)
 
 	for i, source := range sharedSources {
 		parsed, err := parseHooksJSON(source)
@@ -47,12 +48,12 @@ func (m *HooksMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, er
 		collectHooks(parsed, hooks)
 	}
 
-	deduped := make(map[string][]interface{}, len(hooks))
+	deduped := make(map[string][]any, len(hooks))
 	for event, entries := range hooks {
 		deduped[event] = deduplicateHookEntries(entries)
 	}
 
-	filtered := make(map[string][]interface{}, len(deduped))
+	filtered := make(map[string][]any, len(deduped))
 	for event, entries := range deduped {
 		filtered[event] = m.applyExcludes(event, entries)
 	}
@@ -68,18 +69,18 @@ func (m *HooksMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, er
 }
 
 // parseHooksJSON parses a hooks.json byte slice and returns the inner "hooks" map.
-func parseHooksJSON(data []byte) (map[string]interface{}, error) {
-	var root map[string]interface{}
+func parseHooksJSON(data []byte) (map[string]any, error) {
+	var root map[string]any
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal hooks JSON: %w", err)
 	}
 
 	hooksRaw, ok := root["hooks"]
 	if !ok {
-		return make(map[string]interface{}), nil
+		return make(map[string]any), nil
 	}
 
-	hooksMap, ok := hooksRaw.(map[string]interface{})
+	hooksMap, ok := hooksRaw.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("expected 'hooks' to be an object, got %T", hooksRaw)
 	}
@@ -89,9 +90,9 @@ func parseHooksJSON(data []byte) (map[string]interface{}, error) {
 
 // collectHooks extracts hook arrays from a parsed hooks map and appends them
 // to the accumulator keyed by event name.
-func collectHooks(parsed map[string]interface{}, acc map[string][]interface{}) {
+func collectHooks(parsed map[string]any, acc map[string][]any) {
 	for event, entriesRaw := range parsed {
-		entries, ok := entriesRaw.([]interface{})
+		entries, ok := entriesRaw.([]any)
 		if !ok {
 			continue
 		}
@@ -101,9 +102,9 @@ func collectHooks(parsed map[string]interface{}, acc map[string][]interface{}) {
 
 // deduplicateHookEntries removes duplicate hook entries by comparing their
 // JSON-serialized form. The first occurrence is kept.
-func deduplicateHookEntries(entries []interface{}) []interface{} {
+func deduplicateHookEntries(entries []any) []any {
 	seen := make(map[string]struct{})
-	result := make([]interface{}, 0, len(entries))
+	result := make([]any, 0, len(entries))
 
 	for _, entry := range entries {
 		serialized, err := json.Marshal(entry)
@@ -126,12 +127,12 @@ func deduplicateHookEntries(entries []interface{}) []interface{} {
 
 // applyExcludes removes hook entries that match any of the configured exclude rules
 // for the given event key.
-func (m *HooksMerger) applyExcludes(event string, entries []interface{}) []interface{} {
+func (m *HooksMerger) applyExcludes(event string, entries []any) []any {
 	if len(m.excludes) == 0 {
 		return entries
 	}
 
-	result := make([]interface{}, 0, len(entries))
+	result := make([]any, 0, len(entries))
 	for _, entry := range entries {
 		if m.matchesExclude(event, entry) {
 			continue
@@ -143,38 +144,57 @@ func (m *HooksMerger) applyExcludes(event string, entries []interface{}) []inter
 }
 
 // matchesExclude checks if a hook entry matches any exclude rule for the given event.
-func (m *HooksMerger) matchesExclude(event string, entry interface{}) bool {
-	entryMap, ok := entry.(map[string]interface{})
+func (m *HooksMerger) matchesExclude(event string, entry any) bool {
+	entryMap, ok := entry.(map[string]any)
 	if !ok {
 		return false
 	}
 
 	matcher, _ := entryMap["matcher"].(string)
-
-	var command string
-	if hooksRaw, ok := entryMap["hooks"].([]interface{}); ok {
-		for _, hookRaw := range hooksRaw {
-			if hookMap, ok := hookRaw.(map[string]interface{}); ok {
-				if cmd, ok := hookMap["command"].(string); ok {
-					command = cmd
-					break
-				}
-			}
-		}
-	}
+	commands := extractHookCommands(entryMap)
 
 	for _, exclude := range m.excludes {
-		if exclude.Event != event {
-			continue
+		if m.excludeMatches(exclude, event, matcher, commands) {
+			return true
 		}
-		if exclude.Matcher != "" && exclude.Matcher != matcher {
-			continue
-		}
-		if exclude.Command != "" && exclude.Command != command {
-			continue
-		}
-		return true
 	}
 
 	return false
+}
+
+// extractHookCommands extracts command strings from the "hooks" array of a hook entry.
+func extractHookCommands(entryMap map[string]any) []string {
+	hooksRaw, ok := entryMap["hooks"].([]any)
+	if !ok {
+		return nil
+	}
+
+	var commands []string
+	for _, hookRaw := range hooksRaw {
+		if hookMap, mapOk := hookRaw.(map[string]any); mapOk {
+			if cmd, cmdOk := hookMap["command"].(string); cmdOk {
+				commands = append(commands, cmd)
+			}
+		}
+	}
+	return commands
+}
+
+// excludeMatches checks if a single exclude rule matches the given event, matcher,
+// and commands.
+func (m *HooksMerger) excludeMatches(
+	exclude entities.HooksExcludeEntry,
+	event, matcher string,
+	commands []string,
+) bool {
+	if exclude.Event != event {
+		return false
+	}
+	if exclude.Matcher != "" && exclude.Matcher != matcher {
+		return false
+	}
+	if exclude.Command != "" && !slices.Contains(commands, exclude.Command) {
+		return false
+	}
+	return true
 }

@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,11 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	logger "github.com/sirupsen/logrus"
+)
+
+const (
+	gitConfigSectionParts  = 3
+	gitConfigKeyValueParts = 2
 )
 
 // GoGitRepository implements GitRepository using go-git.
@@ -97,7 +103,7 @@ func (r *GoGitRepository) Open(dir string) error {
 // Pull fetches and merges changes from the remote origin.
 func (r *GoGitRepository) Pull() error {
 	if r.worktree == nil {
-		return fmt.Errorf("repository not opened; call Open or Clone first")
+		return errors.New("repository not opened; call Open or Clone first")
 	}
 
 	opts := &git.PullOptions{
@@ -109,7 +115,7 @@ func (r *GoGitRepository) Pull() error {
 	}
 
 	err := r.worktree.Pull(opts)
-	if err == git.NoErrAlreadyUpToDate {
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
 	}
 	if err != nil {
@@ -122,7 +128,7 @@ func (r *GoGitRepository) Pull() error {
 // CommitAll stages all changes and creates a commit with the given message.
 func (r *GoGitRepository) CommitAll(message string) error {
 	if r.worktree == nil {
-		return fmt.Errorf("repository not opened; call Open or Clone first")
+		return errors.New("repository not opened; call Open or Clone first")
 	}
 
 	if _, err := r.worktree.Add("."); err != nil {
@@ -147,7 +153,7 @@ func (r *GoGitRepository) CommitAll(message string) error {
 // it logs a warning and returns nil to support offline workflows.
 func (r *GoGitRepository) Push() error {
 	if r.repo == nil {
-		return fmt.Errorf("repository not opened; call Open or Clone first")
+		return errors.New("repository not opened; call Open or Clone first")
 	}
 
 	opts := &git.PushOptions{}
@@ -157,7 +163,7 @@ func (r *GoGitRepository) Push() error {
 	}
 
 	err := r.repo.Push(opts)
-	if err == git.NoErrAlreadyUpToDate {
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return nil
 	}
 	if err != nil {
@@ -171,7 +177,7 @@ func (r *GoGitRepository) Push() error {
 // IsClean returns true if the worktree has no modifications.
 func (r *GoGitRepository) IsClean() (bool, error) {
 	if r.worktree == nil {
-		return false, fmt.Errorf("repository not opened; call Open or Clone first")
+		return false, errors.New("repository not opened; call Open or Clone first")
 	}
 
 	status, err := r.worktree.Status()
@@ -197,15 +203,15 @@ func (r *GoGitRepository) HasRemote() bool {
 func (r *GoGitRepository) addSSHAuthIfNeeded(opts *git.PullOptions) error {
 	remoteURL, err := r.originURL()
 	if err != nil {
-		return nil // no remote configured; skip auth
+		return nil //nolint:nilerr // no remote configured; skip auth
 	}
 
 	if strings.HasPrefix(remoteURL, "git@") {
-		auth, err := sshAuthFromAgent()
-		if err != nil {
-			return fmt.Errorf("failed to configure SSH auth for pull: %w", err)
+		sshAuth, sshErr := sshAuthFromAgent()
+		if sshErr != nil {
+			return fmt.Errorf("failed to configure SSH auth for pull: %w", sshErr)
 		}
-		opts.Auth = auth
+		opts.Auth = sshAuth
 	}
 
 	return nil
@@ -216,15 +222,15 @@ func (r *GoGitRepository) addSSHAuthIfNeeded(opts *git.PullOptions) error {
 func (r *GoGitRepository) addSSHAuthToPushIfNeeded(opts *git.PushOptions) error {
 	remoteURL, err := r.originURL()
 	if err != nil {
-		return nil // no remote configured; skip auth
+		return nil //nolint:nilerr // no remote configured; skip auth
 	}
 
 	if strings.HasPrefix(remoteURL, "git@") {
-		auth, err := sshAuthFromAgent()
-		if err != nil {
-			return fmt.Errorf("failed to configure SSH auth for push: %w", err)
+		sshAuth, sshErr := sshAuthFromAgent()
+		if sshErr != nil {
+			return fmt.Errorf("failed to configure SSH auth for push: %w", sshErr)
 		}
-		opts.Auth = auth
+		opts.Auth = sshAuth
 	}
 
 	return nil
@@ -239,7 +245,7 @@ func (r *GoGitRepository) originURL() (string, error) {
 
 	cfg := remote.Config()
 	if len(cfg.URLs) == 0 {
-		return "", fmt.Errorf("origin remote has no URLs")
+		return "", errors.New("origin remote has no URLs")
 	}
 
 	return cfg.URLs[0], nil
@@ -248,7 +254,7 @@ func (r *GoGitRepository) originURL() (string, error) {
 // AddRemote adds a named remote to the repository.
 func (r *GoGitRepository) AddRemote(name, url string) error {
 	if r.repo == nil {
-		return fmt.Errorf("repository not opened; call Open or Init first")
+		return errors.New("repository not opened; call Open or Init first")
 	}
 
 	_, err := r.repo.CreateRemote(&config.RemoteConfig{
@@ -266,7 +272,7 @@ func (r *GoGitRepository) AddRemote(name, url string) error {
 // The key uses dot notation (e.g., "filter.aisync-crypt.clean").
 func (r *GoGitRepository) SetConfig(key, value string) error {
 	if r.repo == nil {
-		return fmt.Errorf("repository not opened; call Open or Init first")
+		return errors.New("repository not opened; call Open or Init first")
 	}
 
 	cfg, err := r.repo.Config()
@@ -275,17 +281,17 @@ func (r *GoGitRepository) SetConfig(key, value string) error {
 	}
 
 	// Parse "section.subsection.key" or "section.key" from dot notation.
-	parts := strings.SplitN(key, ".", 3)
+	parts := strings.SplitN(key, ".", gitConfigSectionParts)
 	switch len(parts) {
-	case 3:
+	case gitConfigSectionParts:
 		cfg.Raw.SetOption(parts[0], parts[1], parts[2], value)
-	case 2:
+	case gitConfigKeyValueParts:
 		cfg.Raw.SetOption(parts[0], "", parts[1], value)
 	default:
 		return fmt.Errorf("invalid config key: %s", key)
 	}
 
-	if err := r.repo.SetConfig(cfg); err != nil {
+	if err = r.repo.SetConfig(cfg); err != nil {
 		return fmt.Errorf("failed to write git config: %w", err)
 	}
 	return nil
@@ -311,13 +317,13 @@ func sshAuthFromAgent() (*ssh.PublicKeys, error) {
 			continue
 		}
 
-		auth, err := ssh.NewPublicKeysFromFile("git", keyFile, "")
-		if err != nil {
+		auth, keyErr := ssh.NewPublicKeysFromFile("git", keyFile, "")
+		if keyErr != nil {
 			continue
 		}
 
 		return auth, nil
 	}
 
-	return nil, fmt.Errorf("no SSH key found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)")
+	return nil, errors.New("no SSH key found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)")
 }

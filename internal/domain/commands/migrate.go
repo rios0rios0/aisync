@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
+
+const namespaceShared = "shared"
 
 // knownSharedEntry records the source metadata for a file whose checksum matches
 // content fetched from an external source.
@@ -40,6 +43,12 @@ func NewMigrateCommand(
 	}
 }
 
+// migrateToolResult holds the per-tool migration outcome.
+type migrateToolResult struct {
+	migrated int
+	matched  map[string]knownSharedEntry
+}
+
 // Execute scans tool directories for existing files and migrates them
 // into the sync repo structure. When dryRun is true, it prints what would
 // be migrated without modifying any files.
@@ -49,8 +58,27 @@ func (c *MigrateCommand) Execute(configPath, repoPath string, dryRun bool) error
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Build a map of known shared content by fetching all external sources
-	// and computing their checksums.
+	knownShared := c.buildKnownSharedMap(config)
+	matchedSources := make(map[string]knownSharedEntry)
+	totalMigrated := 0
+
+	for toolName, tool := range config.Tools {
+		if !tool.Enabled {
+			continue
+		}
+
+		result := c.migrateTool(toolName, tool, repoPath, knownShared, dryRun)
+		totalMigrated += result.migrated
+		maps.Copy(matchedSources, result.matched)
+	}
+
+	c.printMigrationSummary(totalMigrated, dryRun, matchedSources)
+	return nil
+}
+
+// buildKnownSharedMap fetches all external sources and builds a map of checksum
+// to source metadata for classifying files during migration.
+func (c *MigrateCommand) buildKnownSharedMap(config *entities.Config) map[string]knownSharedEntry {
 	knownShared := make(map[string]knownSharedEntry)
 	for _, source := range config.Sources {
 		fetched, fetchErr := c.sourceRepo.Fetch(&source, repositories.CacheHints{})
@@ -67,117 +95,144 @@ func (c *MigrateCommand) Execute(configPath, repoPath string, dryRun bool) error
 			}
 		}
 	}
+	return knownShared
+}
 
-	// Track which sources were matched during migration for suggestions.
-	matchedSources := make(map[string]knownSharedEntry)
+// migrateTool walks a single tool directory and classifies each file as shared or
+// personal based on the known shared checksums. Returns the count of migrated files
+// and any matched source entries.
+func (c *MigrateCommand) migrateTool(
+	toolName string,
+	tool entities.Tool,
+	repoPath string,
+	knownShared map[string]knownSharedEntry,
+	dryRun bool,
+) migrateToolResult {
+	result := migrateToolResult{matched: make(map[string]knownSharedEntry)}
 
-	totalMigrated := 0
-
-	for toolName, tool := range config.Tools {
-		if !tool.Enabled {
-			continue
-		}
-
-		toolDir := ExpandHome(tool.Path)
-		if _, err := os.Stat(toolDir); err != nil {
-			continue
-		}
-
-		hostname, _ := os.Hostname()
-		manifest := entities.NewManifest("0.1.0", hostname)
-
-		migrated := 0
-		err := filepath.WalkDir(toolDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-
-			if entities.IsDenied(path) {
-				return nil
-			}
-
-			relPath, _ := filepath.Rel(toolDir, path)
-
-			// Skip the manifest file itself
-			if relPath == ".aisync-manifest.json" {
-				return nil
-			}
-
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return nil
-			}
-
-			checksum := checksumBytes(content)
-
-			// Classify: if the file checksum matches known external source
-			// content, place it in shared/; otherwise in personal/.
-			namespace := "personal"
-			sourceName := "personal"
-			if entry, ok := knownShared[checksum]; ok {
-				namespace = "shared"
-				sourceName = entry.sourceName
-				matchedSources[entry.sourceName] = entry
-			}
-
-			if dryRun {
-				fmt.Printf("  [%s] %s/%s (source: %s)\n", namespace, toolName, relPath, sourceName)
-				migrated++
-				return nil
-			}
-
-			destDir := filepath.Join(repoPath, namespace, toolName, filepath.Dir(relPath))
-			destPath := filepath.Join(repoPath, namespace, toolName, relPath)
-
-			if err := os.MkdirAll(destDir, 0755); err != nil {
-				logger.Warnf("failed to create %s: %v", destDir, err)
-				return nil
-			}
-
-			if err := os.WriteFile(destPath, content, 0644); err != nil {
-				logger.Warnf("failed to write %s: %v", destPath, err)
-				return nil
-			}
-
-			manifest.SetFile(relPath, sourceName, namespace, checksum)
-			migrated++
-
-			return nil
-		})
-
-		if err != nil {
-			logger.Warnf("error scanning %s: %v", toolDir, err)
-			continue
-		}
-
-		if migrated > 0 {
-			if !dryRun {
-				if err := c.manifestRepo.Save(toolDir, manifest); err != nil {
-					logger.Warnf("failed to save manifest for %s: %v", toolName, err)
-				}
-			}
-			logger.Infof("migrated %d files from %s to personal/%s/", migrated, toolDir, toolName)
-			totalMigrated += migrated
-		}
+	toolDir := ExpandHome(tool.Path)
+	if _, err := os.Stat(toolDir); err != nil {
+		return result
 	}
 
-	if totalMigrated == 0 {
-		fmt.Println("No files found to migrate.")
-	} else if dryRun {
-		fmt.Printf("\n[dry-run] Would migrate %d files into shared/ and personal/ namespaces.\n", totalMigrated)
-	} else {
-		fmt.Printf("Migration complete: %d files classified into shared/ and personal/ namespaces.\n", totalMigrated)
-		fmt.Println("Files matching external sources were placed in shared/; the rest in personal/.")
+	hostname, _ := os.Hostname()
+	manifest := entities.NewManifest("0.1.0", hostname)
+
+	err := filepath.WalkDir(toolDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		n, matched := c.migrateFile(path, toolDir, toolName, repoPath, knownShared, manifest, dryRun)
+		result.migrated += n
+		maps.Copy(result.matched, matched)
+		return nil
+	})
+
+	if err != nil {
+		logger.Warnf("error scanning %s: %v", toolDir, err)
+		return result
 	}
 
-	// Suggest source configuration commands for matched sources.
+	if result.migrated > 0 {
+		if !dryRun {
+			if saveErr := c.manifestRepo.Save(toolDir, manifest); saveErr != nil {
+				logger.Warnf("failed to save manifest for %s: %v", toolName, saveErr)
+			}
+		}
+		logger.Infof("migrated %d files from %s to personal/%s/", result.migrated, toolDir, toolName)
+	}
+
+	return result
+}
+
+// migrateFile classifies and migrates a single file. Returns 1 if the file was
+// migrated, 0 otherwise, and any matched source entry.
+func (c *MigrateCommand) migrateFile(
+	path, toolDir, toolName, repoPath string,
+	knownShared map[string]knownSharedEntry,
+	manifest *entities.Manifest,
+	dryRun bool,
+) (int, map[string]knownSharedEntry) {
+	matched := make(map[string]knownSharedEntry)
+
+	if entities.IsDenied(path) {
+		return 0, matched
+	}
+
+	relPath, _ := filepath.Rel(toolDir, path)
+	if relPath == ".aisync-manifest.json" {
+		return 0, matched
+	}
+
+	content, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return 0, matched
+	}
+
+	checksum := checksumBytes(content)
+	namespace := "personal"
+	sourceName := "personal"
+	if entry, ok := knownShared[checksum]; ok {
+		namespace = namespaceShared
+		sourceName = entry.sourceName
+		matched[entry.sourceName] = entry
+	}
+
+	if dryRun {
+		fmt.Fprintf(os.Stdout, "  [%s] %s/%s (source: %s)\n", namespace, toolName, relPath, sourceName)
+		return 1, matched
+	}
+
+	destDir := filepath.Clean(filepath.Join(repoPath, namespace, toolName, filepath.Dir(relPath)))
+	destPath := filepath.Clean(filepath.Join(repoPath, namespace, toolName, relPath))
+
+	if err := os.MkdirAll(destDir, 0700); err != nil {
+		logger.Warnf("failed to create %s: %v", destDir, err)
+		return 0, matched
+	}
+
+	if err := os.WriteFile(destPath, content, 0600); err != nil { //nolint:gosec // destPath is filepath.Clean'd above
+		logger.Warnf("failed to write %s: %v", destPath, err)
+		return 0, matched
+	}
+
+	manifest.SetFile(relPath, sourceName, namespace, checksum)
+	return 1, matched
+}
+
+// printMigrationSummary prints the final migration summary and source suggestions.
+func (c *MigrateCommand) printMigrationSummary(
+	totalMigrated int,
+	dryRun bool,
+	matchedSources map[string]knownSharedEntry,
+) {
+	switch {
+	case totalMigrated == 0:
+		fmt.Fprintln(os.Stdout, "No files found to migrate.")
+	case dryRun:
+		fmt.Fprintf(os.Stdout,
+			"\n[dry-run] Would migrate %d files into shared/ and personal/ namespaces.\n",
+			totalMigrated,
+		)
+	default:
+		fmt.Fprintf(
+			os.Stdout,
+			"Migration complete: %d files classified into shared/ and personal/ namespaces.\n",
+			totalMigrated,
+		)
+		fmt.Fprintln(os.Stdout, "Files matching external sources were placed in shared/; the rest in personal/.")
+	}
+
 	if len(matchedSources) > 0 {
-		fmt.Println()
+		fmt.Fprintln(os.Stdout)
 		for _, entry := range matchedSources {
-			fmt.Printf("Detected files from source '%s'. To configure it:\n", entry.sourceName)
-			fmt.Printf("  aisync source add %s --source-repo %s --branch %s\n", entry.sourceName, entry.sourceRepo, entry.branch)
+			fmt.Fprintf(os.Stdout, "Detected files from source '%s'. To configure it:\n", entry.sourceName)
+			fmt.Fprintf(os.Stdout,
+				"  aisync source add %s --source-repo %s --branch %s\n",
+				entry.sourceName,
+				entry.sourceRepo,
+				entry.branch,
+			)
 		}
 	}
-
-	return nil
 }

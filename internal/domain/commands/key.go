@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	logger "github.com/sirupsen/logrus"
 
@@ -44,13 +45,13 @@ func (c *KeyCommand) Generate(configPath string) error {
 
 	config.Encryption.Recipients = appendUniqueRecipient(config.Encryption.Recipients, publicKey)
 
-	if err := c.configRepo.Save(configPath, config); err != nil {
+	if err = c.configRepo.Save(configPath, config); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	logger.Infof("age key generated successfully")
-	fmt.Printf("Public key: %s\n", publicKey)
-	fmt.Printf("Identity:   %s\n", identityPath)
+	fmt.Fprintf(os.Stdout, "Public key: %s\n", publicKey)
+	fmt.Fprintf(os.Stdout, "Identity:   %s\n", identityPath)
 
 	return nil
 }
@@ -66,7 +67,7 @@ func (c *KeyCommand) Import(configPath, keyPath string) error {
 	identityPath := c.resolveIdentityPath(config.Encryption.Identity)
 	logger.Infof("importing age key from %s to %s", keyPath, identityPath)
 
-	if err := c.encryptionService.ImportKey(keyPath, identityPath); err != nil {
+	if err = c.encryptionService.ImportKey(keyPath, identityPath); err != nil {
 		return fmt.Errorf("failed to import age key: %w", err)
 	}
 
@@ -77,13 +78,13 @@ func (c *KeyCommand) Import(configPath, keyPath string) error {
 
 	config.Encryption.Recipients = appendUniqueRecipient(config.Encryption.Recipients, publicKey)
 
-	if err := c.configRepo.Save(configPath, config); err != nil {
+	if err = c.configRepo.Save(configPath, config); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	logger.Infof("age key imported successfully")
-	fmt.Printf("Public key: %s\n", publicKey)
-	fmt.Printf("Identity:   %s\n", identityPath)
+	fmt.Fprintf(os.Stdout, "Public key: %s\n", publicKey)
+	fmt.Fprintf(os.Stdout, "Identity:   %s\n", identityPath)
 
 	return nil
 }
@@ -102,7 +103,7 @@ func (c *KeyCommand) Export(configPath string) error {
 		return fmt.Errorf("failed to export public key: %w", err)
 	}
 
-	fmt.Println(publicKey)
+	fmt.Fprintln(os.Stdout, publicKey)
 
 	return nil
 }
@@ -116,7 +117,7 @@ func (c *KeyCommand) AddRecipient(configPath, publicKey string) error {
 
 	config.Encryption.Recipients = appendUniqueRecipient(config.Encryption.Recipients, publicKey)
 
-	if err := c.configRepo.Save(configPath, config); err != nil {
+	if err = c.configRepo.Save(configPath, config); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -140,10 +141,8 @@ func (c *KeyCommand) resolveIdentityPath(identity string) string {
 // appendUniqueRecipient appends a public key to the recipients slice only if
 // it is not already present.
 func appendUniqueRecipient(recipients []string, publicKey string) []string {
-	for _, r := range recipients {
-		if r == publicKey {
-			return recipients
-		}
+	if slices.Contains(recipients, publicKey) {
+		return recipients
 	}
 	return append(recipients, publicKey)
 }

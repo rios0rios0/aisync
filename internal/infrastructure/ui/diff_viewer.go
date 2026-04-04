@@ -13,6 +13,10 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 )
 
+const (
+	bytesPerKBViewer = 1024
+)
+
 // BubbleteaDiffViewer displays diff results in an interactive scrollable viewport.
 type BubbleteaDiffViewer struct{}
 
@@ -24,13 +28,13 @@ func NewBubbleteaDiffViewer() *BubbleteaDiffViewer {
 // Show renders the diff result in an interactive bubbletea viewport.
 // Returns immediately if stdout is not a TTY.
 func (v *BubbleteaDiffViewer) Show(result *entities.DiffResult, f entities.Formatter) error {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
+	if !term.IsTerminal(int(os.Stdout.Fd())) { //nolint:gosec // fd conversion is safe on all supported platforms
 		return nil
 	}
 
 	content := BuildDiffContent(result, f)
 	if content == "" {
-		fmt.Println("No changes detected.")
+		fmt.Fprintln(os.Stdout, "No changes detected.")
 		return nil
 	}
 
@@ -60,16 +64,19 @@ func BuildDiffContent(result *entities.DiffResult, f entities.Formatter) string 
 			if ch.Source != "" {
 				details = append(details, "source: "+ch.Source)
 			}
-			if ch.Direction == entities.ChangeModified {
+			switch ch.Direction {
+			case entities.ChangeModified:
 				details = append(details, fmt.Sprintf("%s → %s", humanSize(ch.LocalSize), humanSize(ch.RemoteSize)))
-			} else if ch.Direction == entities.ChangeAdded {
+			case entities.ChangeAdded:
 				details = append(details, humanSize(ch.RemoteSize))
+			case entities.ChangeRemoved:
+				details = append(details, "removed upstream")
 			}
 			if ch.Encrypted {
 				details = append(details, "encrypted")
 			}
 			if len(details) > 0 {
-				b.WriteString(fmt.Sprintf("      %s\n", f.Subtle(strings.Join(details, " | "))))
+				fmt.Fprintf(&b, "      %s\n", f.Subtle(strings.Join(details, " | ")))
 			}
 		}
 		b.WriteString("\n")
@@ -83,13 +90,13 @@ func BuildDiffContent(result *entities.DiffResult, f entities.Formatter) string 
 }
 
 func humanSize(bytes int64) string {
-	if bytes < 1024 {
+	if bytes < bytesPerKBViewer {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	if bytes < 1024*1024 {
-		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	if bytes < bytesPerKBViewer*bytesPerKBViewer {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/bytesPerKBViewer)
 	}
-	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(bytesPerKBViewer*bytesPerKBViewer))
 }
 
 // diffModel is the bubbletea model for the interactive diff viewport.
@@ -103,6 +110,7 @@ func newDiffModel(content string) diffModel {
 	return diffModel{content: content}
 }
 
+//nolint:gochecknoglobals // lipgloss styles are compile-time constants
 var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 func (m diffModel) Init() tea.Cmd {

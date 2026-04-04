@@ -21,7 +21,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		repoPath := filepath.Join(tmpDir, "aifiles")
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0700))
 
 		identityPath := filepath.Join(tmpDir, "key.txt")
 		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY-FAKE"), 0600))
@@ -102,7 +102,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0700))
 
 		configRepo := &doubles.MockConfigRepository{
 			ExistsVal: false,
@@ -140,7 +140,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0700))
 
 		configRepo := &doubles.MockConfigRepository{
 			ExistsVal: true,
@@ -179,7 +179,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0700))
 
 		identityPath := filepath.Join(tmpDir, "key.txt")
 		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY"), 0600))
@@ -218,7 +218,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0755))
+		require.NoError(t, os.MkdirAll(filepath.Join(repoPath, ".git"), 0700))
 
 		configRepo := &doubles.MockConfigRepository{
 			ExistsVal: true,
@@ -252,7 +252,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0755))
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
 		// no .git directory created
 
 		configRepo := &doubles.MockConfigRepository{

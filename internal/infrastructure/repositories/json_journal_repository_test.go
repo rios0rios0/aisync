@@ -95,9 +95,9 @@ func TestJSONJournalRepository_Clear_RemovesJournalFile(t *testing.T) {
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
 	stagingDir := filepath.Join(t.TempDir(), "staging")
-	err := os.MkdirAll(stagingDir, 0755)
+	err := os.MkdirAll(stagingDir, 0700)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(stagingDir, "test.txt"), []byte("data"), 0644)
+	err = os.WriteFile(filepath.Join(stagingDir, "test.txt"), []byte("data"), 0600)
 	assert.NoError(t, err)
 
 	journal := &entities.Journal{
@@ -244,7 +244,7 @@ func TestJSONJournalRepository_Load_InvalidJSON(t *testing.T) {
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
 	journalPath := filepath.Join(basePath, "journal.json")
-	err := os.WriteFile(journalPath, []byte("{invalid json!!!"), 0644)
+	err := os.WriteFile(journalPath, []byte("{invalid json!!!"), 0600)
 	assert.NoError(t, err)
 
 	// when
@@ -315,7 +315,7 @@ func TestJSONJournalRepository_Clear_WithCorruptJournalFile(t *testing.T) {
 	repo := repositories.NewJSONJournalRepository(basePath)
 	// Write invalid JSON as journal file
 	journalPath := filepath.Join(basePath, "journal.json")
-	assert.NoError(t, os.WriteFile(journalPath, []byte("{corrupt!"), 0644))
+	assert.NoError(t, os.WriteFile(journalPath, []byte("{corrupt!"), 0600))
 	assert.True(t, repo.Exists())
 
 	// when -- Clear should still remove the journal file even if Load fails

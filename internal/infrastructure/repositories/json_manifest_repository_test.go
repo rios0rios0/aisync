@@ -183,7 +183,7 @@ func TestJSONManifestRepository_Load_InvalidJSON(t *testing.T) {
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
 	manifestPath := filepath.Join(toolDir, ".aisync-manifest.json")
-	assert.NoError(t, os.WriteFile(manifestPath, []byte("{invalid json}"), 0644))
+	assert.NoError(t, os.WriteFile(manifestPath, []byte("{invalid json}"), 0600))
 
 	// when
 	manifest, err := repo.Load(toolDir)

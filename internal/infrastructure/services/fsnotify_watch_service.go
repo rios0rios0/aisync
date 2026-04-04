@@ -46,8 +46,8 @@ func (s *FSNotifyWatchService) Watch(dirs []string, callback func(event reposito
 	s.watcher = watcher
 
 	for _, dir := range dirs {
-		if err := s.addRecursive(dir); err != nil {
-			logger.Warnf("failed to watch %s: %v", dir, err)
+		if addErr := s.addRecursive(dir); addErr != nil {
+			logger.Warnf("failed to watch %s: %v", dir, addErr)
 		}
 	}
 
@@ -65,7 +65,7 @@ func (s *FSNotifyWatchService) Stop() {
 	s.stopped = true
 	close(s.stopCh)
 	if s.watcher != nil {
-		s.watcher.Close()
+		_ = s.watcher.Close()
 	}
 }
 
@@ -78,30 +78,41 @@ func (s *FSNotifyWatchService) eventLoop(callback func(event repositories.FileEv
 			if !ok {
 				return
 			}
-			if entities.IsDenied(event.Name) {
-				continue
-			}
-			if s.ignorePatterns != nil && s.ignorePatterns.Matches(event.Name) {
-				continue
-			}
-			fe := repositories.FileEvent{
-				Path: event.Name,
-				Op:   mapOp(event.Op),
-			}
-			callback(fe)
-
-			// Watch new directories
-			if event.Op&fsnotify.Create != 0 {
-				info, err := os.Stat(event.Name)
-				if err == nil && info.IsDir() {
-					s.addRecursive(event.Name)
-				}
-			}
+			s.handleFSEvent(event, callback)
 		case err, ok := <-s.watcher.Errors:
 			if !ok {
 				return
 			}
 			logger.Warnf("watch error: %v", err)
+		}
+	}
+}
+
+// handleFSEvent processes a single filesystem event, filtering denied and ignored
+// paths, invoking the callback, and watching newly created directories.
+func (s *FSNotifyWatchService) handleFSEvent(
+	event fsnotify.Event,
+	callback func(event repositories.FileEvent),
+) {
+	if entities.IsDenied(event.Name) {
+		return
+	}
+	if s.ignorePatterns != nil && s.ignorePatterns.Matches(event.Name) {
+		return
+	}
+
+	fe := repositories.FileEvent{
+		Path: event.Name,
+		Op:   mapOp(event.Op),
+	}
+	callback(fe)
+
+	if event.Op&fsnotify.Create != 0 {
+		info, statErr := os.Stat(event.Name)
+		if statErr == nil && info.IsDir() {
+			if addErr := s.addRecursive(event.Name); addErr != nil {
+				logger.Warnf("failed to watch new directory %s: %v", event.Name, addErr)
+			}
 		}
 	}
 }
@@ -113,6 +124,9 @@ func (s *FSNotifyWatchService) addRecursive(dir string) error {
 		}
 		if d.IsDir() {
 			if entities.IsDenied(path) {
+				return filepath.SkipDir
+			}
+			if s.ignorePatterns != nil && s.ignorePatterns.Matches(path) {
 				return filepath.SkipDir
 			}
 			return s.watcher.Add(path)
@@ -188,7 +202,7 @@ func (s *PollingWatchService) Stop() {
 }
 
 func (s *PollingWatchService) scanDir(dir string) {
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
@@ -209,7 +223,7 @@ func (s *PollingWatchService) scanDir(dir string) {
 func (s *PollingWatchService) pollDir(dir string, callback func(event repositories.FileEvent)) {
 	current := make(map[string]time.Time)
 
-	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}

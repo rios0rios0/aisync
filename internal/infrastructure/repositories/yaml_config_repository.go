@@ -25,7 +25,7 @@ func (r *YAMLConfigRepository) Load(path string) (*entities.Config, error) {
 	}
 
 	var config entities.Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	if err = yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -39,7 +39,7 @@ func (r *YAMLConfigRepository) Save(path string, config *entities.Config) error 
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err = os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
