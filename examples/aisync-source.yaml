@@ -1,0 +1,44 @@
+# aisync-source.yaml -- Source definition for aisync
+#
+# Publish this file at a stable URL so users can add your source with:
+#   aisync source add --from-url https://raw.githubusercontent.com/<owner>/<repo>/<branch>/aisync-source.yaml
+#
+# Schema: this file is a YAML representation of the entities.Source struct.
+# All fields are optional except 'name' and 'repo'.
+
+# Human-readable name (used as the key in config.yaml sources list).
+name: "my-rules"
+
+# GitHub repository in owner/repo format.
+repo: "owner/repo"
+
+# Branch to pull from (default: "main").
+branch: "main"
+
+# Pin to a specific tag or SHA (empty = latest from branch).
+ref: ""
+
+# How often to check for updates (Go duration string, default: "168h" = 7 days).
+# Set to "0" to disable automatic refresh (manual only via `aisync source update`).
+refresh: "168h"
+
+# Mappings define which paths in the source repo map to which paths in the
+# user's aifiles sync repo. Source paths are relative to the repo root.
+# Target paths are relative to the sync repo root (typically under shared/).
+mappings:
+  - source: "claude/rules"
+    target: "shared/claude/rules"
+  - source: "claude/commands"
+    target: "shared/claude/commands"
+  - source: "claude/agents"
+    target: "shared/claude/agents"
+  - source: "claude/hooks"
+    target: "shared/claude/hooks"
+  - source: "claude/skills"
+    target: "shared/claude/skills"
+  - source: "cursor/rules"
+    target: "shared/cursor/rules"
+  - source: "copilot/instructions"
+    target: "shared/copilot/instructions"
+  - source: "codex/rules"
+    target: "shared/codex/rules"

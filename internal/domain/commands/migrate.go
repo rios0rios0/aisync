@@ -41,8 +41,9 @@ func NewMigrateCommand(
 }
 
 // Execute scans tool directories for existing files and migrates them
-// into the sync repo structure.
-func (c *MigrateCommand) Execute(configPath, repoPath string) error {
+// into the sync repo structure. When dryRun is true, it prints what would
+// be migrated without modifying any files.
+func (c *MigrateCommand) Execute(configPath, repoPath string, dryRun bool) error {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -119,6 +120,12 @@ func (c *MigrateCommand) Execute(configPath, repoPath string) error {
 				matchedSources[entry.sourceName] = entry
 			}
 
+			if dryRun {
+				fmt.Printf("  [%s] %s/%s (source: %s)\n", namespace, toolName, relPath, sourceName)
+				migrated++
+				return nil
+			}
+
 			destDir := filepath.Join(repoPath, namespace, toolName, filepath.Dir(relPath))
 			destPath := filepath.Join(repoPath, namespace, toolName, relPath)
 
@@ -144,8 +151,10 @@ func (c *MigrateCommand) Execute(configPath, repoPath string) error {
 		}
 
 		if migrated > 0 {
-			if err := c.manifestRepo.Save(toolDir, manifest); err != nil {
-				logger.Warnf("failed to save manifest for %s: %v", toolName, err)
+			if !dryRun {
+				if err := c.manifestRepo.Save(toolDir, manifest); err != nil {
+					logger.Warnf("failed to save manifest for %s: %v", toolName, err)
+				}
 			}
 			logger.Infof("migrated %d files from %s to personal/%s/", migrated, toolDir, toolName)
 			totalMigrated += migrated
@@ -154,6 +163,8 @@ func (c *MigrateCommand) Execute(configPath, repoPath string) error {
 
 	if totalMigrated == 0 {
 		fmt.Println("No files found to migrate.")
+	} else if dryRun {
+		fmt.Printf("\n[dry-run] Would migrate %d files into shared/ and personal/ namespaces.\n", totalMigrated)
 	} else {
 		fmt.Printf("Migration complete: %d files classified into shared/ and personal/ namespaces.\n", totalMigrated)
 		fmt.Println("Files matching external sources were placed in shared/; the rest in personal/.")

@@ -99,10 +99,11 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	pushCmd := commands.NewPushCommand(configRepo, stateRepo, gitProxy, encryptionSvc, manifestRepo, secretScanner)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
-	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter)
+	diffViewer := ui.NewBubbleteaDiffViewer()
+	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter, diffViewer)
 	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
-	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, formatter)
+	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
 	migrateCmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 	watchCmd := commands.NewWatchCommand(configRepo, watchSvc, pushCmd)
 
@@ -406,15 +407,21 @@ func newWatchSubcmd(watchCmd *commands.WatchCommand) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			autoPush, _ := cmd.Flags().GetBool("auto-push")
 			interval, _ := cmd.Flags().GetString("interval")
+			pollingStr, _ := cmd.Flags().GetString("polling-interval")
 			debounce := 60 * time.Second
 			if d, err := time.ParseDuration(interval); err == nil {
 				debounce = d
 			}
-			return watchCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), autoPush, debounce)
+			var pollingInterval time.Duration
+			if d, err := time.ParseDuration(pollingStr); err == nil {
+				pollingInterval = d
+			}
+			return watchCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), autoPush, debounce, pollingInterval)
 		},
 	}
 	cmd.Flags().Bool("auto-push", false, "automatically push after debounce window")
 	cmd.Flags().String("interval", "60s", "debounce interval for auto-push")
+	cmd.Flags().String("polling-interval", "30s", "polling interval for file change detection (Android/Termux)")
 	return cmd
 }
 
@@ -483,12 +490,15 @@ func newDoctorSubcmd(doctorCmd *commands.DoctorCommand) *cobra.Command {
 
 func newMigrateSubcmd(migrateCmd *commands.MigrateCommand) *cobra.Command {
 	//nolint:exhaustruct
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use: "migrate", Short: "Migrate from legacy setups", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return migrateCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd))
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			return migrateCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), dryRun)
 		},
 	}
+	cmd.Flags().Bool("dry-run", false, "preview migration without modifying files")
+	return cmd
 }
 
 func newSelfUpdateSubcmd(version string) *cobra.Command {

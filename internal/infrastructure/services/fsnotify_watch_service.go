@@ -34,6 +34,9 @@ func (s *FSNotifyWatchService) SetIgnorePatterns(patterns *entities.IgnorePatter
 	s.ignorePatterns = patterns
 }
 
+// SetInterval is a no-op for fsnotify-based watching (only applies to polling).
+func (s *FSNotifyWatchService) SetInterval(_ time.Duration) {}
+
 // Watch starts monitoring the given directories for file changes.
 func (s *FSNotifyWatchService) Watch(dirs []string, callback func(event repositories.FileEvent)) error {
 	watcher, err := fsnotify.NewWatcher()
@@ -141,6 +144,11 @@ func NewPollingWatchService(interval time.Duration) *PollingWatchService {
 // SetIgnorePatterns configures the ignore patterns used to filter polled events.
 func (s *PollingWatchService) SetIgnorePatterns(patterns *entities.IgnorePatterns) {
 	s.ignorePatterns = patterns
+}
+
+// SetInterval updates the polling interval.
+func (s *PollingWatchService) SetInterval(d time.Duration) {
+	s.interval = d
 }
 
 // Watch starts polling the given directories for file changes.

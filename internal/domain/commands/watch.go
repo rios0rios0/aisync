@@ -36,10 +36,14 @@ func NewWatchCommand(
 }
 
 // Execute starts watching AI tool directories for changes.
-func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debounce time.Duration) error {
+func (c *WatchCommand) Execute(configPath, repoPath string, autoPush bool, debounce, pollingInterval time.Duration) error {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if pollingInterval > 0 {
+		c.watchService.SetInterval(pollingInterval)
 	}
 
 	var dirs []string

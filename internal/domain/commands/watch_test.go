@@ -23,7 +23,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		cmd := commands.NewWatchCommand(configRepo, nil, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second)
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second, 0)
 
 		// then
 		require.Error(t, err)
@@ -41,7 +41,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		cmd := commands.NewWatchCommand(configRepo, nil, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second)
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second, 0)
 
 		// then
 		require.Error(t, err)
@@ -60,7 +60,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		cmd := commands.NewWatchCommand(configRepo, nil, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second)
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false, 60*time.Second, 0)
 
 		// then
 		require.Error(t, err)
@@ -86,7 +86,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		cmd := commands.NewWatchCommand(configRepo, watchService, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", tmpDir, false, 60*time.Second)
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, false, 60*time.Second, 0)
 
 		// then
 		require.Error(t, err)
@@ -119,7 +119,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 		cmd := commands.NewWatchCommand(configRepo, watchService, nil)
 
 		// when
-		_ = cmd.Execute("/tmp/config.yaml", tmpDir, false, 60*time.Second)
+		_ = cmd.Execute("/tmp/config.yaml", tmpDir, false, 60*time.Second, 0)
 
 		// then
 		require.NotNil(t, watchService.IgnorePatterns)

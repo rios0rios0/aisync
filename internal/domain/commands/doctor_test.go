@@ -54,7 +54,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, formatter)
+		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, &doubles.MockGitRepository{}, formatter)
 
 		configPath := filepath.Join(repoPath, "config.yaml")
 
@@ -89,7 +89,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 			DetectedTools: map[string]entities.Tool{},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, formatter)
+		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, &doubles.MockGitRepository{}, formatter)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", repoPath)
@@ -124,7 +124,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		cmd := commands.NewDoctorCommand(
 			configRepo, stateRepo,
 			&doubles.MockEncryptionService{ExportErr: assert.AnError},
-			toolDetector, formatter,
+			toolDetector, &doubles.MockGitRepository{}, formatter,
 		)
 
 		// when
@@ -164,7 +164,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		cmd := commands.NewDoctorCommand(
 			configRepo, stateRepo,
 			&doubles.MockEncryptionService{ExportErr: assert.AnError},
-			toolDetector, formatter,
+			toolDetector, &doubles.MockGitRepository{}, formatter,
 		)
 
 		// when
@@ -202,7 +202,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		cmd := commands.NewDoctorCommand(
 			configRepo, stateRepo,
 			&doubles.MockEncryptionService{ExportedPublicKey: "age1testpublickeylongstringhere"},
-			toolDetector, formatter,
+			toolDetector, &doubles.MockGitRepository{}, formatter,
 		)
 
 		// when
@@ -237,7 +237,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		cmd := commands.NewDoctorCommand(
 			configRepo, stateRepo,
 			&doubles.MockEncryptionService{ExportErr: assert.AnError},
-			toolDetector, formatter,
+			toolDetector, &doubles.MockGitRepository{}, formatter,
 		)
 
 		// when
@@ -275,7 +275,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 		cmd := commands.NewDoctorCommand(
 			configRepo, stateRepo,
 			&doubles.MockEncryptionService{ExportErr: assert.AnError},
-			toolDetector, formatter,
+			toolDetector, &doubles.MockGitRepository{}, formatter,
 		)
 
 		// when

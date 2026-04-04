@@ -3,6 +3,8 @@
 package doubles
 
 import (
+	"time"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
@@ -368,6 +370,8 @@ func (m *MockWatchService) SetIgnorePatterns(patterns *entities.IgnorePatterns) 
 	m.IgnorePatterns = patterns
 }
 
+func (m *MockWatchService) SetInterval(_ time.Duration) {}
+
 // MockMerger is a manual stub for repositories.Merger.
 type MockMerger struct {
 	MergedData []byte
@@ -479,9 +483,11 @@ type MockPromptService struct {
 	ToolAction         string // preconfigured return for PromptToolAction
 	Confirmation       bool   // preconfigured return for PromptConfirmation
 	ConflictResolution string // preconfigured return for PromptConflictResolution
+	FileAction         string // preconfigured return for PromptFileAction
 	ToolActionCalls    int
 	ConfirmationCalls  int
 	ConflictCalls      int
+	FileActionCalls    int
 }
 
 func (m *MockPromptService) PromptToolAction(_ string) string {
@@ -497,4 +503,9 @@ func (m *MockPromptService) PromptConfirmation(_ string) bool {
 func (m *MockPromptService) PromptConflictResolution(_, _ string) string {
 	m.ConflictCalls++
 	return m.ConflictResolution
+}
+
+func (m *MockPromptService) PromptFileAction(_, _ string) string {
+	m.FileActionCalls++
+	return m.FileAction
 }

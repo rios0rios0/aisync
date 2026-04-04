@@ -31,6 +31,16 @@ func TestIsDenied(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "should deny .oauth_token (trailing wildcard)",
+			path:     ".claude/.oauth_token",
+			expected: true,
+		},
+		{
+			name:     "should deny .oauth-device (trailing wildcard)",
+			path:     ".claude/.oauth-device",
+			expected: true,
+		},
+		{
 			name:     "should deny statsig directory entries",
 			path:     ".claude/statsig/experiments.json",
 			expected: true,
@@ -48,6 +58,16 @@ func TestIsDenied(t *testing.T) {
 		{
 			name:     "should deny session wildcard pattern",
 			path:     ".claude/projects/myproject/session",
+			expected: true,
+		},
+		{
+			name:     "should deny session.json (trailing wildcard)",
+			path:     ".claude/projects/myproject/session.json",
+			expected: true,
+		},
+		{
+			name:     "should deny session-abc123 (trailing wildcard)",
+			path:     ".claude/projects/myproject/session-abc123",
 			expected: true,
 		},
 		{
@@ -132,9 +152,12 @@ func TestDenyList_ContainsExpectedEntries(t *testing.T) {
 
 	expectedEntries := []string{
 		".claude/.credentials.json",
-		".claude/.oauth",
+		".claude/.oauth*",
 		".claude/statsig/",
 		".claude/todos/",
+		".claude/projects/*/session*",
+		".claude/plugins/",
+		".claude/.claude.json",
 		".DS_Store",
 		"Thumbs.db",
 		".git/",

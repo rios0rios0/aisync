@@ -42,7 +42,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -64,7 +64,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 		sourceRepo := &doubles.MockSourceRepository{}
 		diffService := &doubles.MockDiffService{}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{})
@@ -78,7 +78,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{
 			LoadErr: assert.AnError,
 		}
-		cmd := commands.NewDiffCommand(configRepo, nil, nil, nil)
+		cmd := commands.NewDiffCommand(configRepo, nil, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{})
@@ -106,7 +106,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -145,7 +145,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -180,7 +180,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -215,7 +215,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -266,7 +266,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
@@ -295,7 +295,7 @@ func TestDiffCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter)
+		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
