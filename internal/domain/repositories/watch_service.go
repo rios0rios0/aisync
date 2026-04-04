@@ -1,6 +1,10 @@
 package repositories
 
-import "github.com/rios0rios0/aisync/internal/domain/entities"
+import (
+	"time"
+
+	"github.com/rios0rios0/aisync/internal/domain/entities"
+)
 
 // FileEvent represents a filesystem change detected by the watch service.
 type FileEvent struct {
@@ -20,4 +24,8 @@ type WatchService interface {
 
 	// SetIgnorePatterns configures the ignore patterns used to filter events.
 	SetIgnorePatterns(patterns *entities.IgnorePatterns)
+
+	// SetInterval updates the polling interval. Only effective for polling-based
+	// implementations; fsnotify-based implementations ignore this.
+	SetInterval(d time.Duration)
 }

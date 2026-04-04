@@ -106,6 +106,23 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 		}
 	}
 
+	// Detect installed AI tools and update config for this device
+	configPath := filepath.Join(repoPath, "config.yaml")
+	if config, loadErr := c.configRepo.Load(configPath); loadErr == nil {
+		detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
+		if config.Tools == nil {
+			config.Tools = make(map[string]entities.Tool)
+		}
+		for name, tool := range detected {
+			if _, exists := config.Tools[name]; !exists {
+				config.Tools[name] = tool
+			}
+		}
+		if saveErr := c.configRepo.Save(configPath, config); saveErr != nil {
+			logger.Warnf("failed to update config with detected tools: %v", saveErr)
+		}
+	}
+
 	// Ensure state file exists for this device
 	hostname, _ := os.Hostname()
 	if !c.stateRepo.Exists(repoPath) {
@@ -116,7 +133,7 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 	}
 
 	logger.Info("aifiles repo cloned successfully")
-	fmt.Println()
+	fmt.Printf("\nSync repo cloned to %s\n\n", repoPath)
 	fmt.Println("Next steps:")
 	fmt.Println("  aisync pull")
 	fmt.Println()
@@ -234,7 +251,8 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	}
 
 	// Offer to set up a remote for cross-device sync
-	fmt.Print("Add a remote Git URL for syncing? (leave empty to skip): ")
+	fmt.Println("Tip: create a repo with \"gh repo create aifiles --private\" then paste the URL below")
+	fmt.Print("Remote Git URL (leave empty to skip): ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		if remoteURL := strings.TrimSpace(scanner.Text()); remoteURL != "" {
@@ -247,7 +265,7 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	}
 
 	logger.Info("aifiles repo initialized successfully")
-	fmt.Println()
+	fmt.Printf("\nSync repo initialized at %s\n\n", repoPath)
 	fmt.Println("Next steps:")
 	fmt.Println("  aisync source add <name> --repo <owner/repo> --branch <branch>")
 	fmt.Println("  aisync pull")

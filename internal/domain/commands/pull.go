@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -134,7 +135,9 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	// Step 5b: Per-file checksum verification against previous sync repo contents.
 	// Warn when a file's content changed but the source ETag did not, which may
 	// indicate a force-push or silent upstream modification.
-	c.verifyFileChecksums(repoPath, allFiles, oldETags, state)
+	if err := c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
+		return err
+	}
 
 	// Step 6: Write fetched files to the sync repo shared/ directory.
 	c.writeToSyncRepo(repoPath, allFiles)
@@ -281,25 +284,22 @@ func (c *PullCommand) verifyFileChecksums(
 	allFiles map[string]fileEntry,
 	oldETags map[string]string,
 	state *entities.State,
-) {
+	force bool,
+) error {
 	for relPath, entry := range allFiles {
 		existingPath := filepath.Join(repoPath, relPath)
 		existingContent, err := os.ReadFile(existingPath)
 		if err != nil {
-			// File did not exist previously; nothing to compare.
 			continue
 		}
 
 		existingChecksum := checksumBytes(existingContent)
 		if existingChecksum == entry.checksum {
-			// Content unchanged; no concern.
 			continue
 		}
 
-		// Content changed -- check if the source's ETag also changed.
 		oldETag, hadOldETag := oldETags[entry.source]
 		if !hadOldETag {
-			// No previous ETag for this source; first fetch, skip check.
 			continue
 		}
 
@@ -309,8 +309,15 @@ func (c *PullCommand) verifyFileChecksums(
 				"file '%s' changed unexpectedly — source '%s' may have been force-pushed (ETag unchanged)",
 				relPath, entry.source,
 			)
+			if !force {
+				msg := fmt.Sprintf("Source '%s' may have been force-pushed. Continue?", entry.source)
+				if !c.promptService.PromptConfirmation(msg) {
+					return fmt.Errorf("aborted: suspected force-push on source '%s'", entry.source)
+				}
+			}
 		}
 	}
+	return nil
 }
 
 // writeToSyncRepo writes all fetched files to the sync repo shared/ directory,
@@ -405,6 +412,19 @@ func (c *PullCommand) applyToToolDir(
 			content = personalContent
 		}
 
+		// Recency check: warn if local file differs from incoming.
+		if !opts.Force {
+			if existing, readErr := os.ReadFile(destPath); readErr == nil {
+				if checksumBytes(existing) != checksumBytes(content) {
+					msg := fmt.Sprintf("Local file '%s' differs from incoming. Overwrite?", localRel)
+					if !c.promptService.PromptConfirmation(msg) {
+						logger.Infof("kept local version of '%s'", localRel)
+						continue
+					}
+				}
+			}
+		}
+
 		pendingFiles[destPath] = content
 		manifest.SetFile(localRel, entry.source, "shared", checksumBytes(content))
 	}
@@ -467,6 +487,18 @@ func (c *PullCommand) applyToToolDir(
 				// Break out of the loop to proceed with apply.
 			}
 			break
+		}
+	}
+
+	// Per-file skip: allow the user to exclude individual files.
+	if !opts.Force && len(pendingFiles) > 1 {
+		for destPath := range pendingFiles {
+			relPath, _ := filepath.Rel(toolDir, destPath)
+			action := c.promptService.PromptFileAction(relPath, "incoming")
+			if action == "skip" {
+				delete(pendingFiles, destPath)
+				logger.Infof("skipped file '%s' (user choice)", relPath)
+			}
 		}
 	}
 
@@ -706,9 +738,15 @@ func (c *PullCommand) printDryRun(
 		relPath, _ := filepath.Rel(toolDir, destPath)
 		existing, err := os.ReadFile(destPath)
 		if err != nil {
-			fmt.Printf("  + %s (%d bytes, new)\n", relPath, len(content))
+			fmt.Printf("  + %s (%s, new)\n", relPath, formatSize(int64(len(content))))
 		} else if checksumBytes(existing) != checksumBytes(content) {
-			fmt.Printf("  ~ %s (%d -> %d bytes)\n", relPath, len(existing), len(content))
+			detail := fmt.Sprintf("%s → %s", formatSize(int64(len(existing))), formatSize(int64(len(content))))
+			oldLines := bytes.Count(existing, []byte("\n"))
+			newLines := bytes.Count(content, []byte("\n"))
+			if delta := newLines - oldLines; delta != 0 {
+				detail += fmt.Sprintf(", %+d lines", delta)
+			}
+			fmt.Printf("  ~ %s (%s)\n", relPath, detail)
 		} else {
 			fmt.Printf("  = %s (unchanged)\n", relPath)
 		}

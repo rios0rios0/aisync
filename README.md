@@ -100,11 +100,31 @@ aisync key import <path>     # Import existing key
 ### Diagnostics
 
 ```bash
-aisync status     # Sync state, managed files, sources
-aisync diff       # Preview what would change
-aisync doctor     # Check config, git, age key, tools, sources
+aisync status     # Sync state, managed files, sources (offline indicator if unreachable)
+aisync diff       # Preview what would change (interactive TUI viewer when TTY)
+aisync doctor     # Check config, git, age key, tools, sources, git connectivity
 aisync device list
 ```
+
+### Advanced Options
+
+```bash
+# Use system git instead of built-in go-git (for Git LFS, SSH edge cases)
+aisync pull --use-system-git
+
+# Add source from a specific subdirectory
+aisync source add mytools --source-repo org/repo --branch main --path tools/claude
+
+# Import source definition from a URL
+aisync source add --from-url https://example.com/aisync-source.yaml
+
+# Configure polling interval for Android/Termux
+aisync watch --polling-interval 15s --auto-push
+```
+
+### Encryption Filters
+
+New repos created with `aisync init` are automatically configured with git clean/smudge filters for transparent age encryption. Files matching `.aisyncencrypt` patterns are encrypted on `git add` and decrypted on `git checkout`. This works with `--use-system-git`; with built-in go-git, encryption is handled during push/pull.
 
 ## Recommended External Sources
 

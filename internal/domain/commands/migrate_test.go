@@ -46,7 +46,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, nil, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo")
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false)
 
 		// then
 		require.Error(t, err)
@@ -135,7 +135,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo")
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", false)
 
 		// then
 		require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)
@@ -205,7 +205,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)
@@ -275,7 +275,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		cmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		err := cmd.Execute("/tmp/config.yaml", repoPath, false)
 
 		// then
 		require.NoError(t, err)

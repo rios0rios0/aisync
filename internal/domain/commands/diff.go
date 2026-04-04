@@ -13,12 +13,18 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
+// DiffViewer displays diff results interactively (e.g., bubbletea viewport).
+type DiffViewer interface {
+	Show(result *entities.DiffResult, f entities.Formatter) error
+}
+
 // DiffCommand previews changes without applying them.
 type DiffCommand struct {
 	configRepo  repositories.ConfigRepository
 	sourceRepo  repositories.SourceRepository
 	diffService repositories.DiffService
 	formatter   entities.Formatter
+	viewer      DiffViewer
 }
 
 // NewDiffCommand creates a new DiffCommand.
@@ -27,12 +33,14 @@ func NewDiffCommand(
 	sourceRepo repositories.SourceRepository,
 	diffService repositories.DiffService,
 	formatter entities.Formatter,
+	viewer DiffViewer,
 ) *DiffCommand {
 	return &DiffCommand{
 		configRepo:  configRepo,
 		sourceRepo:  sourceRepo,
 		diffService: diffService,
 		formatter:   formatter,
+		viewer:      viewer,
 	}
 }
 
@@ -113,6 +121,11 @@ func (c *DiffCommand) Execute(configPath, repoPath string, opts DiffOptions) err
 
 	if opts.Summary {
 		printSummary(result, c.formatter)
+	} else if c.viewer != nil && opts.Tool == "" {
+		if err := c.viewer.Show(result, c.formatter); err != nil {
+			// Fallback to plain output if TUI fails (e.g., non-TTY).
+			printDetailed(result, opts.Tool, c.formatter)
+		}
 	} else {
 		printDetailed(result, opts.Tool, c.formatter)
 	}
@@ -209,7 +222,10 @@ func formatSize(bytes int64) string {
 	if bytes < 1024 {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
 }
 
 // launchExternalTool invokes an external diff tool for modified files that have

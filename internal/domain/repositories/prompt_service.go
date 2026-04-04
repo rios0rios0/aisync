@@ -14,4 +14,8 @@ type PromptService interface {
 	// PromptConflictResolution asks how to resolve a file conflict.
 	// Returns "local", "remote", or "skip".
 	PromptConflictResolution(path, remoteDevice string) string
+
+	// PromptFileAction asks the user what to do for a specific file.
+	// Returns "apply" or "skip".
+	PromptFileAction(path, direction string) string
 }

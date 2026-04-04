@@ -5,8 +5,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
@@ -85,10 +87,15 @@ func findIdentityPath() (string, error) {
 	}
 	for {
 		candidate := filepath.Join(dir, "config.yaml")
-		if _, statErr := os.Stat(candidate); statErr == nil {
-			// Found config.yaml; a real implementation would parse it for
-			// encryption.identity. For now, use the default.
-			break
+		if data, readErr := os.ReadFile(candidate); readErr == nil {
+			var cfg struct {
+				Encryption struct {
+					Identity string `yaml:"identity"`
+				} `yaml:"encryption"`
+			}
+			if yamlErr := yaml.Unmarshal(data, &cfg); yamlErr == nil && cfg.Encryption.Identity != "" {
+				return expandIdentityPath(cfg.Encryption.Identity), nil
+			}
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -98,6 +105,21 @@ func findIdentityPath() (string, error) {
 	}
 
 	return defaultIdentityPath(), nil
+}
+
+// expandIdentityPath resolves ~/... and %ENVVAR%... paths for the identity file.
+func expandIdentityPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return filepath.Join(home, path[2:])
+	}
+	if strings.Contains(path, "%") {
+		return os.ExpandEnv(path)
+	}
+	return path
 }
 
 func defaultIdentityPath() string {

@@ -86,6 +86,28 @@ func (s *HuhPromptService) PromptConflictResolution(path, remoteDevice string) s
 	return choice
 }
 
+// PromptFileAction asks the user what to do for a specific file.
+func (s *HuhPromptService) PromptFileAction(path, direction string) string {
+	if !isInteractive() {
+		return promptFileActionFallback(path, direction)
+	}
+
+	var choice string
+	err := huh.NewSelect[string]().
+		Title(fmt.Sprintf("[%s] %s", direction, path)).
+		Options(
+			huh.NewOption("Apply", "apply"),
+			huh.NewOption("Skip", "skip"),
+		).
+		Value(&choice).
+		Run()
+
+	if err != nil {
+		return "apply"
+	}
+	return choice
+}
+
 // isInteractive returns true if stdin is a terminal.
 func isInteractive() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
@@ -123,6 +145,18 @@ func promptConfirmationFallback(prompt string) bool {
 		return answer == "y" || answer == "yes"
 	}
 	return false
+}
+
+func promptFileActionFallback(path, direction string) string {
+	fmt.Printf("  [%s] %s — apply? [Y/n]: ", direction, path)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		if answer == "n" || answer == "no" {
+			return "skip"
+		}
+	}
+	return "apply"
 }
 
 func promptConflictFallback(path, remoteDevice string) string {

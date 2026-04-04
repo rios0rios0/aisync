@@ -16,6 +16,7 @@ type DoctorCommand struct {
 	stateRepo         repositories.StateRepository
 	encryptionService repositories.EncryptionService
 	toolDetector      repositories.ToolDetector
+	gitRepo           repositories.GitRepository
 	formatter         entities.Formatter
 }
 
@@ -25,6 +26,7 @@ func NewDoctorCommand(
 	stateRepo repositories.StateRepository,
 	encryptionService repositories.EncryptionService,
 	toolDetector repositories.ToolDetector,
+	gitRepo repositories.GitRepository,
 	formatter entities.Formatter,
 ) *DoctorCommand {
 	return &DoctorCommand{
@@ -32,6 +34,7 @@ func NewDoctorCommand(
 		stateRepo:         stateRepo,
 		encryptionService: encryptionService,
 		toolDetector:      toolDetector,
+		gitRepo:           gitRepo,
 		formatter:         formatter,
 	}
 }
@@ -50,6 +53,7 @@ func (c *DoctorCommand) Execute(configPath, repoPath string) error {
 		{"State file", func() (string, bool) { return c.checkState(repoPath) }},
 		{"Age key", func() (string, bool) { return c.checkAgeKey(configPath) }},
 		{"AI tools", func() (string, bool) { return c.checkTools() }},
+		{"Git connectivity", func() (string, bool) { return c.checkGitConnectivity(configPath, repoPath) }},
 		{"External sources", func() (string, bool) { return c.checkSources(configPath) }},
 	}
 
@@ -166,4 +170,22 @@ func (c *DoctorCommand) checkSources(configPath string) (string, bool) {
 	}
 
 	return fmt.Sprintf("%d/%d source(s) reachable", reachable, len(config.Sources)), reachable == len(config.Sources)
+}
+
+func (c *DoctorCommand) checkGitConnectivity(configPath, repoPath string) (string, bool) {
+	config, err := c.configRepo.Load(configPath)
+	if err != nil {
+		return "cannot load config", false
+	}
+	if config.Sync.Remote == "" {
+		return "no remote configured (local only)", true
+	}
+
+	if err := c.gitRepo.Open(repoPath); err != nil {
+		return fmt.Sprintf("cannot open repo: %v", err), false
+	}
+	if !c.gitRepo.HasRemote() {
+		return "remote configured in config but not in git", false
+	}
+	return config.Sync.Remote, true
 }

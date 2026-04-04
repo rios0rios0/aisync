@@ -3,6 +3,7 @@ package commands
 import (
 	"crypto/sha256"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,6 +76,10 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 		remote = "(not configured)"
 	}
 	fmt.Printf("Remote:     %s\n", remote)
+	if config.Sync.Remote != "" && !isRemoteReachable(config.Sync.Remote) {
+		cachedAt := state.LastPull.Format("2006-01-02 15:04")
+		fmt.Printf("            (offline, cached at %s)\n", cachedAt)
+	}
 	fmt.Printf("Branch:     %s\n", config.Sync.Branch)
 	fmt.Printf("Last pull:  %s\n", lastPull)
 	fmt.Printf("Last push:  %s\n", lastPush)
@@ -83,6 +88,8 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 
 	// Tools status
 	totalFiles := 0
+	provenance := make(map[string]int) // source name -> file count
+
 	fmt.Println("AI Tools:")
 	for name, tool := range config.Tools {
 		if !tool.Enabled {
@@ -101,6 +108,10 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 					totalFiles += files
 					status = fmt.Sprintf("%d files managed (last sync: %s)",
 						files, manifest.LastSync.Format("2006-01-02 15:04"))
+
+					for _, mf := range manifest.Files {
+						provenance[mf.Source]++
+					}
 				}
 			}
 		}
@@ -108,6 +119,13 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 		fmt.Printf("  %-12s %s  %s\n", name, tool.Path, status)
 	}
 	fmt.Printf("\n  Total managed files: %d\n", totalFiles)
+	if len(provenance) > 0 {
+		parts := make([]string, 0, len(provenance))
+		for source, count := range provenance {
+			parts = append(parts, fmt.Sprintf("%d from %s", count, source))
+		}
+		fmt.Printf("  Provenance: %s\n", strings.Join(parts, ", "))
+	}
 	fmt.Println()
 
 	// Pending local changes
@@ -307,4 +325,19 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// isRemoteReachable performs a quick connectivity check for HTTPS remotes.
+// SSH remotes are assumed reachable (no lightweight check available).
+func isRemoteReachable(remoteURL string) bool {
+	if strings.HasPrefix(remoteURL, "git@") || !strings.HasPrefix(remoteURL, "http") {
+		return true // Can't cheaply check SSH; assume reachable
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Head(remoteURL) //nolint:gosec
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return true
 }

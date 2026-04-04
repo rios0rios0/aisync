@@ -6,10 +6,10 @@ import "strings"
 // compiled into the binary and cannot be overridden by the user.
 var DenyList = []string{
 	".claude/.credentials.json",
-	".claude/.oauth",
+	".claude/.oauth*",
 	".claude/statsig/",
 	".claude/todos/",
-	".claude/projects/*/session",
+	".claude/projects/*/session*",
 	".claude/plugins/",
 	".claude/.claude.json",
 	".DS_Store",
@@ -36,9 +36,20 @@ func matchesDenyPattern(path, pattern string) bool {
 		return strings.Contains(path, pattern) || strings.Contains(path, strings.TrimSuffix(pattern, "/"))
 	}
 	if strings.Contains(pattern, "*") {
-		prefix := pattern[:strings.Index(pattern, "*")]
-		suffix := pattern[strings.Index(pattern, "*")+1:]
-		return strings.Contains(path, prefix) && strings.Contains(path, suffix)
+		// Split pattern by "*" and check that all segments appear in order.
+		segments := strings.Split(pattern, "*")
+		remaining := path
+		for _, seg := range segments {
+			if seg == "" {
+				continue
+			}
+			idx := strings.Index(remaining, seg)
+			if idx < 0 {
+				return false
+			}
+			remaining = remaining[idx+len(seg):]
+		}
+		return true
 	}
 	return strings.HasSuffix(path, pattern) || strings.Contains(path, pattern)
 }
