@@ -62,5 +62,6 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 - changed `aisync diff` dry-run output to use KB/MB formatting and show line count deltas
 - changed `aisync init` to parse `config.yaml` for encryption identity in clean/smudge filters
+- changed the Go module dependencies to their latest versions
 
 ### Removed
