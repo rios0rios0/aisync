@@ -41,16 +41,33 @@ func parsePatternLines(content []byte) []string {
 	return patterns
 }
 
-// matchesAnyPattern checks a path against a list of glob patterns.
-// For patterns containing "**", it also tries matching only the filename.
-// For simple patterns without path separators (e.g. "*.tmp"), the pattern
-// is also matched against the basename of the path.
+// matchesAnyPattern checks a path against a list of glob patterns. The matcher
+// supports four pattern styles, in order of precedence:
+//
+//  1. Directory patterns ending with "/" (e.g. "plans/"). These match any path
+//     containing the directory name as a contiguous segment, at any depth,
+//     using the same engine as the compiled deny-list.
+//  2. Full-path globs via [filepath.Match] (e.g. "personal/*/settings.local.json").
+//  3. Basename globs for patterns without "/" (e.g. "*.tmp" matches
+//     "some/dir/file.tmp").
+//  4. Basename fallback for patterns containing "**" (e.g. "**/secret.yaml").
 func matchesAnyPattern(path string, patterns []string) bool {
 	normalized := filepath.ToSlash(path)
 	base := filepath.Base(normalized)
 
 	for _, pattern := range patterns {
 		pattern = filepath.ToSlash(pattern)
+
+		// Directory pattern: "plans/" matches any path with "plans" as a
+		// contiguous segment sequence, at any depth. Mirrors the deny-list
+		// matcher so .aisyncignore and the compiled deny-list behave the
+		// same way when given "foo/"-style entries.
+		if before, ok := strings.CutSuffix(pattern, "/"); ok {
+			if matchesDirectoryPattern(normalized, before) {
+				return true
+			}
+			continue
+		}
 
 		if matched, _ := filepath.Match(pattern, normalized); matched {
 			return true

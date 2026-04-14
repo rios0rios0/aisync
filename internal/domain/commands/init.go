@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,67 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
+
+// defaultAisyncIgnore is the starter content written to .aisyncignore by
+// `aisync init`. These are basename and simple-glob patterns for files that
+// users almost never want to sync across devices. Structural/directory-level
+// blocking (transcripts, runtime state, backups) lives in the compiled-in
+// deny-list in entities/denylist.go — that deny-list cannot be overridden,
+// whereas this file can.
+const defaultAisyncIgnore = `# aisync default ignore — user-overridable basename patterns.
+# For structural directory exclusions (transcripts, runtime state, caches,
+# backups) see the compiled-in deny-list in aisync. That list cannot be
+# overridden and ships updated with every aisync release.
+
+# editor / OS junk
+*.tmp
+*.swp
+*.bak
+*.old
+*.orig
+*.log
+*.backup
+*.backup.*
+.DS_Store
+Thumbs.db
+
+# AI-assistant planning documents.
+# Plans are generated from conversation context and frequently contain
+# internal repo paths, customer/project names, and other NDA-sensitive
+# strings. Comment out the lines below if you want to sync them anyway.
+plans/
+`
+
+// defaultAisyncEncrypt is the starter content written to .aisyncencrypt by
+// `aisync init`. Patterns are matched against the repo-relative path
+// personal/<tool>/<file> so they agree with .gitattributes and the secret
+// scanner. Anything matched here is age-encrypted before being committed.
+const defaultAisyncEncrypt = `# aisync default encrypt patterns.
+# Patterns are matched against the repo-relative path under personal/<tool>/
+# (same form used by .gitattributes). Anything matched here is age-encrypted
+# before being committed. Add your own patterns for any file that may contain
+# secrets, credentials, or NDA-protected content.
+
+# Claude — user memories and local overrides.
+personal/claude/memories/**
+personal/claude/settings.local.json
+personal/claude/*.local.json
+personal/claude/keys/**
+
+# Cursor — user memories and local overrides.
+personal/cursor/memories/**
+personal/cursor/settings.local.json
+
+# Codex — user memories.
+personal/codex/memories/**
+
+# Generic — anything the user explicitly marks private.
+personal/**/secrets/**
+personal/**/*.secret
+personal/**/*.private
+personal/**/.env
+personal/**/.env.*
+`
 
 // InitCommand creates or clones an aifiles repository.
 type InitCommand struct {
@@ -91,6 +153,15 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 	c.detectAndUpdateTools(repoPath)
 	if err := c.ensureStateExists(repoPath); err != nil {
 		return err
+	}
+
+	// Upgrade legacy cloned repos that predate default ignore/encrypt files.
+	// Never overwrite user-customised content; just fill in missing files.
+	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
+		logger.Warnf("failed to write default .aisyncignore: %v", err)
+	}
+	if err := c.writeDefaultEncryptIfMissing(repoPath); err != nil {
+		logger.Warnf("failed to write default .aisyncencrypt: %v", err)
 	}
 
 	logger.Info("aifiles repo cloned successfully")
@@ -185,6 +256,13 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 		return err
 	}
 
+	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
+		return fmt.Errorf("failed to write default .aisyncignore: %w", err)
+	}
+	if err := c.writeDefaultEncryptIfMissing(repoPath); err != nil {
+		return fmt.Errorf("failed to write default .aisyncencrypt: %w", err)
+	}
+
 	config := c.buildDefaultConfig()
 	if err := c.configRepo.Save(configPath, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -217,20 +295,45 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	return nil
 }
 
-// scaffoldDirectories creates the standard aifiles directory structure with
-// .gitkeep files in each directory.
+// writeDefaultIgnoreIfMissing writes the default .aisyncignore content to the
+// repo root if no .aisyncignore file exists there. Existing files are left
+// untouched so user customisations survive re-runs of init.
+func (c *InitCommand) writeDefaultIgnoreIfMissing(repoPath string) error {
+	return writeFileIfMissing(filepath.Join(repoPath, ".aisyncignore"), []byte(defaultAisyncIgnore))
+}
+
+// writeDefaultEncryptIfMissing writes the default .aisyncencrypt content to
+// the repo root if no .aisyncencrypt file exists there. Existing files are
+// left untouched so user customisations survive re-runs of init.
+func (c *InitCommand) writeDefaultEncryptIfMissing(repoPath string) error {
+	return writeFileIfMissing(filepath.Join(repoPath, ".aisyncencrypt"), []byte(defaultAisyncEncrypt))
+}
+
+// writeFileIfMissing writes content to path only if path does not already
+// exist. If the file exists, nothing is changed and nil is returned.
+func writeFileIfMissing(path string, content []byte) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", path, err)
+	}
+	return os.WriteFile(path, content, 0600)
+}
+
+// scaffoldDirectories creates the minimal aifiles directory layout: the two
+// namespace roots (personal/ and shared/) plus the .aisync/ device-state
+// directory. Tool-specific subdirectories (e.g. personal/claude/rules/) are
+// deliberately NOT pre-created — they emerge organically when push/pull
+// calls [os.MkdirAll] for the tools that are actually installed on each
+// device. This keeps fresh repos from being polluted with empty placeholder
+// directories for AI tools the user does not use.
 func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	dirs := []string{
-		"shared/claude/rules", "shared/claude/commands", "shared/claude/agents",
-		"shared/claude/hooks", "shared/claude/skills",
-		"shared/cursor/rules", "shared/cursor/skills",
-		"shared/copilot/instructions",
-		"shared/codex/rules",
-		"personal/claude/rules", "personal/claude/commands", "personal/claude/agents",
-		"personal/claude/hooks", "personal/claude/memories",
-		"personal/cursor/rules",
-		"personal/copilot/instructions",
-		"personal/codex/rules",
+		"personal",
+		"shared",
 		".aisync",
 	}
 

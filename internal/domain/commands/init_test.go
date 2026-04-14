@@ -59,10 +59,18 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Equal(t, repoPath, gitRepo.InitDir)
 		assert.Equal(t, 1, toolDetector.DetectCalls)
 
-		// Verify directories were created
-		sharedClaudeRules := filepath.Join(repoPath, "shared", "claude", "rules")
-		_, statErr := os.Stat(sharedClaudeRules)
-		assert.NoError(t, statErr)
+		// Verify only the minimal root directories were created. Tool
+		// subdirectories must NOT be pre-created — they emerge as push/pull
+		// discovers tools actually installed on the device.
+		for _, dir := range []string{"personal", "shared", ".aisync"} {
+			info, statErr := os.Stat(filepath.Join(repoPath, dir))
+			require.NoError(t, statErr, "%s should exist", dir)
+			assert.True(t, info.IsDir(), "%s should be a directory", dir)
+		}
+		_, statErr := os.Stat(filepath.Join(repoPath, "shared", "claude"))
+		assert.True(t, os.IsNotExist(statErr), "shared/claude must NOT be pre-created")
+		_, statErr = os.Stat(filepath.Join(repoPath, "personal", "claude"))
+		assert.True(t, os.IsNotExist(statErr), "personal/claude must NOT be pre-created")
 	})
 
 	t.Run("should call gitRepo.Clone with correct URL when github user is provided", func(t *testing.T) {
@@ -316,6 +324,109 @@ func TestInitCommand_Execute(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to initialize git repository")
+	})
+
+	t.Run("should write default .aisyncignore and .aisyncencrypt on create", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{ExistsVal: false}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{
+				"claude": {Path: "~/.claude", Enabled: true},
+			},
+		}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{
+			GeneratedPublicKey: "age1testkey",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.NoError(t, err)
+
+		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(ignoreContent), "plans/", "default .aisyncignore should include plans/")
+		assert.Contains(t, string(ignoreContent), "*.tmp")
+
+		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(encryptContent), "personal/claude/memories/**")
+		assert.Contains(t, string(encryptContent), "personal/claude/settings.local.json")
+	})
+
+	t.Run("should not overwrite existing .aisyncignore and .aisyncencrypt on clone", func(t *testing.T) {
+		// given — simulate a clone that lands a repo with custom ignore/encrypt files.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		customIgnore := "# user-customised\nfoo/\n"
+		customEncrypt := "# user-customised\npersonal/custom/**\n"
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncignore"), []byte(customIgnore), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncencrypt"), []byte(customEncrypt), 0600))
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", "")
+
+		// then
+		require.NoError(t, err)
+
+		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
+		require.NoError(t, readErr)
+		assert.Equal(t, customIgnore, string(ignoreContent), "existing .aisyncignore must not be overwritten")
+
+		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
+		require.NoError(t, readErr)
+		assert.Equal(t, customEncrypt, string(encryptContent), "existing .aisyncencrypt must not be overwritten")
+	})
+
+	t.Run("should write default .aisyncignore and .aisyncencrypt when missing after clone", func(t *testing.T) {
+		// given — legacy cloned repo with no ignore/encrypt files yet.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "testuser", "", "")
+
+		// then
+		require.NoError(t, err)
+
+		_, statErr := os.Stat(filepath.Join(repoPath, ".aisyncignore"))
+		assert.NoError(t, statErr, "clone should backfill .aisyncignore when missing")
+
+		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncencrypt"))
+		assert.NoError(t, statErr, "clone should backfill .aisyncencrypt when missing")
 	})
 
 	t.Run("should prefer remoteURL over githubUser for clone URL", func(t *testing.T) {
