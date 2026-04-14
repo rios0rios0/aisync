@@ -137,6 +137,30 @@ func TestEncryptPatterns_Matches(t *testing.T) {
 			path:        "document.age",
 			shouldMatch: true,
 		},
+		{
+			name:        "should match trailing-slash directory pattern at any depth",
+			patterns:    []string{"plans/"},
+			path:        "plans/my-plan.md",
+			shouldMatch: true,
+		},
+		{
+			name:        "should match trailing-slash directory pattern under nested path",
+			patterns:    []string{"plans/"},
+			path:        "claude/plans/nested/file.md",
+			shouldMatch: true,
+		},
+		{
+			name:        "should not match trailing-slash directory against adjacent name",
+			patterns:    []string{"plans/"},
+			path:        "planning.md",
+			shouldMatch: false,
+		},
+		{
+			name:        "should match multi-segment trailing-slash directory pattern",
+			patterns:    []string{"personal/claude/memories/"},
+			path:        "personal/claude/memories/user.md",
+			shouldMatch: true,
+		},
 	}
 
 	for _, tt := range tests {

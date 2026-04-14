@@ -437,6 +437,94 @@ func TestPushCommand_Execute(t *testing.T) {
 		assert.Equal(t, "ENCRYPTED-DATA", string(content))
 	})
 
+	t.Run("should encrypt files matching repo-relative personal/<tool>/ patterns", func(t *testing.T) {
+		// given — regression for a bug where .aisyncencrypt patterns like
+		// "personal/*/memories/**" never matched because the push command
+		// matched against tool-relative paths (e.g. "memories/foo.md") instead
+		// of the repo-relative path "personal/claude/memories/foo.md".
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "repo")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		// Pattern uses the repo-relative form documented in .gitattributes.
+		require.NoError(t, os.WriteFile(
+			filepath.Join(repoPath, ".aisyncencrypt"),
+			[]byte("personal/*/memories/**\npersonal/*/settings.local.json\n"),
+			0600,
+		))
+
+		claudeDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories"), 0700))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "memories", "user.md"),
+			[]byte("personal memory content"),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "settings.local.json"),
+			[]byte(`{"permissions":{}}`),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "CLAUDE.md"),
+			[]byte("# shared"),
+			0600,
+		))
+
+		config := &entities.Config{
+			Tools: map[string]entities.Tool{
+				"claude": {Path: claudeDir, Enabled: true},
+			},
+			Encryption: entities.EncryptionConfig{
+				Recipients: []string{"age1recipient123"},
+			},
+		}
+		configRepo := &doubles.MockConfigRepository{Config: config}
+		stateRepo := &doubles.MockStateRepository{
+			State:     entities.NewState("test-device"),
+			ExistsVal: true,
+		}
+		gitRepo := &doubles.MockGitRepository{
+			HasRemoteVal: true,
+			IsCleanVal:   false,
+		}
+		encryptionService := &doubles.MockEncryptionService{
+			EncryptedData: []byte("ENCRYPTED-DATA"),
+		}
+
+		cmd := commands.NewPushCommand(
+			configRepo, stateRepo, gitRepo,
+			encryptionService,
+			&doubles.MockManifestRepository{},
+			&doubles.MockSecretScanner{},
+		)
+
+		// when
+		err := cmd.Execute(
+			filepath.Join(repoPath, "config.yaml"),
+			repoPath, "test commit", true, false,
+		)
+
+		// then
+		require.NoError(t, err)
+		// memories/user.md and settings.local.json should both be encrypted.
+		assert.Equal(t, 2, encryptionService.EncryptCalls)
+
+		encryptedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "user.md.age")
+		_, statErr := os.Stat(encryptedMemory)
+		assert.NoError(t, statErr, "memories/user.md should have been encrypted")
+
+		encryptedSettings := filepath.Join(repoPath, "personal", "claude", "settings.local.json.age")
+		_, statErr = os.Stat(encryptedSettings)
+		assert.NoError(t, statErr, "settings.local.json should have been encrypted")
+
+		// CLAUDE.md is not matched and must remain plaintext.
+		plaintextClaude := filepath.Join(repoPath, "personal", "claude", "CLAUDE.md")
+		content, readErr := os.ReadFile(plaintextClaude)
+		require.NoError(t, readErr)
+		assert.Equal(t, "# shared", string(content))
+	})
+
 	t.Run("should skip tool directory that does not exist", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()

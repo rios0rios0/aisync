@@ -42,6 +42,14 @@ func NewPushCommand(
 	}
 }
 
+// encryptMatchPath builds the repo-relative path under personal/<tool>/ that
+// is used for matching .aisyncencrypt patterns. Every encrypt match site must
+// use this helper so .aisyncencrypt patterns, .gitattributes filters, and the
+// secret scanner all agree on path semantics.
+func encryptMatchPath(toolName, relPath string) string {
+	return filepath.ToSlash(filepath.Join("personal", toolName, relPath))
+}
+
 // Execute scans enabled AI tool directories for personal files, copies them into
 // the sync repo under personal/<tool>/, commits, and pushes. When skipSecretScan
 // is false, unencrypted files are scanned for leaked secrets before committing.
@@ -223,7 +231,8 @@ func (c *PushCommand) dryRunScanTool(
 			return nil
 		}
 
-		encrypted := encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0
+		encrypted := encryptPatterns.Matches(encryptMatchPath(toolName, relPath)) &&
+			len(config.Encryption.Recipients) > 0
 		if encrypted {
 			result.encrypted++
 			fmt.Fprintf(os.Stdout, "  %s/%s (encrypted)\n", toolName, relPath)
@@ -270,7 +279,7 @@ func (c *PushCommand) collectPersonalFiles(
 			return nil
 		}
 
-		if c.copyPersonalFile(path, relPath, personalDir, encryptPatterns, config) {
+		if c.copyPersonalFile(path, relPath, toolName, personalDir, encryptPatterns, config) {
 			copied++
 		}
 		return nil
@@ -281,8 +290,10 @@ func (c *PushCommand) collectPersonalFiles(
 
 // copyPersonalFile reads a single file, optionally encrypts it, and writes it to
 // the personal directory if it has changed. Returns true if the file was copied.
+// The toolName parameter is used to build the repo-relative path under
+// personal/<tool>/ for matching encrypt patterns.
 func (c *PushCommand) copyPersonalFile(
-	path, relPath, personalDir string,
+	path, relPath, toolName, personalDir string,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
 ) bool {
@@ -292,7 +303,7 @@ func (c *PushCommand) copyPersonalFile(
 		return false
 	}
 
-	if encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0 {
+	if encryptPatterns.Matches(encryptMatchPath(toolName, relPath)) && len(config.Encryption.Recipients) > 0 {
 		encrypted, encErr := c.encryptionService.Encrypt(content, config.Encryption.Recipients)
 		if encErr != nil {
 			logger.Warnf("failed to encrypt %s: %v", relPath, encErr)
@@ -397,9 +408,12 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 			return nil
 		}
 
-		// Skip files that would be encrypted (matching encrypt patterns)
+		// Skip files that would be encrypted (matching encrypt patterns).
+		// relToPersonal is relative to personalDir (e.g. "claude/memories/foo.md");
+		// encryptMatchPath rebuilds the repo-relative "personal/<tool>/<rest>"
+		// form so the match agrees with dryRunScanTool and copyPersonalFile.
 		relToPersonal, _ := filepath.Rel(personalDir, path)
-		if encryptPatterns.Matches(relToPersonal) {
+		if encryptPatterns.Matches(filepath.ToSlash(filepath.Join("personal", relToPersonal))) {
 			return nil
 		}
 
