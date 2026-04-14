@@ -46,7 +46,6 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 - added cross-source file conflict detection and warning in `aisync source update`
 - added force-push detection with user confirmation prompt
 - added git clean/smudge filters for transparent `age` encryption (`_clean`/`_smudge` subcommands)
-- added Git connectivity check to `aisync doctor`
 - added interactive TUI prompts via `charmbracelet/huh` with non-interactive fallback
 - added manifest file (`.aisync-manifest.json`) for provenance tracking and deletion detection
 - added offline connectivity indicator to `aisync status` output
