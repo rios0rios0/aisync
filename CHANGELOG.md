@@ -16,52 +16,55 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-14
+
 ### Added
-- added automatic version check on CLI startup using `CheckForUpdates()`
-- added `aisync init` command to create or clone an `aifiles` repository
-- added `aisync source add/remove/list/update/pin` commands to manage external sources
-- added `aisync pull` command to fetch from external sources and apply to AI tool directories
-- added `aisync push` command with personal file detection, secret scanning, and dry-run mode
-- added `aisync sync` command combining pull and push in a single workflow
-- added `aisync diff` command with summary/detailed modes, reverse mode, and external tool support
-- added `aisync watch` command with `fsnotify`/polling dual-mode and auto-push debounce
-- added `aisync status` command to show sync state, source freshness, and offline indicator
-- added `aisync doctor` command with 7 diagnostic checks including Git connectivity
+
+- added `--from-url` flag on `aisync source add` to import source definitions from YAML URLs
+- added `--path` flag on `aisync source add` to restrict mappings to a subdirectory
+- added `--polling-interval` flag on `aisync watch` for configuring file change detection interval
+- added `--use-system-git` flag for environments where `go-git` has compatibility issues
+- added `.gitattributes` creation with LF line ending enforcement and encryption filter patterns
 - added `aisync device list/rename/remove` commands for managing registered devices
+- added `aisync diff` command with summary/detailed modes, reverse mode, and external tool support
+- added `aisync doctor` command with 7 diagnostic checks including Git connectivity
+- added `aisync init` command to create or clone an `aifiles` repository
 - added `aisync key generate/import/export/add-recipient` commands for `age` encryption management
 - added `aisync migrate` command for legacy setup migration
+- added `aisync pull` command to fetch from external sources and apply to AI tool directories
+- added `aisync push` command with personal file detection, secret scanning, and dry-run mode
+- added `aisync source add/remove/list/update/pin` commands to manage external sources
+- added `aisync status` command to show sync state, source freshness, and offline indicator
+- added `aisync sync` command combining pull and push in a single workflow
 - added `aisync version` and `aisync self-update` commands
-- added Tier 1 AI tool detection (Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, Windsurf)
-- added manifest file (`.aisync-manifest.json`) for provenance tracking and deletion detection
-- added tarball-only external source fetching with HTTP ETag and `Last-Modified` caching (zero API calls)
-- added shared/personal namespace separation with file-level precedence
-- added compiled-in deny-list for credentials, session transcripts, and plugin caches
-- added `--use-system-git` flag for environments where `go-git` has compatibility issues
-- added `--path` flag on `aisync source add` to restrict mappings to a subdirectory
-- added `--from-url` flag on `aisync source add` to import source definitions from YAML URLs
-- added `--polling-interval` flag on `aisync watch` for configuring file change detection interval
-- added interactive TUI prompts via `charmbracelet/huh` with non-interactive fallback
+- added `aisync watch` command with `fsnotify`/polling dual-mode and auto-push debounce
 - added `bubbletea` interactive diff viewer with keyboard scrolling
-- added git clean/smudge filters for transparent `age` encryption (`_clean`/`_smudge` subcommands)
-- added `.gitattributes` creation with LF line ending enforcement and encryption filter patterns
-- added CRLF-to-LF line ending normalization in atomic apply with binary file detection
-- added per-file confirmation prompts during pull
-- added force-push detection with user confirmation prompt
-- added recency warning when local files differ from incoming changes
-- added tool detection during `aisync init` clone workflow
 - added `gh repo create` suggestion in `aisync init` create flow
+- added automatic version check on CLI startup using `CheckForUpdates()`
+- added compiled-in deny-list for credentials, session transcripts, and plugin caches
+- added CRLF-to-LF line ending normalization in atomic apply with binary file detection
 - added cross-source file conflict detection and warning in `aisync source update`
+- added force-push detection with user confirmation prompt
+- added git clean/smudge filters for transparent `age` encryption (`_clean`/`_smudge` subcommands)
+- added interactive TUI prompts via `charmbracelet/huh` with non-interactive fallback
+- added manifest file (`.aisync-manifest.json`) for provenance tracking and deletion detection
 - added offline connectivity indicator to `aisync status` output
-- added Git connectivity check to `aisync doctor`
+- added per-file confirmation prompts during pull
+- added recency warning when local files differ from incoming changes
+- added shared/personal namespace separation with file-level precedence
+- added tarball-only external source fetching with HTTP ETag and `Last-Modified` caching (zero API calls)
+- added Tier 1 AI tool detection (Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, Windsurf)
+- added tool detection during `aisync init` clone workflow
 - added Windows `%APPDATA%` config path resolution and `%ENVVAR%` expansion
 
+### Changed
+
+- changed `aisync diff` dry-run output to use KB/MB formatting and show line count deltas
+- changed `aisync init` to parse `config.yaml` for encryption identity in clean/smudge filters
+
 ### Fixed
+
 - fixed deny-list patterns: `.claude/.oauth` now uses trailing wildcard `.claude/.oauth*`
 - fixed deny-list patterns: `.claude/projects/*/session` now uses trailing wildcard `.claude/projects/*/session*`
 - fixed deny-list wildcard matching to support multiple `*` segments in a single pattern
 
-### Changed
-- changed `aisync diff` dry-run output to use KB/MB formatting and show line count deltas
-- changed `aisync init` to parse `config.yaml` for encryption identity in clean/smudge filters
-
-### Removed
