@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/rios0rios0/cliforge/pkg/selfupdate"
 	logger "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -40,9 +41,27 @@ func main() {
 			}
 			setGitImpl(repo)
 		}
+
+		runUpdateCheck(cmd, quiet)
 	}
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+// runUpdateCheck performs the cliforge update check, skipping local dev builds,
+// the self-update / version subcommands, and any invocation that passed --quiet.
+// Running after flag parsing (inside PersistentPreRun) means Cobra's own --help,
+// flag parse errors, and shell completion paths are bypassed automatically.
+func runUpdateCheck(cmd *cobra.Command, quiet bool) {
+	if version == "dev" || quiet {
+		return
+	}
+	switch cmd.Name() {
+	case "self-update", "version":
+		return
+	}
+	selfupdate.NewCommand(controllers.RepoOwner, controllers.RepoName, controllers.BinaryName, version).
+		CheckForUpdates()
 }

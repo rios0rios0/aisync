@@ -24,6 +24,14 @@ const (
 	pollingWatchInterval = 30 * time.Second
 	defaultDebounce      = 60 * time.Second
 	deviceRenameArgs     = 2
+
+	// RepoOwner is the GitHub owner of the aisync CLI, shared between the passive
+	// update check at startup and the `self-update` subcommand to avoid drift.
+	RepoOwner = "rios0rios0"
+	// RepoName is the GitHub repository name of the aisync CLI.
+	RepoName = "aisync"
+	// BinaryName is the release asset binary name for the aisync CLI.
+	BinaryName = "aisync"
 )
 
 // DefaultRepoPath returns the default aifiles repo location.
@@ -513,7 +521,7 @@ func newMigrateSubcmd(migrateCmd *commands.MigrateCommand) *cobra.Command {
 }
 
 func newSelfUpdateSubcmd(version string) *cobra.Command {
-	updateCmd := selfupdate.NewCommand("rios0rios0", "aisync", "aisync", version)
+	updateCmd := selfupdate.NewCommand(RepoOwner, RepoName, BinaryName, version)
 	//nolint:exhaustruct // cobra command does not require all fields
 	return &cobra.Command{
 		Use: "self-update", Short: "Update aisync to the latest version", Args: cobra.NoArgs,
