@@ -52,6 +52,7 @@ func newTestPushCommand(
 		&doubles.MockEncryptionService{},
 		&doubles.MockManifestRepository{},
 		&doubles.MockSecretScanner{},
+		&doubles.MockNDAContentChecker{},
 	)
 }
 

@@ -239,6 +239,7 @@ type MockEncryptionService struct {
 	ExportIdentityPath string
 	ExportErr          error
 	EncryptedData      []byte
+	EncryptPlaintext   []byte // captures the last plaintext passed to Encrypt for round-trip tests
 	EncryptErr         error
 	DecryptedData      []byte
 	DecryptErr         error
@@ -276,6 +277,7 @@ func (m *MockEncryptionService) ExportPublicKey(identityPath string) (string, er
 
 func (m *MockEncryptionService) Encrypt(plaintext []byte, recipients []string) ([]byte, error) {
 	m.EncryptCalls++
+	m.EncryptPlaintext = plaintext
 	if m.EncryptErr != nil {
 		return nil, m.EncryptErr
 	}
@@ -345,6 +347,28 @@ func (m *MockDiffService) ComputePersonalDiff(
 	repoPath string,
 ) ([]entities.FileChange, error) {
 	return m.PersonalDiff, m.PersonalErr
+}
+
+// MockNDAContentChecker is a manual stub for repositories.NDAContentChecker.
+// Tests set Findings or Err to simulate a clean/blocked scan.
+type MockNDAContentChecker struct {
+	Findings   []entities.NDAFinding
+	Err        error
+	CheckCalls int
+	LastRepo   string
+}
+
+func (m *MockNDAContentChecker) Check(
+	repoPath string,
+	_ *entities.Config,
+	_ map[string][]byte,
+) ([]entities.NDAFinding, error) {
+	m.CheckCalls++
+	m.LastRepo = repoPath
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	return m.Findings, nil
 }
 
 // MockWatchService is a manual stub for repositories.WatchService.
@@ -508,4 +532,90 @@ func (m *MockPromptService) PromptConflictResolution(_, _ string) string {
 func (m *MockPromptService) PromptFileAction(_, _ string) string {
 	m.FileActionCalls++
 	return m.FileAction
+}
+
+// MockForbiddenTermsRepository is a manual stub for
+// repositories.ForbiddenTermsRepository. It stores the in-memory term
+// list, captures Save calls, and lets tests preconfigure errors per
+// method.
+type MockForbiddenTermsRepository struct {
+	Terms      []entities.ForbiddenTerm
+	SavedRepo  string
+	SavedTerms []entities.ForbiddenTerm
+	LoadErr    error
+	SaveErr    error
+	LoadCalls  int
+	SaveCalls  int
+	PathCalls  int
+}
+
+func (m *MockForbiddenTermsRepository) Load(_ string) ([]entities.ForbiddenTerm, error) {
+	m.LoadCalls++
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	return m.Terms, nil
+}
+
+func (m *MockForbiddenTermsRepository) Save(repoPath string, terms []entities.ForbiddenTerm) error {
+	m.SaveCalls++
+	m.SavedRepo = repoPath
+	m.SavedTerms = terms
+	if m.SaveErr != nil {
+		return m.SaveErr
+	}
+	m.Terms = terms
+	return nil
+}
+
+func (m *MockForbiddenTermsRepository) Path(repoPath string) string {
+	m.PathCalls++
+	return repoPath + "/.aisync-forbidden.age"
+}
+
+// MockGitInspector is a manual stub for repositories.GitInspector. Tests
+// can preconfigure each method's return values and (optionally) an error
+// per method to exercise the per-source error tolerance in AutoDeriver.
+type MockGitInspector struct {
+	EmailDomainVal     string
+	EmailDomainErr     error
+	SelfIdentitiesVal  []string
+	SelfIdentitiesErr  error
+	LocalRemotesVal    []repositories.DerivedTerm
+	LocalRemotesErr    error
+	DirectoryLayoutVal []repositories.DerivedTerm
+	DirectoryLayoutErr error
+	SSHHostAliasesVal  []repositories.DerivedTerm
+	SSHHostAliasesErr  error
+
+	EmailDomainCalls     int
+	SelfIdentitiesCalls  int
+	LocalRemotesCalls    int
+	DirectoryLayoutCalls int
+	SSHHostAliasesCalls  int
+}
+
+func (m *MockGitInspector) EmailDomain() (string, error) {
+	m.EmailDomainCalls++
+	return m.EmailDomainVal, m.EmailDomainErr
+}
+
+func (m *MockGitInspector) SelfIdentities() ([]string, error) {
+	m.SelfIdentitiesCalls++
+	return m.SelfIdentitiesVal, m.SelfIdentitiesErr
+}
+
+func (m *MockGitInspector) LocalRemotes(_ []string, _ int) ([]repositories.DerivedTerm, error) {
+	m.LocalRemotesCalls++
+	return m.LocalRemotesVal, m.LocalRemotesErr
+}
+
+func (m *MockGitInspector) DirectoryLayout(_ []string) ([]repositories.DerivedTerm, error) {
+	m.DirectoryLayoutCalls++
+	return m.DirectoryLayoutVal, m.DirectoryLayoutErr
+}
+
+func (m *MockGitInspector) SSHHostAliases() ([]repositories.DerivedTerm, error) {
+	m.SSHHostAliasesCalls++
+	return m.SSHHostAliasesVal, m.SSHHostAliasesErr
 }

@@ -162,7 +162,7 @@ func (c *WatchCommand) buildWatchCallback(
 
 			logger.Infof("debounce window closed, pushing %d changes", len(events))
 			msg := fmt.Sprintf("sync(watch): %d file(s) changed", len(events))
-			if pushErr := c.pushCmd.Execute(configPath, repoPath, msg, false, false); pushErr != nil {
+			if pushErr := c.pushCmd.Execute(configPath, repoPath, msg, PushOptions{}); pushErr != nil {
 				logger.Warnf("auto-push failed: %v", pushErr)
 			}
 		})
