@@ -321,6 +321,138 @@ Host random.example.com
 	})
 }
 
+// TestExecGitInspector_EmailDomain must NOT call t.Parallel() at any
+// level because t.Setenv panics inside parallel tests, and EmailDomain
+// shells out to `git config --global user.email` whose source file is
+// controlled via `GIT_CONFIG_GLOBAL` (set per sub-test).
+func TestExecGitInspector_EmailDomain(t *testing.T) {
+	// writeGlobalGitConfig writes a synthetic global gitconfig file
+	// for the current sub-test and points `git config --global` at it
+	// via the GIT_CONFIG_GLOBAL env var. Using GIT_CONFIG_GLOBAL is
+	// cleaner than swapping HOME because it doesn't risk picking up
+	// other dotfiles from the test environment.
+	writeGlobalGitConfig := func(t *testing.T, email string) {
+		t.Helper()
+		dir := t.TempDir()
+		path := filepath.Join(dir, "gitconfig")
+		body := "[user]\n\temail = " + email + "\n"
+		require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+		t.Setenv("GIT_CONFIG_GLOBAL", path)
+	}
+
+	t.Run("should return the domain for an employer email", func(t *testing.T) {
+		// given
+		requireGit(t)
+		writeGlobalGitConfig(t, "alice@arancia.ca")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "arancia.ca", domain)
+	})
+
+	t.Run("should lower-case the domain for case-mixed input", func(t *testing.T) {
+		// given
+		requireGit(t)
+		writeGlobalGitConfig(t, "alice@AranCia.CA")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "arancia.ca", domain)
+	})
+
+	t.Run("should filter gmail.com via the public free-mail allowlist", func(t *testing.T) {
+		// given — gmail is in publicFreeMailDomains and must NOT be
+		// returned as a candidate NDA term. Catches the regression
+		// where a personal email would fire the auto-derived scanner.
+		requireGit(t)
+		writeGlobalGitConfig(t, "alice@gmail.com")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, domain, "gmail.com is in the public free-mail allowlist")
+	})
+
+	t.Run("should filter outlook.com via the public free-mail allowlist", func(t *testing.T) {
+		// given — sanity check that the allowlist isn't gmail-only.
+		requireGit(t)
+		writeGlobalGitConfig(t, "bob@outlook.com")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, domain)
+	})
+
+	t.Run("should return empty for malformed email with no @", func(t *testing.T) {
+		// given
+		requireGit(t)
+		writeGlobalGitConfig(t, "not-an-email")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, domain)
+	})
+
+	t.Run("should return empty for trailing-@ email", func(t *testing.T) {
+		// given — `at == len(email)-1` branch in EmailDomain.
+		requireGit(t)
+		writeGlobalGitConfig(t, "alice@")
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, domain)
+	})
+
+	t.Run("should return empty when user.email is unset", func(t *testing.T) {
+		// given — empty global gitconfig file. `git config --global
+		// user.email` will exit non-zero, which EmailDomain treats as
+		// "no domain configured" rather than an error.
+		requireGit(t)
+		dir := t.TempDir()
+		path := filepath.Join(dir, "gitconfig")
+		require.NoError(t, os.WriteFile(path, []byte(""), 0o600))
+		t.Setenv("GIT_CONFIG_GLOBAL", path)
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		domain, err := inspector.EmailDomain()
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, domain)
+	})
+}
+
 // initGitRepoWithRemote creates a real git repo under a fresh temp dir
 // (so the parent path doesn't pollute LocalRemotes) and sets `origin` to
 // the given URL. Returns the dev-root path that should be passed to
