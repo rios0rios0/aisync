@@ -572,3 +572,50 @@ func (m *MockForbiddenTermsRepository) Path(repoPath string) string {
 	m.PathCalls++
 	return repoPath + "/.aisync-forbidden.age"
 }
+
+// MockGitInspector is a manual stub for repositories.GitInspector. Tests
+// can preconfigure each method's return values and (optionally) an error
+// per method to exercise the per-source error tolerance in AutoDeriver.
+type MockGitInspector struct {
+	EmailDomainVal     string
+	EmailDomainErr     error
+	SelfIdentitiesVal  []string
+	SelfIdentitiesErr  error
+	LocalRemotesVal    []repositories.DerivedTerm
+	LocalRemotesErr    error
+	DirectoryLayoutVal []repositories.DerivedTerm
+	DirectoryLayoutErr error
+	SSHHostAliasesVal  []repositories.DerivedTerm
+	SSHHostAliasesErr  error
+
+	EmailDomainCalls     int
+	SelfIdentitiesCalls  int
+	LocalRemotesCalls    int
+	DirectoryLayoutCalls int
+	SSHHostAliasesCalls  int
+}
+
+func (m *MockGitInspector) EmailDomain() (string, error) {
+	m.EmailDomainCalls++
+	return m.EmailDomainVal, m.EmailDomainErr
+}
+
+func (m *MockGitInspector) SelfIdentities() ([]string, error) {
+	m.SelfIdentitiesCalls++
+	return m.SelfIdentitiesVal, m.SelfIdentitiesErr
+}
+
+func (m *MockGitInspector) LocalRemotes(_ []string, _ int) ([]repositories.DerivedTerm, error) {
+	m.LocalRemotesCalls++
+	return m.LocalRemotesVal, m.LocalRemotesErr
+}
+
+func (m *MockGitInspector) DirectoryLayout(_ []string) ([]repositories.DerivedTerm, error) {
+	m.DirectoryLayoutCalls++
+	return m.DirectoryLayoutVal, m.DirectoryLayoutErr
+}
+
+func (m *MockGitInspector) SSHHostAliases() ([]repositories.DerivedTerm, error) {
+	m.SSHHostAliasesCalls++
+	return m.SSHHostAliasesVal, m.SSHHostAliasesErr
+}
