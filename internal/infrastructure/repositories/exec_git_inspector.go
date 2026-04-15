@@ -161,6 +161,11 @@ func (g *ExecGitInspector) DirectoryLayout(devRoots []string) ([]repositories.De
 // scanForgeDir enumerates one forge directory under a dev root and
 // returns derived terms for each first-level entry. For ADO, it also
 // descends one extra level to pick up `<org>/<project>/` layouts.
+// Dotfile entries (e.g. `.idea`, `.vscode`, `.git`, `.github`,
+// `.devcontainer`) are skipped — they are universal IDE/tooling
+// markers, never company identifiers, and leaving them in the derived
+// set produces false positives against every rule file that mentions
+// an IDE configuration folder.
 func scanForgeDir(expandedRoot, displayRoot, forge string) []repositories.DerivedTerm {
 	forgeRoot := filepath.Join(expandedRoot, forge)
 	entries, err := os.ReadDir(forgeRoot)
@@ -171,6 +176,9 @@ func scanForgeDir(expandedRoot, displayRoot, forge string) []repositories.Derive
 	origin := "fs:" + filepath.Join(displayRoot, forge)
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 		out = append(out, repositories.DerivedTerm{Value: entry.Name(), Origin: origin})
@@ -185,6 +193,7 @@ func scanForgeDir(expandedRoot, displayRoot, forge string) []repositories.Derive
 // scanADOProjects descends into `<forgeRoot>/<org>/` and returns each
 // project subdirectory name as a derived term. Used for ADO layouts
 // where the structure is `<dev-root>/dev.azure.com/<org>/<project>/<repo>`.
+// Dotfile entries are skipped for the same reason as in [scanForgeDir].
 func scanADOProjects(forgeRoot, displayRoot, forge, org string) []repositories.DerivedTerm {
 	projectRoot := filepath.Join(forgeRoot, org)
 	projectEntries, err := os.ReadDir(projectRoot)
@@ -195,6 +204,9 @@ func scanADOProjects(forgeRoot, displayRoot, forge, org string) []repositories.D
 	out := make([]repositories.DerivedTerm, 0, len(projectEntries))
 	for _, project := range projectEntries {
 		if !project.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(project.Name(), ".") {
 			continue
 		}
 		out = append(out, repositories.DerivedTerm{
