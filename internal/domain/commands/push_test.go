@@ -53,12 +53,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			secretScanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -90,12 +91,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "", true, false,
+			repoPath, "", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -107,10 +109,10 @@ func TestPushCommand_Execute(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewPushCommand(configRepo, nil, nil, nil, nil, nil)
+		cmd := commands.NewPushCommand(configRepo, nil, nil, nil, nil, nil, nil)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", "", false, false)
+		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", "", commands.PushOptions{})
 
 		// then
 		require.Error(t, err)
@@ -139,12 +141,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -171,12 +174,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "", false, true,
+			repoPath, "", commands.PushOptions{DryRun: true},
 		)
 
 		// then
@@ -221,12 +225,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			secretScanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", false, false,
+			repoPath, "test commit", commands.PushOptions{},
 		)
 
 		// then
@@ -263,12 +268,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			secretScanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -299,12 +305,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "", true, false,
+			repoPath, "", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -328,12 +335,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -360,12 +368,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -423,12 +432,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			encryptionService,
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -506,12 +516,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			encryptionService,
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -603,12 +614,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			encryptionService,
 			&doubles.MockManifestRepository{},
 			scanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", false, false,
+			repoPath, "test commit", commands.PushOptions{},
 		)
 
 		// then
@@ -646,12 +658,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -681,12 +694,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -716,12 +730,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -778,12 +793,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			manifestRepo,
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -824,12 +840,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "", false, true,
+			repoPath, "", commands.PushOptions{DryRun: true},
 		)
 
 		// then
@@ -878,12 +895,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -925,12 +943,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			secretScanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", false, false,
+			repoPath, "test", commands.PushOptions{},
 		)
 
 		// then
@@ -975,12 +994,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -1015,12 +1035,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			secretScanner,
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", false, false,
+			repoPath, "test", commands.PushOptions{},
 		)
 
 		// then
@@ -1052,12 +1073,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test commit", true, false,
+			repoPath, "test commit", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -1088,12 +1110,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then
@@ -1137,12 +1160,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "", false, true,
+			repoPath, "", commands.PushOptions{DryRun: true},
 		)
 
 		// then
@@ -1188,12 +1212,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockEncryptionService{},
 			manifestRepo,
 			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
 		)
 
 		// when
 		err := cmd.Execute(
 			filepath.Join(repoPath, "config.yaml"),
-			repoPath, "test", true, false,
+			repoPath, "test", commands.PushOptions{SkipSecretScan: true},
 		)
 
 		// then

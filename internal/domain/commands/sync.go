@@ -38,7 +38,7 @@ func (c *SyncCommand) Execute(configPath, repoPath, commitMsg string, dryRun boo
 	}
 
 	logger.Info("starting sync: push phase")
-	if err := c.pushCmd.Execute(configPath, repoPath, commitMsg, false, false); err != nil {
+	if err := c.pushCmd.Execute(configPath, repoPath, commitMsg, PushOptions{}); err != nil {
 		return fmt.Errorf("push phase failed: %w", err)
 	}
 
