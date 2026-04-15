@@ -18,13 +18,16 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ### Added
 
-- added default `.aisyncignore` and `.aisyncencrypt` scaffolding to `aisync init` — fresh repos start with safe basename-ignore patterns and encrypt patterns for memories/settings/secrets/env files
+- added default `.aisyncignore` and `.aisyncencrypt` scaffolding to `aisync init` — fresh repos start with safe basename-ignore patterns and a broad default encrypt pattern set covering memories, local settings, private keys (`*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.jks`, `id_rsa`, `id_ed25519`, GPG keyrings), credential files (`.netrc`, `.pypirc`, `.npmrc`, `.dockerconfigjson`, `credentials*`, `auth.json`, `*.token`, `*.credentials`), env files, and session/cookie state
 - added legacy-repo upgrade path in `aisync init` clone mode: missing `.aisyncignore`/`.aisyncencrypt` files are backfilled with defaults while existing user-customized content is left untouched
+- added automatic recipient registration in `aisync init` create mode when an age identity already exists at the configured path: the public key is derived via `ExportPublicKey` and added to `config.Encryption.Recipients` so fresh configs on machines with a pre-existing key immediately encrypt as expected (previously the fresh config silently shipped `recipients: []` and push would write plaintext)
 
 ### Changed
 
 - extended the `.aisyncignore` and `.aisyncencrypt` matcher to understand trailing-slash directory patterns (e.g. `plans/`) using the same contiguous-segment semantics as the compiled deny-list, so user ignore/encrypt files can cleanly exclude or mark whole directory trees
 - simplified `aisync init` directory scaffolding to create only `personal/`, `shared/`, and `.aisync/` at the repo root; tool subdirectories (e.g. `personal/claude/rules/`) now emerge organically from `push`/`pull` as tools are detected, so fresh repos are no longer polluted with empty placeholder folders for AI tools the user does not actually use
+- changed `aisync init` create mode to include **only detected (installed) tools** in the fresh `config.yaml`; tools that are not present on the device are omitted entirely rather than shipped as `enabled: false` placeholders. To enable additional tools later, add them to `config.yaml` by hand or re-run `aisync init` on a machine where they are installed
+- pinned `aisync init` (create mode) to initialize the local Git repository on branch `main` regardless of the system's `init.defaultBranch` setting, so the fresh repo, `sync.branch` in `config.yaml`, and the assumed remote default always agree from the first commit
 
 ### Security
 

@@ -32,7 +32,8 @@ func TestInitCommand_Execute(t *testing.T) {
 		}
 		gitRepo := &doubles.MockGitRepository{}
 
-		// Create a fake identity file so the command does not try to generate a key
+		// Create a fake identity file so the command takes the "reuse existing
+		// identity" branch of ensureAgeKeyAndRecipient.
 		identityDir := filepath.Join(tmpDir, ".config", "aisync")
 		require.NoError(t, os.MkdirAll(identityDir, 0700))
 		identityPath := filepath.Join(identityDir, "key.txt")
@@ -44,7 +45,9 @@ func TestInitCommand_Execute(t *testing.T) {
 		defer func() { _ = os.Setenv("HOME", origHome) }()
 
 		encryptionService := &doubles.MockEncryptionService{
-			GeneratedPublicKey: "age1testkey",
+			// ExportedPublicKey is the value ExportPublicKey returns when the
+			// command re-registers the existing identity as a recipient.
+			ExportedPublicKey: "age1derivedfromexistingkey",
 		}
 		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
 
@@ -53,11 +56,20 @@ func TestInitCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 1, configRepo.SaveCalls)
+		// Config is saved twice: once by buildDefaultConfig, a second time
+		// by registerExistingKey after deriving the public key.
+		assert.Equal(t, 2, configRepo.SaveCalls)
 		assert.Equal(t, 1, stateRepo.SaveCalls)
 		assert.Equal(t, 1, gitRepo.InitCalls)
 		assert.Equal(t, repoPath, gitRepo.InitDir)
 		assert.Equal(t, 1, toolDetector.DetectCalls)
+		// ExportPublicKey must have been called against the existing identity.
+		assert.Equal(t, 1, encryptionService.ExportCalls)
+		assert.Equal(t, identityPath, encryptionService.ExportIdentityPath)
+		// The derived public key must end up in config.Encryption.Recipients
+		// (checked on the last Save-d config snapshot held by the mock).
+		require.NotNil(t, configRepo.SavedConfig)
+		assert.Contains(t, configRepo.SavedConfig.Encryption.Recipients, "age1derivedfromexistingkey")
 
 		// Verify only the minimal root directories were created. Tool
 		// subdirectories must NOT be pre-created — they emerge as push/pull
@@ -358,8 +370,15 @@ func TestInitCommand_Execute(t *testing.T) {
 
 		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
 		require.NoError(t, readErr)
-		assert.Contains(t, string(encryptContent), "personal/claude/memories/**")
-		assert.Contains(t, string(encryptContent), "personal/claude/settings.local.json")
+		// Default patterns are tool-agnostic wildcards under personal/**/...
+		// so the same defaults cover Claude, Cursor, Codex, and any future tool.
+		assert.Contains(t, string(encryptContent), "personal/**/memories/**")
+		assert.Contains(t, string(encryptContent), "personal/**/settings.local.json")
+		// Spot-check a few critical new categories.
+		assert.Contains(t, string(encryptContent), "personal/**/*.key", "private keys should be in default encrypt list")
+		assert.Contains(t, string(encryptContent), "personal/**/id_ed25519", "SSH private keys should be in default encrypt list")
+		assert.Contains(t, string(encryptContent), "personal/**/.netrc", ".netrc should be in default encrypt list")
+		assert.Contains(t, string(encryptContent), "personal/**/auth.json", "auth.json should be in default encrypt list")
 	})
 
 	t.Run("should not overwrite existing .aisyncignore and .aisyncencrypt on clone", func(t *testing.T) {
@@ -427,6 +446,44 @@ func TestInitCommand_Execute(t *testing.T) {
 
 		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncencrypt"))
 		assert.NoError(t, statErr, "clone should backfill .aisyncencrypt when missing")
+	})
+
+	t.Run("should include only enabled tools in fresh config on create", func(t *testing.T) {
+		// given — detector returns a mix: two enabled (installed) and two
+		// disabled (not installed). Fresh config must list only the enabled
+		// ones so the file is not polluted with placeholders for tools the
+		// user does not have.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{ExistsVal: false}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{
+			DetectedTools: map[string]entities.Tool{
+				"claude": {Path: "~/.claude", Enabled: true},
+				"cursor": {Path: "~/.cursor", Enabled: true},
+				"kiro":   {Path: "~/.kiro", Enabled: false},
+				"warp":   {Path: "~/.warp", Enabled: false},
+			},
+		}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{
+			GeneratedPublicKey: "age1freshkey",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.Execute(repoPath, "", "", "")
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, configRepo.SavedConfig)
+		assert.Len(t, configRepo.SavedConfig.Tools, 2, "fresh config should contain only enabled tools")
+		assert.Contains(t, configRepo.SavedConfig.Tools, "claude")
+		assert.Contains(t, configRepo.SavedConfig.Tools, "cursor")
+		assert.NotContains(t, configRepo.SavedConfig.Tools, "kiro", "disabled tool must not pollute fresh config")
+		assert.NotContains(t, configRepo.SavedConfig.Tools, "warp", "disabled tool must not pollute fresh config")
 	})
 
 	t.Run("should prefer remoteURL over githubUser for clone URL", func(t *testing.T) {
