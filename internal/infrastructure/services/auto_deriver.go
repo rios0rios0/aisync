@@ -42,6 +42,62 @@ var DefaultDevRoots = []string{ //nolint:gochecknoglobals // compile-time defaul
 // which is the deepest common layout.
 const DefaultAutoDeriveDepth = 4
 
+// genericNames is a compile-time stop list of canonical-form terms that
+// are too generic to be useful as auto-derived forbidden-term candidates.
+// A company directory happening to be called `backend`, a git-remote path
+// containing `v3` (the Azure DevOps REST API version prefix), or a
+// filesystem entry named `src`/`lib`/`docs` should not make every English
+// sentence containing those words in a synced rule/command/agent file
+// fire the NDA scanner.
+//
+// The canonicalization in [entities.Canonicalize] runs before this map
+// is consulted, so one entry catches every writing variant
+// (`Back-End`/`backend`/`BACKEND` all collapse to `backend`).
+//
+// Users who genuinely need any of these as a forbidden term can still
+// add it explicitly via `aisync nda add <term>` — the explicit list is
+// checked independently of this stop list and wins.
+var genericNames = map[string]struct{}{ //nolint:gochecknoglobals // compile-time stop list
+	// Generic project-layout names used in every codebase and every
+	// architecture document in English.
+	"backend":  {},
+	"frontend": {},
+	"common":   {},
+	"shared":   {},
+	"core":     {},
+	"docs":     {},
+	"src":      {},
+	"lib":      {},
+	"libs":     {},
+	"test":     {},
+	"tests":    {},
+	"internal": {},
+	"public":   {},
+	"private":  {},
+	"app":      {},
+	"apps":     {},
+	"api":      {},
+	"apis":     {},
+	"www":      {},
+	"web":      {},
+	"mobile":   {},
+	// Standard URL path conventions — ADO v3, generic versioned APIs.
+	"v1": {},
+	"v2": {},
+	"v3": {},
+	"v4": {},
+	// Branch names — by definition universal, never a leak signal.
+	"main":    {},
+	"master":  {},
+	"develop": {},
+	// AI-tool / IDE markers — nearly always appear in rule docs as
+	// English references, not as company identifiers.
+	"claude": {},
+	"cursor": {},
+	"vscode": {},
+	"idea":   {},
+}
+
 // AutoDeriver extracts forbidden-term candidates from machine state via a
 // [repositories.GitInspector] and caches the result on disk so repeated
 // `aisync push` invocations don't re-scan the filesystem every time. The
@@ -153,9 +209,15 @@ func (d *AutoDeriver) runInspector(devRoots []string) []entities.ForbiddenTerm {
 	return toSortedSlice(seen)
 }
 
-// addDerived inserts a derived term into the seen map, skipping self
-// identities and empty values, and building a [entities.ForbiddenTerm]
-// whose Kind is the origin tag.
+// addDerived inserts a derived term into the seen map, skipping empty
+// values, compile-time generic names, self identities, and duplicates,
+// then building a [entities.ForbiddenTerm] whose Kind is the origin tag.
+//
+// Order of filters: empty → generic-name stop list → self-identity →
+// already-seen. Generic names are filtered BEFORE self-identity because
+// the self-set is derived from `gh api user` and may contain a login
+// that canonicalizes to e.g. `docs` — but we still want to filter
+// `docs` regardless of whether it happens to match the user's login.
 func (d *AutoDeriver) addDerived(
 	seen map[string]entities.ForbiddenTerm,
 	selfSet map[string]struct{},
@@ -166,6 +228,9 @@ func (d *AutoDeriver) addDerived(
 	}
 	canon := entities.Canonicalize(derived.Value)
 	if canon == "" {
+		return
+	}
+	if _, generic := genericNames[canon]; generic {
 		return
 	}
 	if _, isSelf := selfSet[canon]; isSelf {

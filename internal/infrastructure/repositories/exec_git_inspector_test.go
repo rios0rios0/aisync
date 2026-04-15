@@ -150,6 +150,51 @@ func TestExecGitInspector_DirectoryLayout(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, terms)
 	})
+
+	t.Run("should skip dotfile directories under forge roots", func(t *testing.T) {
+		t.Parallel()
+
+		// given — a dev root that mirrors a realistic developer
+		// machine: each forge subdir contains a mix of a real org
+		// (`AcmeOrg`) plus several dotfile directories (`.idea`,
+		// `.vscode`, `.git`, `.github`, `.devcontainer`) that a user's
+		// tooling commonly drops at the forge level. Under ADO, the
+		// real org also has a dotfile project subdir (`.cache`) that
+		// scanADOProjects must skip. None of the dotfile entries are
+		// company identifiers — they must NOT appear in the derived
+		// terms.
+		requireGit(t)
+		root := t.TempDir()
+		for _, forge := range []string{"github.com", "gitlab.com", "bitbucket.org"} {
+			require.NoError(t, os.MkdirAll(filepath.Join(root, forge, "AcmeOrg"), 0o755))
+			for _, dot := range []string{".idea", ".vscode", ".git", ".github", ".devcontainer"} {
+				require.NoError(t, os.MkdirAll(filepath.Join(root, forge, dot), 0o755))
+			}
+		}
+		adoOrg := filepath.Join(root, "dev.azure.com", "AcmeOrg")
+		require.NoError(t, os.MkdirAll(filepath.Join(adoOrg, "RealProject"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(adoOrg, ".cache"), 0o755))
+
+		inspector, err := repositories.NewExecGitInspector()
+		require.NoError(t, err)
+
+		// when
+		terms, err := inspector.DirectoryLayout([]string{root})
+
+		// then
+		require.NoError(t, err)
+		values := termValues(terms)
+		// Dotfile names must NOT appear in the derived set, regardless
+		// of forge or depth.
+		for _, dot := range []string{".idea", ".vscode", ".git", ".github", ".devcontainer", ".cache"} {
+			assert.NotContains(t, values, dot,
+				"dotfile entry %q must be skipped under every forge root", dot)
+		}
+		// AcmeOrg (first level, all 4 forges) and RealProject (ADO
+		// second level) must survive.
+		assert.Contains(t, values, "AcmeOrg", "real org must survive the dotfile filter")
+		assert.Contains(t, values, "RealProject", "real ADO project must survive the dotfile filter")
+	})
 }
 
 func TestExecGitInspector_LocalRemotes(t *testing.T) {
