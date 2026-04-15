@@ -241,4 +241,37 @@ func TestAutoDeriver_DeriveTerms(t *testing.T) {
 		assert.Equal(t, "auto-derived:git-remote:dev.azure.com", terms[0].Kind)
 		assert.Equal(t, entities.ForbiddenModeCanonical, terms[0].Mode)
 	})
+
+	t.Run("should dedupe across sources via canonical form", func(t *testing.T) {
+		t.Parallel()
+
+		// given — the same canonical term appears in two different
+		// inspector sources with different Origin tags. The seen[canon]
+		// check inside addDerived must collapse them into a single
+		// ForbiddenTerm; without it the user would see two findings
+		// per matching line, one per source.
+		inspector := &doubles.MockGitInspector{
+			LocalRemotesVal: []repositories.DerivedTerm{
+				{Value: "ZestSecurity", Origin: "git-remote:dev.azure.com"},
+			},
+			DirectoryLayoutVal: []repositories.DerivedTerm{
+				// Same canonical form (`zestsecurity`) as the git remote
+				// owner above — dedupe must collapse them.
+				{Value: "Zest-Security", Origin: "fs:~/Development/dev.azure.com"},
+			},
+		}
+		deriver := newAutoDeriverWithTempCache(t, inspector)
+
+		// when
+		terms, err := deriver.DeriveTerms(nil, nil)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, terms, 1, "cross-source canonical-form dedupe must collapse to one entry")
+		// The first source seen wins (deterministic ordering depends on
+		// runInspector's source iteration), so don't pin the exact
+		// Original spelling — just confirm the canonical form is
+		// preserved and the entry survived.
+		assert.Equal(t, "zestsecurity", entities.Canonicalize(terms[0].Original))
+	})
 }
