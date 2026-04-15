@@ -77,7 +77,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 	copied := c.collectAllPersonalFiles(config, repoPath, ignorePatterns, encryptPatterns)
 	logger.Infof("collected %d personal files into sync repo", copied)
 
-	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns); err != nil {
+	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns, config); err != nil {
 		return err
 	}
 
@@ -125,6 +125,7 @@ func (c *PushCommand) commitAndPush(
 	repoPath, commitMsg string,
 	skipSecretScan bool,
 	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
 ) error {
 	clean, err := c.gitRepo.IsClean()
 	if err != nil {
@@ -136,7 +137,7 @@ func (c *PushCommand) commitAndPush(
 	}
 
 	if !skipSecretScan {
-		if scanErr := c.scanForSecrets(repoPath, encryptPatterns); scanErr != nil {
+		if scanErr := c.scanForSecrets(repoPath, encryptPatterns, config); scanErr != nil {
 			return scanErr
 		}
 	}
@@ -303,7 +304,9 @@ func (c *PushCommand) copyPersonalFile(
 		return false
 	}
 
-	if encryptPatterns.Matches(encryptMatchPath(toolName, relPath)) && len(config.Encryption.Recipients) > 0 {
+	matchedForEncryption := encryptPatterns.Matches(encryptMatchPath(toolName, relPath))
+	switch {
+	case matchedForEncryption && len(config.Encryption.Recipients) > 0:
 		encrypted, encErr := c.encryptionService.Encrypt(content, config.Encryption.Recipients)
 		if encErr != nil {
 			logger.Warnf("failed to encrypt %s: %v", relPath, encErr)
@@ -311,6 +314,17 @@ func (c *PushCommand) copyPersonalFile(
 		}
 		content = encrypted
 		relPath += ".age"
+	case matchedForEncryption:
+		// Pattern matches but no recipients are configured: the file is
+		// about to be written as plaintext. Warn loudly so operators
+		// notice the misconfiguration (typically a cloned repo with no
+		// imported age identity, or a stale `recipients: []` list). The
+		// secret scanner still runs on this file — see scanForSecrets.
+		logger.Warnf(
+			"file %s matches an encrypt pattern but no recipients are configured; "+
+				"writing as plaintext. Run `aisync key generate` or add a recipient to config.yaml.",
+			relPath,
+		)
 	}
 
 	destPath := filepath.Clean(filepath.Join(personalDir, relPath))
@@ -386,11 +400,26 @@ func (c *PushCommand) loadEncryptPatterns(repoPath string) *entities.EncryptPatt
 // scanForSecrets walks the personal/ directory in the sync repo, collects all
 // unencrypted files (those not matching encrypt patterns), and runs the secret
 // scanner against them. Returns an error if any secrets are found.
-func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.EncryptPatterns) error {
+//
+// The config parameter is required so the skip-when-matched gate mirrors the
+// one in [PushCommand.copyPersonalFile]: a file is only considered "already
+// encrypted-at-commit" when its encrypt pattern matches AND the config has at
+// least one recipient. Without the recipients gate, a repo with
+// `recipients: []` (reachable via clone without key import, or a stale
+// config) would write pattern-matched files as plaintext via copyPersonalFile
+// and then have the scanner skip them here — exactly the silent plaintext
+// commit failure mode the secret scanner exists to prevent.
+func (c *PushCommand) scanForSecrets(
+	repoPath string,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+) error {
 	personalDir := filepath.Join(repoPath, "personal")
 	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
 		return nil
 	}
+
+	hasRecipients := len(config.Encryption.Recipients) > 0
 
 	unencrypted := make(map[string][]byte)
 	err := filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
@@ -408,11 +437,14 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 			return nil
 		}
 
-		// Skip files that would be encrypted (matching encrypt patterns).
-		// relPath is already the repo-relative form (e.g.
-		// "personal/claude/memories/foo.md"), so the match agrees with
-		// dryRunScanTool and copyPersonalFile without re-deriving the path.
-		if encryptPatterns.Matches(filepath.ToSlash(relPath)) {
+		// Skip files that would be encrypted (matching encrypt patterns)
+		// AND have at least one recipient configured. relPath is already
+		// the repo-relative form (e.g. "personal/claude/memories/foo.md"),
+		// so the match agrees with dryRunScanTool and copyPersonalFile
+		// without re-deriving the path. When recipients is empty we MUST
+		// scan the file, because copyPersonalFile writes it as plaintext
+		// in that configuration.
+		if hasRecipients && encryptPatterns.Matches(filepath.ToSlash(relPath)) {
 			return nil
 		}
 
