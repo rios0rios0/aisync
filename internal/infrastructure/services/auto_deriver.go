@@ -77,9 +77,9 @@ func (d *AutoDeriver) WithTTL(ttl time.Duration) *AutoDeriver {
 }
 
 // DeriveTerms returns the current set of machine-state forbidden terms.
-// If the cache is fresh (within TTL and newer than every inspected source
-// file) it returns the cached result. Otherwise it re-runs the inspector,
-// rewrites the cache, and returns the fresh result.
+// If the cache is fresh (within TTL) it returns the cached result.
+// Otherwise it re-runs the inspector, rewrites the cache, and returns
+// the fresh result.
 //
 // `devRoots` defaults to [DefaultDevRoots] when nil/empty.
 // `excludes` is a list of canonical-form strings the caller wants

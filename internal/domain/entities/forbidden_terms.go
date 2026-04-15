@@ -227,29 +227,40 @@ func matchTermAgainstLine(
 // substring match is always a legitimate "word" match in the canonical space;
 // we only need to confirm that the ORIGINAL line doesn't smoosh the match
 // into a larger alphanumeric run. We do that by canonicalizing the original
-// line char-by-char and checking that the index range before the match and
-// after the match in the canonical form corresponds to either start/end of
-// line or a non-alphanumeric rune in the original.
+// line rune-by-rune (so the per-canonical-index → original-byte-offset
+// mapping always points back into `originalLine` itself, not a transient
+// NFKD-decomposed string), then checking that the rune immediately before
+// and after the match span is either start/end of line or non-alphanumeric.
 func matchesCanonicalWord(canonicalLine, originalLine, canonicalTerm string) bool {
 	if canonicalTerm == "" {
 		return false
 	}
-	// Build a mapping from canonical-index → original-rune-index so we can
-	// inspect the neighbors of a match in the original text.
+	// Build a mapping from canonical-index → byte offset in originalLine.
+	// We iterate the ORIGINAL string rune by rune and decompose each rune
+	// through NFKD individually. Each surviving canonical rune (post
+	// mark-strip, lowercase, alphanumeric-only) inherits the byte offset
+	// of its source rune in `originalLine`. Iterating the original
+	// directly — rather than `norm.NFKD.String(originalLine)` — keeps the
+	// stored offsets pointing into `originalLine`, which is what
+	// [isAtWordBoundary] then indexes via [runeAt]. The previous approach
+	// stored offsets into the NFKD-decomposed string and could mis-judge
+	// boundaries for inputs containing precomposed characters (accents,
+	// ligatures) whose decomposition differs in length from the source.
 	originalRunes := []rune(originalLine)
 	origIdxOfCanon := make([]int, 0, len(canonicalLine))
-	for origIdx, r := range norm.NFKD.String(originalLine) {
-		if unicode.Is(unicode.Mn, r) {
-			continue
+	byteIdx := 0
+	for _, origRune := range originalRunes {
+		for _, decomposed := range norm.NFKD.String(string(origRune)) {
+			if unicode.Is(unicode.Mn, decomposed) {
+				continue
+			}
+			decomposed = unicode.ToLower(decomposed)
+			if unicode.IsLetter(decomposed) || unicode.IsDigit(decomposed) {
+				origIdxOfCanon = append(origIdxOfCanon, byteIdx)
+			}
 		}
-		r = unicode.ToLower(r)
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			origIdxOfCanon = append(origIdxOfCanon, origIdx)
-		}
+		byteIdx += len(string(origRune))
 	}
-	// Note: origIdxOfCanon[i] is a BYTE offset into the NFKD-decomposed
-	// original. For rune-level word-boundary checks we re-index into
-	// originalRunes by counting runes up to that byte offset.
 	search := 0
 	for {
 		hit := strings.Index(canonicalLine[search:], canonicalTerm)

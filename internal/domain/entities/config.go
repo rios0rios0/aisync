@@ -21,16 +21,18 @@ type NDAConfig struct {
 	// to false.
 	AutoDerive *bool `yaml:"auto_derive,omitempty"`
 
-	// AutoDeriveExclude is a list of canonical-form strings that should
+	// AutoDeriveExclude is a list of user-provided strings that should
 	// be removed from the auto-derived set even when machine state
-	// exposes them. Use for false positives (e.g., the user has a
-	// personal open-source project under `~/Development/github.com/<some-org>/`
-	// that shouldn't be treated as NDA).
+	// exposes them. Values are canonicalized at comparison time rather
+	// than being stored canonically in config.yaml. Use for false
+	// positives (e.g., the user has a personal open-source project under
+	// `~/Development/github.com/<some-org>/` that shouldn't be treated
+	// as NDA).
 	AutoDeriveExclude []string `yaml:"auto_derive_exclude,omitempty"`
 
 	// Heuristics controls whether compile-time content-shape checks
-	// (home-path, WSL path, employer email domain, ADO/GitHub org URL,
-	// SSH host alias) run during push scans. Default true.
+	// (home-path, WSL path, ADO org URL, SSH host alias) run during
+	// push scans. Default true.
 	Heuristics *bool `yaml:"heuristics,omitempty"`
 
 	// DevRoots overrides the default list of directories auto-derivation

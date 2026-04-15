@@ -187,7 +187,7 @@ func buildNDAStack(
 	forbiddenRepo := infraRepos.NewAgeForbiddenTermsRepository(
 		encryptionSvc,
 		func(repoPath string) (*entities.Config, error) {
-			return configRepo.Load(repoPath + "/config.yaml")
+			return configRepo.Load(filepath.Join(repoPath, "config.yaml"))
 		},
 	)
 	gitInspector, err := infraRepos.NewExecGitInspector()

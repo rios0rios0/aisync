@@ -118,7 +118,7 @@ func (r *AgeForbiddenTermsRepository) Save(repoPath string, terms []entities.For
 func serializeForbiddenTerms(terms []entities.ForbiddenTerm) []byte {
 	var b strings.Builder
 	b.WriteString("# aisync encrypted forbidden-terms list.\n")
-	b.WriteString("# Managed by `aisync nda add/remove/import`. Do not edit by hand.\n")
+	b.WriteString("# Managed by `aisync nda add/remove`. Do not edit by hand.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Each non-comment line is a pattern that blocks `aisync push` when it\n")
 	b.WriteString("# matches file content. Default is canonical-form substring match\n")

@@ -8,8 +8,8 @@ import (
 
 // heuristicCheck is a compile-time regex the scanner always runs regardless
 // of user configuration. Heuristics match content SHAPES that are almost
-// always leaks (hardcoded home paths, employer email domains, ADO/GitHub
-// org URLs), not specific strings.
+// always leaks (hardcoded home paths, WSL user-document paths, Azure DevOps
+// org URLs, and SSH host aliases), not specific strings.
 type heuristicCheck struct {
 	name string
 	re   *regexp.Regexp
@@ -31,11 +31,14 @@ var heuristicChecks = []heuristicCheck{ //nolint:gochecknoglobals // compile-tim
 	},
 	{
 		name: "ado-org-url",
-		// https://dev.azure.com/<Capitalized-or-Numeric-Org>
+		// \bhttps://dev.azure.com/<Capitalized-or-Numeric-Org>
 		// Allow alphanumeric + dash + underscore; require at least one
 		// uppercase letter in the first 12 characters to skip lowercase
-		// placeholder words like `<org>`.
-		re: regexp.MustCompile(`https?://(?:ssh\.)?dev\.azure\.com/[A-Za-z0-9][A-Za-z0-9_-]*[A-Z][A-Za-z0-9_-]*`),
+		// placeholder words like `<org>`. The leading `\b` anchor stops
+		// the pattern from matching `dev.azure.com` as a substring of an
+		// attacker-controlled host like `https://evil.dev.azure.com.example/`
+		// (CodeQL "Missing regular expression anchor").
+		re: regexp.MustCompile(`\bhttps?://(?:ssh\.)?dev\.azure\.com/[A-Za-z0-9][A-Za-z0-9_-]*[A-Z][A-Za-z0-9_-]*`),
 	},
 	{
 		name: "ssh-host-alias",
@@ -64,9 +67,9 @@ func HeuristicCount() int {
 //  2. **Auto-derived** — extracted from machine state (git remotes,
 //     `~/.gitconfig`, `~/.ssh/config`, dev directory layout) via
 //     [AutoDeriver]. Per-device, cached at `~/.cache/aisync/derived-terms.txt`.
-//  3. **Heuristics** — compile-time shape checks (home paths, employer
-//     email domains, ADO/GitHub org URLs, SSH host aliases) that catch
-//     content-shape leaks without knowing specific strings.
+//  3. **Heuristics** — compile-time shape checks (home paths, WSL
+//     user-document paths, Azure DevOps org URLs, and SSH host aliases)
+//     that catch content-shape leaks without knowing specific strings.
 //
 // Any match from any source produces an [entities.NDAFinding] tagged with
 // the source (`user`, `auto-derived:<origin>`, or `heuristic:<name>`) so
