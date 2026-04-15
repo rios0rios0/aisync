@@ -409,11 +409,10 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 		}
 
 		// Skip files that would be encrypted (matching encrypt patterns).
-		// relToPersonal is relative to personalDir (e.g. "claude/memories/foo.md");
-		// encryptMatchPath rebuilds the repo-relative "personal/<tool>/<rest>"
-		// form so the match agrees with dryRunScanTool and copyPersonalFile.
-		relToPersonal, _ := filepath.Rel(personalDir, path)
-		if encryptPatterns.Matches(filepath.ToSlash(filepath.Join("personal", relToPersonal))) {
+		// relPath is already the repo-relative form (e.g.
+		// "personal/claude/memories/foo.md"), so the match agrees with
+		// dryRunScanTool and copyPersonalFile without re-deriving the path.
+		if encryptPatterns.Matches(filepath.ToSlash(relPath)) {
 			return nil
 		}
 

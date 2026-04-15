@@ -297,12 +297,18 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	}
 
 	config := c.buildDefaultConfig()
-	if err := c.configRepo.Save(configPath, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+
+	// Populate the age identity and recipient list in memory BEFORE writing
+	// config.yaml. Writing the recipient list and the config file in a single
+	// Save eliminates the interrupt window where the repo could otherwise
+	// land with `recipients: []` on disk and silently push plaintext secrets
+	// on the next `aisync push`.
+	if err := c.ensureAgeKeyAndRecipient(config); err != nil {
+		return err
 	}
 
-	if err := c.ensureAgeKeyAndRecipient(configPath, config); err != nil {
-		return err
+	if err := c.configRepo.Save(configPath, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
 	}
 
 	hostname, _ := os.Hostname()
@@ -420,34 +426,39 @@ func (c *InitCommand) buildDefaultConfig() *entities.Config {
 }
 
 // ensureAgeKeyAndRecipient makes sure the fresh repo has a working age
-// identity AND that its public key is registered as a recipient in
-// config.yaml. There are two cases:
+// identity AND that its public key is registered as a recipient on the
+// given config struct. It mutates config in memory only — callers are
+// expected to persist the updated config themselves, which is how
+// [InitCommand.executeCreate] keeps the config write atomic.
 //
-//  1. The identity file does not exist — generate a new keypair, write the
-//     new public key as the sole recipient, and persist.
+// There are two cases:
+//
+//  1. The identity file does not exist — generate a new keypair and set
+//     config.Encryption.Recipients to the new public key.
 //  2. The identity file already exists (e.g. carried over from a previous
 //     aisync install, imported from 1Password, or shared across repos) —
 //     derive the public key via [repositories.EncryptionService.ExportPublicKey]
-//     and add it to the recipient list if it is not already there.
+//     and append it to the recipient list if it is not already there.
 //
 // Before this change, case 2 silently left Recipients empty, which caused
 // `aisync push` to skip encryption entirely and commit memories /
 // settings.local.json as plaintext.
-func (c *InitCommand) ensureAgeKeyAndRecipient(configPath string, config *entities.Config) error {
+func (c *InitCommand) ensureAgeKeyAndRecipient(config *entities.Config) error {
 	identityPath := ExpandHome(config.Encryption.Identity)
 
 	if _, statErr := os.Stat(identityPath); os.IsNotExist(statErr) {
-		return c.generateAndRegisterNewKey(configPath, identityPath, config)
+		return c.generateAndRegisterNewKey(identityPath, config)
 	} else if statErr != nil {
 		return fmt.Errorf("failed to stat identity file %s: %w", identityPath, statErr)
 	}
 
-	return c.registerExistingKey(configPath, identityPath, config)
+	return c.registerExistingKey(identityPath, config)
 }
 
 // generateAndRegisterNewKey creates a fresh age keypair at identityPath and
-// writes its public key as the sole recipient in config.
-func (c *InitCommand) generateAndRegisterNewKey(configPath, identityPath string, config *entities.Config) error {
+// sets the new public key as the sole recipient on the given config struct.
+// It mutates config in memory only; the caller is expected to persist it.
+func (c *InitCommand) generateAndRegisterNewKey(identityPath string, config *entities.Config) error {
 	if err := os.MkdirAll(filepath.Dir(identityPath), 0700); err != nil {
 		return fmt.Errorf("failed to create identity directory: %w", err)
 	}
@@ -458,17 +469,15 @@ func (c *InitCommand) generateAndRegisterNewKey(configPath, identityPath string,
 	}
 
 	config.Encryption.Recipients = []string{publicKey}
-	if err := c.configRepo.Save(configPath, config); err != nil {
-		return fmt.Errorf("failed to update config with recipient: %w", err)
-	}
 	logger.Infof("generated age key pair at %s", identityPath)
 	return nil
 }
 
 // registerExistingKey derives the public key from an existing identity file
-// and appends it to the recipient list (if not already present), saving the
-// updated config. A no-op if the recipient is already registered.
-func (c *InitCommand) registerExistingKey(configPath, identityPath string, config *entities.Config) error {
+// and appends it to the recipient list on the given config struct if it is
+// not already present. It mutates config in memory only; the caller is
+// expected to persist it.
+func (c *InitCommand) registerExistingKey(identityPath string, config *entities.Config) error {
 	publicKey, err := c.encryptionService.ExportPublicKey(identityPath)
 	if err != nil {
 		return fmt.Errorf("failed to derive public key from existing identity %s: %w", identityPath, err)
@@ -480,9 +489,6 @@ func (c *InitCommand) registerExistingKey(configPath, identityPath string, confi
 	}
 
 	config.Encryption.Recipients = append(config.Encryption.Recipients, publicKey)
-	if saveErr := c.configRepo.Save(configPath, config); saveErr != nil {
-		return fmt.Errorf("failed to update config with derived recipient: %w", saveErr)
-	}
 	logger.Infof("reused existing age identity at %s and registered its public key as a recipient", identityPath)
 	return nil
 }

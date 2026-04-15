@@ -161,6 +161,42 @@ func TestEncryptPatterns_Matches(t *testing.T) {
 			path:        "personal/claude/memories/user.md",
 			shouldMatch: true,
 		},
+		{
+			name:        "should match leading ** against single-level path",
+			patterns:    []string{"personal/**/memories/**"},
+			path:        "personal/claude/memories/user.md",
+			shouldMatch: true,
+		},
+		{
+			name:        "should match leading ** against nested path",
+			patterns:    []string{"personal/**/memories/**"},
+			path:        "personal/claude/memories/nested/deeper/user.md",
+			shouldMatch: true,
+		},
+		{
+			name:        "should match middle ** against zero segments",
+			patterns:    []string{"personal/**/settings.local.json"},
+			path:        "personal/claude/settings.local.json",
+			shouldMatch: true,
+		},
+		{
+			name:        "should match middle ** against extra-hops path",
+			patterns:    []string{"personal/**/.env.*"},
+			path:        "personal/deep/nested/claude/.env.local",
+			shouldMatch: true,
+		},
+		{
+			name:        "should match trailing ** wildcard across depth",
+			patterns:    []string{"personal/**/keys/**"},
+			path:        "personal/claude/keys/nested/deep/key.pem",
+			shouldMatch: true,
+		},
+		{
+			name:        "should not match ** pattern when prefix differs",
+			patterns:    []string{"personal/**/memories/**"},
+			path:        "shared/claude/memories/user.md",
+			shouldMatch: false,
+		},
 	}
 
 	for _, tt := range tests {

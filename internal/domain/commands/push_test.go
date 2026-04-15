@@ -454,10 +454,15 @@ func TestPushCommand_Execute(t *testing.T) {
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories"), 0700))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories", "nested"), 0700))
 		require.NoError(t, os.WriteFile(
 			filepath.Join(claudeDir, "memories", "user.md"),
 			[]byte("personal memory content"),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "memories", "nested", "user.md"),
+			[]byte("nested personal memory content"),
 			0600,
 		))
 		require.NoError(t, os.WriteFile(
@@ -507,12 +512,19 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// memories/user.md and settings.local.json should both be encrypted.
-		assert.Equal(t, 2, encryptionService.EncryptCalls)
+		// memories/user.md, memories/nested/user.md, and settings.local.json
+		// should all be encrypted. The nested case guards against a regression
+		// where "personal/*/memories/**" only matched a single level because
+		// the underlying matcher did not support recursive "**".
+		assert.Equal(t, 3, encryptionService.EncryptCalls)
 
 		encryptedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "user.md.age")
 		_, statErr := os.Stat(encryptedMemory)
 		assert.NoError(t, statErr, "memories/user.md should have been encrypted")
+
+		encryptedNestedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "nested", "user.md.age")
+		_, statErr = os.Stat(encryptedNestedMemory)
+		assert.NoError(t, statErr, "memories/nested/user.md should have been encrypted")
 
 		encryptedSettings := filepath.Join(repoPath, "personal", "claude", "settings.local.json.age")
 		_, statErr = os.Stat(encryptedSettings)
