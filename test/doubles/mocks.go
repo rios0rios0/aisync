@@ -239,6 +239,7 @@ type MockEncryptionService struct {
 	ExportIdentityPath string
 	ExportErr          error
 	EncryptedData      []byte
+	EncryptPlaintext   []byte // captures the last plaintext passed to Encrypt for round-trip tests
 	EncryptErr         error
 	DecryptedData      []byte
 	DecryptErr         error
@@ -276,6 +277,7 @@ func (m *MockEncryptionService) ExportPublicKey(identityPath string) (string, er
 
 func (m *MockEncryptionService) Encrypt(plaintext []byte, recipients []string) ([]byte, error) {
 	m.EncryptCalls++
+	m.EncryptPlaintext = plaintext
 	if m.EncryptErr != nil {
 		return nil, m.EncryptErr
 	}
@@ -345,6 +347,28 @@ func (m *MockDiffService) ComputePersonalDiff(
 	repoPath string,
 ) ([]entities.FileChange, error) {
 	return m.PersonalDiff, m.PersonalErr
+}
+
+// MockNDAContentChecker is a manual stub for repositories.NDAContentChecker.
+// Tests set Findings or Err to simulate a clean/blocked scan.
+type MockNDAContentChecker struct {
+	Findings   []entities.NDAFinding
+	Err        error
+	CheckCalls int
+	LastRepo   string
+}
+
+func (m *MockNDAContentChecker) Check(
+	repoPath string,
+	_ *entities.Config,
+	_ map[string][]byte,
+) ([]entities.NDAFinding, error) {
+	m.CheckCalls++
+	m.LastRepo = repoPath
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	return m.Findings, nil
 }
 
 // MockWatchService is a manual stub for repositories.WatchService.
