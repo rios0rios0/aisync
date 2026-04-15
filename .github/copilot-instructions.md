@@ -151,14 +151,44 @@ Test description patterns by layer:
   match, rotate the credential and remove it from history before pushing.
 - **The encrypt path has two independent gates.** A file is written as
   ciphertext only when BOTH `encryptPatterns.Matches(...)` and
-  `len(config.Encryption.Recipients) > 0` are true. The secret scanner must
-  mirror that gate so files written as plaintext (empty recipients) are
-  still scanned. See `PushCommand.copyPersonalFile` and
-  `PushCommand.scanForSecrets` in `internal/domain/commands/push.go`.
-- **Two-tier ignore system.** The compiled-in deny-list in
-  `internal/domain/entities/denylist.go` cannot be overridden — it is the
-  last line of defence for credentials, OAuth state, and session
-  transcripts. The user-facing `.aisyncignore` is additive on top.
+  `len(config.Encryption.Recipients) > 0` are true. Both content scanners
+  (secret + NDA) must mirror that gate so files written as plaintext
+  (empty recipients) are still scanned. See `PushCommand.copyPersonalFile`
+  and `PushCommand.collectUnencryptedFiles` /
+  `PushCommand.runSecretScan` / `PushCommand.runNDAScan` in
+  `internal/domain/commands/push.go`.
+- **Four-layer push protection stack.** Every push runs four orthogonal
+  gates that each catch a different leak class. They compose, they do not
+  overlap. **Never delete or weaken any layer without an explicit
+  user-facing decision in the PR description.**
+  1. **Per-tool allowlist** (`internal/domain/entities/allowlist.go`) —
+     unknown content is never synced; users opt in via
+     `tools.<name>.extra_allowlist`. The strict matcher does NOT fall back
+     to basename matching.
+  2. **`.aisyncignore`** — gitignore-syntax additional exclusions.
+  3. **`.aisyncencrypt` + age** — paths matching the patterns are
+     written as ciphertext to the configured recipients.
+  4. **Content scanners** —
+     - `RegexSecretScanner` (15 credential-format regexes), bypass
+       `--skip-secret-scan`.
+     - `CompositeNDAChecker` (explicit list at
+       `<repo>/.aisync-forbidden.age` + auto-derived from machine state +
+       compile-time heuristic shape checks), bypass `--skip-nda-scan`.
+     Findings are tagged with the source (`user`,
+     `auto-derived:<origin>`, `heuristic:<name>`) so the user knows
+     which knob fixes each hit.
+- **NDA scanner stays in the dry-run path.** `executeDryRun` runs the
+  same secret + NDA scanners against the would-be-pushed file contents
+  that `commitAndPush` runs in the real-push path. `--dry-run` must
+  preview the actual blocks, not just enumerate paths — that is the
+  whole point of `--dry-run`.
+- **Domain layer never imports infrastructure.** `PushCommand` depends
+  on `repositories.NDAContentChecker` (a single-method facade defined in
+  the domain layer); the composite implementation lives in
+  `infrastructure/services/nda_content_checker.go` and is wired in
+  `controllers/root.go:buildNDAStack`. `NDACommand` similarly takes the
+  heuristic count as an `int` constructor parameter rather than calling
+  `services.HeuristicCount()` directly.
 - **Path-matching consistency.** Every `.aisyncencrypt` match site must
   build the repo-relative path via `encryptMatchPath(toolName, relPath)` or
   reuse an already repo-relative `relPath` — never hand-roll a
@@ -212,6 +242,20 @@ Copilot should actively steer away from these:
   application logging. Use `logger` (Logrus).
 - Hand-rolling encrypt-match paths instead of calling
   `encryptMatchPath(toolName, relPath)`.
+- Importing `internal/infrastructure/services` from
+  `internal/domain/commands/nda.go` (or any domain command) to read
+  `services.HeuristicCount()`. The count must travel through the
+  constructor as an `int`. The same rule applies to any future scanner
+  configuration the domain layer needs to know about.
+- Skipping the secret or NDA scanner in `executeDryRun` to keep dry-run
+  "fast." Dry-run must run the same content scanners as the real-push
+  path so users discover blocks before they commit.
+- Removing or weakening any of the four push-protection layers (per-tool
+  allowlist, `.aisyncignore`, `.aisyncencrypt`, content scanners) without
+  an explicit user-facing decision in the PR description.
+- Storing the explicit forbidden-terms list anywhere except encrypted
+  inside the sync repo at `<repo>/.aisync-forbidden.age`. Plaintext on
+  disk would defeat the whole point of the scanner.
 - Hard-coding secrets of any kind.
 - Landing a code change without updating `CHANGELOG.md`.
 
@@ -219,13 +263,18 @@ Copilot should actively steer away from these:
 
 When asked to change something, read these files before suggesting edits:
 
-| Topic                               | Start here                                                    |
-|-------------------------------------|---------------------------------------------------------------|
-| Adding / changing a command         | `internal/infrastructure/controllers/root.go`                 |
-| Push pipeline (copy, encrypt, scan) | `internal/domain/commands/push.go`                            |
-| Pull pipeline (fetch, merge, apply) | `internal/domain/commands/pull.go`                            |
-| Encrypt / ignore pattern matching   | `internal/domain/entities/{encrypt,ignore}_patterns.go`       |
-| Compiled-in deny-list               | `internal/domain/entities/denylist.go`                        |
-| File merge strategies               | `internal/infrastructure/services/{hooks,settings,section}_merger.go` |
-| Atomic apply (two-phase commit)     | `internal/infrastructure/services/atomic_apply.go`            |
-| Test stubs                          | `test/doubles/mocks.go`                                       |
+| Topic                                          | Start here                                                                |
+|------------------------------------------------|---------------------------------------------------------------------------|
+| Adding / changing a command                    | `internal/infrastructure/controllers/root.go`                             |
+| Push pipeline (copy, encrypt, scan)            | `internal/domain/commands/push.go`                                        |
+| Pull pipeline (fetch, merge, apply)            | `internal/domain/commands/pull.go`                                        |
+| Encrypt / ignore pattern matching              | `internal/domain/entities/{encrypt,ignore}_patterns.go`                   |
+| Per-tool allowlist (replaces old deny-list)    | `internal/domain/entities/allowlist.go`                                   |
+| Credential regex scanner                       | `internal/infrastructure/services/regex_secret_scanner.go`                |
+| NDA scanner (3 sources + heuristics)           | `internal/infrastructure/services/{nda_scanner,auto_deriver,nda_content_checker}.go` |
+| NDA forbidden-terms entity (canonical match)   | `internal/domain/entities/forbidden_terms.go`                             |
+| Encrypted forbidden-terms repo                 | `internal/infrastructure/repositories/age_forbidden_terms_repository.go`  |
+| `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
+| File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
+| Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply.go`                        |
+| Test stubs                                     | `test/doubles/mocks.go`                                                   |

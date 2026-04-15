@@ -86,6 +86,8 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	secretScanner := services.NewRegexSecretScanner()
 	conflictDetector := services.NewConflictDetector()
 
+	forbiddenRepo, ndaChecker := buildNDAStack(encryptionSvc, configRepo)
+
 	// Watch service: fsnotify on desktop, polling on Android
 	var watchSvc repositories.WatchService
 	if runtime.GOOS == "android" || os.Getenv("ANDROID_ROOT") != "" {
@@ -111,7 +113,10 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 		hooksMerger, settingsMerger, sectionMerger,
 		atomicApplySvc, promptSvc,
 	)
-	pushCmd := commands.NewPushCommand(configRepo, stateRepo, gitProxy, encryptionSvc, manifestRepo, secretScanner)
+	pushCmd := commands.NewPushCommand(
+		configRepo, stateRepo, gitProxy, encryptionSvc,
+		manifestRepo, secretScanner, ndaChecker,
+	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
@@ -120,6 +125,7 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
 	migrateCmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
+	ndaCmd := commands.NewNDACommand(configRepo, forbiddenRepo, services.HeuristicCount())
 	watchCmd := commands.NewWatchCommand(configRepo, watchSvc, pushCmd)
 
 	//nolint:exhaustruct // cobra command does not require all fields
@@ -159,6 +165,7 @@ Quick start:
 		newDeviceSubcmd(deviceCmd),
 		newDoctorSubcmd(doctorCmd),
 		newMigrateSubcmd(migrateCmd),
+		newNDASubcmd(ndaCmd),
 		newSelfUpdateSubcmd(version),
 		newVersionSubcmd(version),
 	)
@@ -167,6 +174,28 @@ Quick start:
 		gitProxy.impl = impl
 	}
 	return root, setGitImpl
+}
+
+// buildNDAStack wires the encrypted forbidden-terms repository plus the
+// composite content checker that push.go depends on. The git inspector
+// is optional — if `git` is missing from PATH we fall back to a checker
+// with no auto-derivation so the rest of aisync still works.
+func buildNDAStack(
+	encryptionSvc repositories.EncryptionService,
+	configRepo repositories.ConfigRepository,
+) (repositories.ForbiddenTermsRepository, repositories.NDAContentChecker) {
+	forbiddenRepo := infraRepos.NewAgeForbiddenTermsRepository(
+		encryptionSvc,
+		func(repoPath string) (*entities.Config, error) {
+			return configRepo.Load(filepath.Join(repoPath, "config.yaml"))
+		},
+	)
+	gitInspector, err := infraRepos.NewExecGitInspector()
+	if err != nil {
+		return forbiddenRepo, services.NewCompositeNDAChecker(forbiddenRepo, nil)
+	}
+	autoDeriver := services.NewAutoDeriver(gitInspector)
+	return forbiddenRepo, services.NewCompositeNDAChecker(forbiddenRepo, autoDeriver)
 }
 
 func defaultConfigDir() string {
@@ -354,12 +383,23 @@ func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			msg, _ := cmd.Flags().GetString("message")
 			skipSecretScan, _ := cmd.Flags().GetBool("skip-secret-scan")
+			skipNDAScan, _ := cmd.Flags().GetBool("skip-nda-scan")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
-			return pushCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), msg, skipSecretScan, dryRun)
+			return pushCmd.Execute(
+				resolveConfigPath(cmd),
+				resolveRepoPath(cmd),
+				msg,
+				commands.PushOptions{
+					SkipSecretScan: skipSecretScan,
+					SkipNDAScan:    skipNDAScan,
+					DryRun:         dryRun,
+				},
+			)
 		},
 	}
 	cmd.Flags().StringP("message", "m", "", "custom commit message")
-	cmd.Flags().Bool("skip-secret-scan", false, "skip secret scanning (not recommended)")
+	cmd.Flags().Bool("skip-secret-scan", false, "skip credential regex scanning (not recommended)")
+	cmd.Flags().Bool("skip-nda-scan", false, "skip NDA content scanning (strongly discouraged)")
 	cmd.Flags().Bool("dry-run", false, "preview files that would be pushed without modifying anything")
 	return cmd
 }
@@ -475,6 +515,129 @@ func newKeySubcmd(keyCmd *commands.KeyCommand) *cobra.Command {
 			}},
 	)
 	return parent
+}
+
+func newNDASubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
+	//nolint:exhaustruct // cobra command does not require all fields
+	parent := &cobra.Command{
+		Use:   "nda",
+		Short: "Manage NDA forbidden-terms list and auto-derive exclusions",
+	}
+
+	//nolint:exhaustruct // cobra command does not require all fields
+	addCmd := &cobra.Command{
+		Use:   "add <term>",
+		Short: "Add a term to the encrypted forbidden list",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			word, _ := cmd.Flags().GetBool("word")
+			regex, _ := cmd.Flags().GetBool("regex")
+			mode := commands.AddModeCanonical
+			switch {
+			case regex:
+				mode = commands.AddModeRegex
+			case word:
+				mode = commands.AddModeWord
+			}
+			count, added, err := ndaCmd.Add(resolveRepoPath(cmd), args[0], mode)
+			if err != nil {
+				return err
+			}
+			if added {
+				fmt.Fprintf(cmd.OutOrStdout(), "Added. Forbidden list now has %d term(s).\n", count)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "Already present. Forbidden list has %d term(s).\n", count)
+			}
+			return nil
+		},
+	}
+	addCmd.Flags().Bool("word", false, "match on word boundaries (for short or ambiguous terms)")
+	addCmd.Flags().Bool("regex", false, "register a raw Go regex pattern")
+
+	//nolint:exhaustruct // cobra command does not require all fields
+	removeCmd := &cobra.Command{
+		Use:   "remove <term>",
+		Short: "Remove a term from the encrypted forbidden list",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			count, removed, err := ndaCmd.Remove(resolveRepoPath(cmd), args[0])
+			if err != nil {
+				return err
+			}
+			if removed {
+				fmt.Fprintf(cmd.OutOrStdout(), "Removed. Forbidden list now has %d term(s).\n", count)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "Not found. Forbidden list has %d term(s).\n", count)
+			}
+			return nil
+		},
+	}
+
+	listCmd := newNDAListSubcmd(ndaCmd)
+	listCmd.Flags().Bool("show", false,
+		"print the full explicit list (default hides it so terminal scrollback cannot leak terms)")
+
+	//nolint:exhaustruct // cobra command does not require all fields
+	ignoreCmd := &cobra.Command{
+		Use:   "ignore <term>",
+		Short: "Exclude a term from auto-derivation (adds to config.yaml:nda.auto_derive_exclude)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ndaCmd.Ignore(resolveRepoPath(cmd), args[0])
+		},
+	}
+
+	parent.AddCommand(addCmd, removeCmd, listCmd, ignoreCmd)
+	return parent
+}
+
+// newNDAListSubcmd builds the `aisync nda list` subcommand. Extracted
+// from [newNDASubcmd] so the parent stays under the gocognit threshold;
+// the cosmetic `disabled in config` branch makes the inline definition
+// too cyclomatic to keep nested.
+func newNDAListSubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
+	//nolint:exhaustruct // cobra command does not require all fields
+	return &cobra.Command{
+		Use:   "list",
+		Short: "Show the current forbidden-terms summary",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			show, _ := cmd.Flags().GetBool("show")
+			summary, err := ndaCmd.List(resolveRepoPath(cmd), show)
+			if err != nil {
+				return err
+			}
+			printNDASummary(cmd, summary)
+			return nil
+		},
+	}
+}
+
+// printNDASummary formats the `aisync nda list` summary line and the
+// optional explicit-term list. Distinguishes "0 active because
+// nda.heuristics is false" from "the binary defines no heuristics" so a
+// user reading "0" doesn't assume the wrong thing.
+func printNDASummary(cmd *cobra.Command, summary commands.ListSummary) {
+	heuristicTotal := services.HeuristicCount()
+	if summary.Heuristics == 0 && heuristicTotal > 0 {
+		fmt.Fprintf(
+			cmd.OutOrStdout(),
+			"Explicit: %d term(s)  |  Compile-time heuristics: %d available, disabled in config  (auto-derive count is per-push)\n",
+			summary.Explicit,
+			heuristicTotal,
+		)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(),
+			"Explicit: %d term(s)  |  Compile-time heuristics: %d  (auto-derive count is per-push)\n",
+			summary.Explicit, summary.Heuristics,
+		)
+	}
+	if len(summary.ExplicitAll) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout())
+		for _, t := range summary.ExplicitAll {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", t.Original)
+		}
+	}
 }
 
 func newDeviceSubcmd(deviceCmd *commands.DeviceCommand) *cobra.Command {

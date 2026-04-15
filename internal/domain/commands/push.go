@@ -21,6 +21,7 @@ type PushCommand struct {
 	encryptionService repositories.EncryptionService
 	manifestRepo      repositories.ManifestRepository
 	secretScanner     repositories.SecretScanner
+	ndaChecker        repositories.NDAContentChecker
 }
 
 // NewPushCommand creates a new PushCommand.
@@ -31,6 +32,7 @@ func NewPushCommand(
 	encryptionService repositories.EncryptionService,
 	manifestRepo repositories.ManifestRepository,
 	secretScanner repositories.SecretScanner,
+	ndaChecker repositories.NDAContentChecker,
 ) *PushCommand {
 	return &PushCommand{
 		configRepo:        configRepo,
@@ -39,6 +41,7 @@ func NewPushCommand(
 		encryptionService: encryptionService,
 		manifestRepo:      manifestRepo,
 		secretScanner:     secretScanner,
+		ndaChecker:        ndaChecker,
 	}
 }
 
@@ -50,18 +53,27 @@ func encryptMatchPath(toolName, relPath string) string {
 	return filepath.ToSlash(filepath.Join("personal", toolName, relPath))
 }
 
+// PushOptions bundles the boolean flags Execute takes so new flags can be
+// added (such as the NDA-scan bypass) without breaking every caller.
+type PushOptions struct {
+	SkipSecretScan bool
+	SkipNDAScan    bool
+	DryRun         bool
+}
+
 // Execute scans enabled AI tool directories for personal files, copies them into
-// the sync repo under personal/<tool>/, commits, and pushes. When skipSecretScan
-// is false, unencrypted files are scanned for leaked secrets before committing.
-// When dryRun is true, files are detected and summarised but not copied, committed,
-// or pushed.
-func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecretScan, dryRun bool) error {
+// the sync repo under personal/<tool>/, commits, and pushes. The options
+// control whether the secret scanner, NDA scanner, or dry-run mode are
+// active. Any scanner firing with findings blocks the push; the NDA scan
+// runs after the secret scan so users see both classes of finding in a
+// single command when both trip.
+func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushOptions) error {
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if !dryRun {
+	if !opts.DryRun {
 		if err = c.gitRepo.Open(repoPath); err != nil {
 			return fmt.Errorf("failed to open git repo: %w", err)
 		}
@@ -70,8 +82,8 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 	ignorePatterns := c.loadIgnorePatterns(repoPath)
 	encryptPatterns := c.loadEncryptPatterns(repoPath)
 
-	if dryRun {
-		if dryErr := c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns); dryErr != nil {
+	if opts.DryRun {
+		if dryErr := c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns, opts); dryErr != nil {
 			return dryErr
 		}
 		c.warnLegacyRepoFiles(config, repoPath)
@@ -83,7 +95,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 
 	c.warnLegacyRepoFiles(config, repoPath)
 
-	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns, config); err != nil {
+	if err = c.commitAndPush(repoPath, commitMsg, opts, encryptPatterns, config); err != nil {
 		return err
 	}
 
@@ -229,10 +241,12 @@ func (c *PushCommand) collectAllPersonalFiles(
 	return copied
 }
 
-// commitAndPush checks for changes, scans for secrets, commits, and pushes.
+// commitAndPush checks for changes, runs the content-scan pipeline
+// (secret scanner + NDA scanner, each independently skippable), commits,
+// and pushes.
 func (c *PushCommand) commitAndPush(
 	repoPath, commitMsg string,
-	skipSecretScan bool,
+	opts PushOptions,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
 ) error {
@@ -245,8 +259,19 @@ func (c *PushCommand) commitAndPush(
 		return nil
 	}
 
-	if !skipSecretScan {
-		if scanErr := c.scanForSecrets(repoPath, encryptPatterns, config); scanErr != nil {
+	unencrypted, err := c.collectUnencryptedFiles(repoPath, encryptPatterns, config)
+	if err != nil {
+		return err
+	}
+
+	if !opts.SkipSecretScan && len(unencrypted) > 0 {
+		if scanErr := c.runSecretScan(unencrypted); scanErr != nil {
+			return scanErr
+		}
+	}
+
+	if !opts.SkipNDAScan && len(unencrypted) > 0 && c.ndaChecker != nil {
+		if scanErr := c.runNDAScan(repoPath, config, unencrypted); scanErr != nil {
 			return scanErr
 		}
 	}
@@ -280,17 +305,22 @@ type dryRunToolResult struct {
 	encrypted int
 }
 
-// executeDryRun detects personal files that would be pushed and prints a summary
-// without modifying the sync repo, committing, or pushing.
+// executeDryRun detects personal files that would be pushed and prints a
+// summary without modifying the sync repo, committing, or pushing. It
+// also runs the secret + NDA content scanners against the would-be
+// pushed files so users discover blocks before they commit instead of
+// after — the whole point of `--dry-run` is to preview the real result.
 func (c *PushCommand) executeDryRun(
 	config *entities.Config,
-	_ string,
+	repoPath string,
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
+	opts PushOptions,
 ) error {
 	totalFiles := 0
 	encryptedFiles := 0
 	skippedTools := 0
+	unencrypted := make(map[string][]byte)
 
 	fmt.Fprintln(os.Stdout, "[dry-run] Push summary:")
 
@@ -306,24 +336,43 @@ func (c *PushCommand) executeDryRun(
 			continue
 		}
 
-		result := c.dryRunScanTool(toolName, toolDir, ignorePatterns, encryptPatterns, config, tool.ExtraAllowlist)
+		result := c.dryRunScanTool(
+			toolName, toolDir, ignorePatterns, encryptPatterns,
+			config, tool.ExtraAllowlist, unencrypted,
+		)
 		totalFiles += result.files
 		encryptedFiles += result.encrypted
 	}
 
 	fmt.Fprintf(os.Stdout, "\n[dry-run] %d file(s) to push, %d encrypted, %d tool(s) skipped\n",
 		totalFiles, encryptedFiles, skippedTools)
+
+	if !opts.SkipSecretScan && len(unencrypted) > 0 {
+		if scanErr := c.runSecretScan(unencrypted); scanErr != nil {
+			return scanErr
+		}
+	}
+	if !opts.SkipNDAScan && len(unencrypted) > 0 && c.ndaChecker != nil {
+		if scanErr := c.runNDAScan(repoPath, config, unencrypted); scanErr != nil {
+			return scanErr
+		}
+	}
 	return nil
 }
 
-// dryRunScanTool walks a single tool directory and prints the files that would be
-// pushed, returning the count of files and encrypted files.
+// dryRunScanTool walks a single tool directory and prints the files that
+// would be pushed, returning the count of files and encrypted files.
+// Plaintext (non-encrypted) file contents are also accumulated into the
+// shared `unencrypted` map so the dry-run caller can run the secret + NDA
+// scanners against them — same map shape `commitAndPush` builds in the
+// real push path.
 func (c *PushCommand) dryRunScanTool(
 	toolName, toolDir string,
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
 	extraAllowlist []string,
+	unencrypted map[string][]byte,
 ) dryRunToolResult {
 	manifest := c.loadManifest(toolDir)
 	var result dryRunToolResult
@@ -351,6 +400,15 @@ func (c *PushCommand) dryRunScanTool(
 			fmt.Fprintf(os.Stdout, "  %s/%s (encrypted)\n", toolName, relPath)
 		} else {
 			fmt.Fprintf(os.Stdout, "  %s/%s\n", toolName, relPath)
+			//nolint:gosec // paths are from trusted tool directories
+			content, readErr := os.ReadFile(path)
+			if readErr == nil {
+				// Use the same `personal/<tool>/<rel>` key shape the
+				// real-push scanners see, so finding messages line up
+				// with the on-disk repo paths users will edit.
+				key := filepath.Join("personal", toolName, relPath)
+				unencrypted[key] = content
+			}
 		}
 
 		result.files++
@@ -434,7 +492,7 @@ func (c *PushCommand) copyPersonalFile(
 		// about to be written as plaintext. Warn loudly so operators
 		// notice the misconfiguration (typically a cloned repo with no
 		// imported age identity, or a stale `recipients: []` list). The
-		// secret scanner still runs on this file — see scanForSecrets.
+		// secret scanner still runs on this file — see runSecretScan.
 		// Route the path through encryptMatchPath so the log line shows
 		// the repo-relative form (`personal/<tool>/<rest>`) that matches
 		// what .gitattributes and .aisyncencrypt operate on, rather than
@@ -517,26 +575,30 @@ func (c *PushCommand) loadEncryptPatterns(repoPath string) *entities.EncryptPatt
 	return entities.ParseEncryptPatterns(content)
 }
 
-// scanForSecrets walks the personal/ directory in the sync repo, collects all
-// unencrypted files (those not matching encrypt patterns), and runs the secret
-// scanner against them. Returns an error if any secrets are found.
+// collectUnencryptedFiles walks the personal/ directory in the sync repo
+// and collects every file that is NOT already `.age`-encrypted and NOT
+// pattern-matched for at-commit encryption (with recipients present).
+// The result is the shared input for both the secret scanner and the NDA
+// scanner: either running or neither, but both always see the exact same
+// set of files.
 //
-// The config parameter is required so the skip-when-matched gate mirrors the
-// one in [PushCommand.copyPersonalFile]: a file is only considered "already
-// encrypted-at-commit" when its encrypt pattern matches AND the config has at
-// least one recipient. Without the recipients gate, a repo with
-// `recipients: []` (reachable via clone without key import, or a stale
-// config) would write pattern-matched files as plaintext via copyPersonalFile
-// and then have the scanner skip them here — exactly the silent plaintext
-// commit failure mode the secret scanner exists to prevent.
-func (c *PushCommand) scanForSecrets(
+// The recipients gate mirrors [PushCommand.copyPersonalFile]: a file is
+// only considered "already encrypted-at-commit" when its encrypt pattern
+// matches AND the config has at least one recipient. Without the gate, a
+// repo with `recipients: []` (reachable via clone without key import, or
+// a stale config) would write pattern-matched files as plaintext via
+// copyPersonalFile and then have the scanner skip them here — exactly
+// the silent plaintext commit failure mode the scanners exist to prevent.
+func (c *PushCommand) collectUnencryptedFiles(
 	repoPath string,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
-) error {
+) (map[string][]byte, error) {
 	personalDir := filepath.Join(repoPath, "personal")
 	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
-		return nil
+		// First-run repo without a personal/ tree yet — return an empty
+		// (non-nil) map so callers can iterate without a special case.
+		return map[string][]byte{}, nil
 	}
 
 	hasRecipients := len(config.Encryption.Recipients) > 0
@@ -552,18 +614,14 @@ func (c *PushCommand) scanForSecrets(
 			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		// Skip files that are already encrypted (.age suffix)
+		// Skip files that are already encrypted (.age suffix).
 		if filepath.Ext(path) == ageSuffix {
 			return nil
 		}
 
-		// Skip files that would be encrypted (matching encrypt patterns)
-		// AND have at least one recipient configured. relPath is already
-		// the repo-relative form (e.g. "personal/claude/memories/foo.md"),
-		// so the match agrees with dryRunScanTool and copyPersonalFile
-		// without re-deriving the path. When recipients is empty we MUST
-		// scan the file, because copyPersonalFile writes it as plaintext
-		// in that configuration.
+		// Skip files that would be encrypted AND have at least one
+		// recipient configured. When recipients is empty we MUST scan
+		// the file because copyPersonalFile writes it as plaintext.
 		if hasRecipients && encryptPatterns.Matches(filepath.ToSlash(relPath)) {
 			return nil
 		}
@@ -577,13 +635,16 @@ func (c *PushCommand) scanForSecrets(
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to walk personal directory: %w", err)
+		return nil, fmt.Errorf("failed to walk personal directory: %w", err)
 	}
+	return unencrypted, nil
+}
 
-	if len(unencrypted) == 0 {
-		return nil
-	}
-
+// runSecretScan runs the credential regex scanner against the already-
+// collected unencrypted files. Returns an error if any credential patterns
+// match. The block message hints at both fixes (encrypt the file or pass
+// `--skip-secret-scan`).
+func (c *PushCommand) runSecretScan(unencrypted map[string][]byte) error {
 	findings := c.secretScanner.Scan(unencrypted)
 	if len(findings) == 0 {
 		return nil
@@ -597,6 +658,39 @@ func (c *PushCommand) scanForSecrets(
 	return fmt.Errorf(
 		"push blocked: %d secret(s) detected in unencrypted files. "+
 			"Encrypt them with .aisyncencrypt or use --skip-secret-scan",
+		len(findings),
+	)
+}
+
+// runNDAScan runs the NDA content checker (explicit list + auto-derive +
+// heuristics) against the already-collected unencrypted files. Any
+// finding blocks the push with a source-tagged error message so the user
+// knows which knob to turn to fix each hit.
+func (c *PushCommand) runNDAScan(
+	repoPath string,
+	config *entities.Config,
+	unencrypted map[string][]byte,
+) error {
+	findings, err := c.ndaChecker.Check(repoPath, config, unencrypted)
+	if err != nil {
+		return fmt.Errorf("nda scan failed: %w", err)
+	}
+	if len(findings) == 0 {
+		return nil
+	}
+
+	fmt.Fprintln(os.Stdout, "NDA scan findings:")
+	for _, f := range findings {
+		fmt.Fprintf(os.Stdout, "  %s:%d  [%s]  %s\n", f.Path, f.Line, f.Kind, f.Term)
+	}
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "To fix:")
+	fmt.Fprintln(os.Stdout, "  1. Sanitize the files (replace the literal with a placeholder)")
+	fmt.Fprintln(os.Stdout, "  2. Or ignore a specific auto-derived term: `aisync nda ignore <term>`")
+	fmt.Fprintln(os.Stdout, "  3. Or bypass for this push only: `aisync push --skip-nda-scan` (discouraged)")
+
+	return fmt.Errorf(
+		"push blocked: %d NDA term hit(s) detected in unencrypted files",
 		len(findings),
 	)
 }
