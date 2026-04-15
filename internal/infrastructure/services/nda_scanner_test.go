@@ -119,6 +119,61 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		}
 	})
 
+	t.Run("should NOT fire ado-org-url heuristic on a contrived scheme prefix", func(t *testing.T) {
+		t.Parallel()
+
+		// given — `xhttps://dev.azure.com/CorporateOrg` is a strict
+		// boundary-only adversarial case: the inner pattern
+		// `https?://(?:ssh\.)?dev\.azure\.com/[A-Za-z0-9][A-Za-z0-9_-]*[A-Z][A-Za-z0-9_-]*`
+		// is otherwise valid (the host literal matches, the org
+		// segment `CorporateOrg` satisfies the uppercase-letter shape
+		// constraint), so the ONLY thing preventing a match is the
+		// `(?:^|[^A-Za-z0-9.])` leading boundary: at position 0 the
+		// `x` fails `https?://`, and at position 1 the preceding `x`
+		// is alphanumeric which fails the `[^A-Za-z0-9.]` boundary.
+		// This test locks in the boundary itself — if a future
+		// simplification deletes it the attacker-substring test
+		// would still pass (its inner literal already blocks the
+		// match), but THIS test would fail immediately.
+		scanner := services.NewForbiddenTermsScanner(nil, nil, true)
+		content := []byte("xhttps://dev.azure.com/CorporateOrg")
+
+		// when
+		findings := scanner.Scan(map[string][]byte{"t.md": content})
+
+		// then
+		for _, f := range findings {
+			assert.NotEqual(t, "heuristic:ado-org-url", f.Kind,
+				"contrived scheme prefix `xhttps://` must be rejected by the boundary anchor")
+		}
+	})
+
+	t.Run("should fire ado-org-url heuristic when the boundary char is punctuation", func(t *testing.T) {
+		t.Parallel()
+
+		// given — a URL wrapped in parentheses, a common markdown
+		// shape. The `(` before `https` is non-alphanumeric-non-dot
+		// so the boundary accepts, and the captured group yields the
+		// URL without the `(` prefix.
+		scanner := services.NewForbiddenTermsScanner(nil, nil, true)
+		content := []byte("see (https://dev.azure.com/CorporateOrg) for details")
+
+		// when
+		findings := scanner.Scan(map[string][]byte{"t.md": content})
+
+		// then
+		var hit *entities.NDAFinding
+		for i, f := range findings {
+			if f.Kind == "heuristic:ado-org-url" {
+				hit = &findings[i]
+				break
+			}
+		}
+		require.NotNil(t, hit, "expected ado-org-url heuristic to fire when URL is wrapped in parens")
+		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term,
+			"capture group must strip the leading `(` from the reported Term")
+	})
+
 	t.Run("should fire ado-org-url heuristic at start of line", func(t *testing.T) {
 		t.Parallel()
 
