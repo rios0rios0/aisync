@@ -51,14 +51,14 @@ func (c *WatchCommand) Execute(
 		c.watchService.SetInterval(pollingInterval)
 	}
 
-	dirs := c.collectWatchDirs(config)
-	if len(dirs) == 0 {
+	trees := c.collectWatchedTrees(config)
+	if len(trees) == 0 {
 		return errors.New("no enabled AI tool directories found")
 	}
 
 	c.loadAndApplyIgnorePatterns(config, repoPath)
 
-	fmt.Fprintf(os.Stdout, "Watching %d directories for changes...\n", len(dirs))
+	fmt.Fprintf(os.Stdout, "Watching %d directories for changes...\n", len(trees))
 	if autoPush && c.pushCmd == nil {
 		return errors.New("auto-push is enabled but no push command is configured")
 	}
@@ -69,7 +69,7 @@ func (c *WatchCommand) Execute(
 
 	callback := c.buildWatchCallback(configPath, repoPath, autoPush, debounce)
 
-	if err = c.watchService.Watch(dirs, callback); err != nil {
+	if err = c.watchService.Watch(trees, callback); err != nil {
 		return fmt.Errorf("failed to start watcher: %w", err)
 	}
 
@@ -82,19 +82,25 @@ func (c *WatchCommand) Execute(
 	return nil
 }
 
-// collectWatchDirs returns the list of existing enabled AI tool directories.
-func (c *WatchCommand) collectWatchDirs(config *entities.Config) []string {
-	var dirs []string
-	for _, tool := range config.Tools {
+// collectWatchedTrees returns a WatchedTree per existing enabled tool, each
+// carrying the tool name and user extra_allowlist so the watch service can
+// apply [entities.IsSyncable] to each event.
+func (c *WatchCommand) collectWatchedTrees(config *entities.Config) []repositories.WatchedTree {
+	var trees []repositories.WatchedTree
+	for name, tool := range config.Tools {
 		if !tool.Enabled {
 			continue
 		}
 		dir := ExpandHome(tool.Path)
 		if _, err := os.Stat(dir); err == nil {
-			dirs = append(dirs, dir)
+			trees = append(trees, repositories.WatchedTree{
+				ToolName:       name,
+				Dir:            dir,
+				ExtraAllowlist: tool.ExtraAllowlist,
+			})
 		}
 	}
-	return dirs
+	return trees
 }
 
 // loadAndApplyIgnorePatterns combines ignore patterns from .aisyncignore and

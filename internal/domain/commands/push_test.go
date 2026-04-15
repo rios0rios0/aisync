@@ -374,21 +374,25 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should encrypt files matching encrypt patterns during push", func(t *testing.T) {
-		// given
+		// given — a file under memories/ (allowlisted) that matches a
+		// memories/** encrypt pattern. The old test used `creds.secret` at
+		// the claude root, but under the allowlist that path no longer
+		// syncs at all, so we anchor the test on memories/credentials.md
+		// which is both syncable and encrypt-matched.
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
 		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		require.NoError(t, os.WriteFile(
 			filepath.Join(repoPath, ".aisyncencrypt"),
-			[]byte("*.secret"),
+			[]byte("personal/**/memories/**"),
 			0600,
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories"), 0700))
 		require.NoError(t, os.WriteFile(
-			filepath.Join(claudeDir, "creds.secret"),
+			filepath.Join(claudeDir, "memories", "credentials.md"),
 			[]byte("my-secret"),
 			0600,
 		))
@@ -431,7 +435,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, encryptionService.EncryptCalls)
 
-		encryptedPath := filepath.Join(repoPath, "personal", "claude", "creds.secret.age")
+		encryptedPath := filepath.Join(repoPath, "personal", "claude", "memories", "credentials.md.age")
 		content, readErr := os.ReadFile(encryptedPath)
 		require.NoError(t, readErr)
 		assert.Equal(t, "ENCRYPTED-DATA", string(content))
@@ -847,9 +851,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "debug.log"), []byte("log data"), 0600))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rule.md"), []byte("rule content"), 0600))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
+		// debug.log is allowlisted (rules/**) but also matches the *.log
+		// ignore pattern, so the subtractive ignore filter removes it.
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules", "debug.log"), []byte("log data"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules", "rule.md"), []byte("rule content"), 0600))
 
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -882,12 +888,12 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// rule.md should be copied, debug.log should not
-		ruleFile := filepath.Join(repoPath, "personal", "claude", "rule.md")
+		// rules/rule.md should be copied, rules/debug.log should not
+		ruleFile := filepath.Join(repoPath, "personal", "claude", "rules", "rule.md")
 		_, err = os.Stat(ruleFile)
 		assert.NoError(t, err)
 
-		logFile := filepath.Join(repoPath, "personal", "claude", "debug.log")
+		logFile := filepath.Join(repoPath, "personal", "claude", "rules", "debug.log")
 		_, err = os.Stat(logFile)
 		assert.True(t, os.IsNotExist(err))
 	})

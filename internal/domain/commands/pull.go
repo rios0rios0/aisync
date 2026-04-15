@@ -375,12 +375,12 @@ func (c *PullCommand) applyToToolDir(
 
 	pendingFiles := c.collectSharedFiles(
 		config, repoPath, toolName, toolDir, prefix, allFiles,
-		sourceFileMap, encryptPatterns, manifest, opts,
+		sourceFileMap, encryptPatterns, manifest, opts, tool.ExtraAllowlist,
 	)
 
 	c.applyPersonalOnlyFiles(
 		repoPath, toolName, toolDir, prefix, allFiles,
-		pendingFiles, manifest, encryptPatterns, config,
+		pendingFiles, manifest, encryptPatterns, config, tool.ExtraAllowlist,
 	)
 
 	c.detectAndResolveConflicts(
@@ -449,6 +449,7 @@ func (c *PullCommand) collectSharedFiles(
 	encryptPatterns *entities.EncryptPatterns,
 	manifest *entities.Manifest,
 	opts PullOptions,
+	extraAllowlist []string,
 ) map[string][]byte {
 	pendingFiles := make(map[string][]byte)
 
@@ -460,7 +461,9 @@ func (c *PullCommand) collectSharedFiles(
 		localRel := strings.TrimPrefix(relPath, prefix)
 		destPath := filepath.Join(toolDir, localRel)
 
-		if entities.IsDenied(destPath) {
+		if !entities.IsSyncable(toolName, localRel, extraAllowlist) {
+			logger.Warnf("pull: source %q tried to deliver %q which is not in %s's allowlist — skipping",
+				entry.source, relPath, toolName)
 			continue
 		}
 
@@ -747,6 +750,7 @@ func (c *PullCommand) applyPersonalOnlyFiles(
 	manifest *entities.Manifest,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
+	extraAllowlist []string,
 ) {
 	personalDir := filepath.Join(repoPath, "personal", toolName)
 	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
@@ -773,7 +777,7 @@ func (c *PullCommand) applyPersonalOnlyFiles(
 		}
 
 		destPath := filepath.Join(toolDir, relPath)
-		if entities.IsDenied(destPath) {
+		if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
 			return nil
 		}
 

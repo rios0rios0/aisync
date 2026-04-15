@@ -276,7 +276,7 @@ func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, rep
 			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		if c.isFilePending(path, toolDir, personalDir, manifest) {
+		if c.isFilePending(path, toolDir, personalDir, name, tool.ExtraAllowlist, manifest) {
 			pending++
 		}
 		return nil
@@ -288,7 +288,8 @@ func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, rep
 // isFilePending checks whether a local file is new or differs from its sync repo
 // counterpart.
 func (c *StatusCommand) isFilePending(
-	path, toolDir, personalDir string,
+	path, toolDir, personalDir, toolName string,
+	extraAllowlist []string,
 	manifest *entities.Manifest,
 ) bool {
 	relPath, err := filepath.Rel(toolDir, path)
@@ -296,7 +297,7 @@ func (c *StatusCommand) isFilePending(
 		return false
 	}
 
-	if entities.IsDenied(path) {
+	if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
 		return false
 	}
 

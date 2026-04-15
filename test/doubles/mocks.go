@@ -349,16 +349,16 @@ func (m *MockDiffService) ComputePersonalDiff(
 
 // MockWatchService is a manual stub for repositories.WatchService.
 type MockWatchService struct {
-	WatchDirs    []string
-	WatchErr     error
-	StopCalls    int
-	WatchCalls   int
+	WatchTrees     []repositories.WatchedTree
+	WatchErr       error
+	StopCalls      int
+	WatchCalls     int
 	IgnorePatterns *entities.IgnorePatterns
 }
 
-func (m *MockWatchService) Watch(dirs []string, callback func(event repositories.FileEvent)) error {
+func (m *MockWatchService) Watch(trees []repositories.WatchedTree, callback func(event repositories.FileEvent)) error {
 	m.WatchCalls++
-	m.WatchDirs = dirs
+	m.WatchTrees = trees
 	return m.WatchErr
 }
 

@@ -70,13 +70,16 @@ func PollingStopped(s *PollingWatchService) bool {
 }
 
 // PollingScanDir exposes scanDir on a PollingWatchService for black-box testing.
+// The tree is synthesized from the raw directory with no tool context, so
+// the allowlist falls through to [entities.DefaultAllowlist] and any tree
+// path under rules/, agents/, commands/, memories/, etc. is syncable.
 func PollingScanDir(s *PollingWatchService, dir string) {
-	s.scanDir(dir)
+	s.scanDir(repositories.WatchedTree{Dir: dir})
 }
 
 // PollingPollDir exposes pollDir on a PollingWatchService for black-box testing.
 func PollingPollDir(s *PollingWatchService, dir string, callback func(event repositories.FileEvent)) {
-	s.pollDir(dir, callback)
+	s.pollDir(repositories.WatchedTree{Dir: dir}, callback)
 }
 
 // FSNotifyStopCh returns the stopCh field from an FSNotifyWatchService.
