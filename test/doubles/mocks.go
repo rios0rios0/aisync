@@ -533,3 +533,42 @@ func (m *MockPromptService) PromptFileAction(_, _ string) string {
 	m.FileActionCalls++
 	return m.FileAction
 }
+
+// MockForbiddenTermsRepository is a manual stub for
+// repositories.ForbiddenTermsRepository. It stores the in-memory term
+// list, captures Save calls, and lets tests preconfigure errors per
+// method.
+type MockForbiddenTermsRepository struct {
+	Terms      []entities.ForbiddenTerm
+	SavedRepo  string
+	SavedTerms []entities.ForbiddenTerm
+	LoadErr    error
+	SaveErr    error
+	LoadCalls  int
+	SaveCalls  int
+	PathCalls  int
+}
+
+func (m *MockForbiddenTermsRepository) Load(_ string) ([]entities.ForbiddenTerm, error) {
+	m.LoadCalls++
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	return m.Terms, nil
+}
+
+func (m *MockForbiddenTermsRepository) Save(repoPath string, terms []entities.ForbiddenTerm) error {
+	m.SaveCalls++
+	m.SavedRepo = repoPath
+	m.SavedTerms = terms
+	if m.SaveErr != nil {
+		return m.SaveErr
+	}
+	m.Terms = terms
+	return nil
+}
+
+func (m *MockForbiddenTermsRepository) Path(repoPath string) string {
+	m.PathCalls++
+	return repoPath + "/.aisync-forbidden.age"
+}
