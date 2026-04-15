@@ -42,6 +42,14 @@ func NewPushCommand(
 	}
 }
 
+// encryptMatchPath builds the repo-relative path under personal/<tool>/ that
+// is used for matching .aisyncencrypt patterns. Every encrypt match site must
+// use this helper so .aisyncencrypt patterns, .gitattributes filters, and the
+// secret scanner all agree on path semantics.
+func encryptMatchPath(toolName, relPath string) string {
+	return filepath.ToSlash(filepath.Join("personal", toolName, relPath))
+}
+
 // Execute scans enabled AI tool directories for personal files, copies them into
 // the sync repo under personal/<tool>/, commits, and pushes. When skipSecretScan
 // is false, unencrypted files are scanned for leaked secrets before committing.
@@ -69,7 +77,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 	copied := c.collectAllPersonalFiles(config, repoPath, ignorePatterns, encryptPatterns)
 	logger.Infof("collected %d personal files into sync repo", copied)
 
-	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns); err != nil {
+	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns, config); err != nil {
 		return err
 	}
 
@@ -117,6 +125,7 @@ func (c *PushCommand) commitAndPush(
 	repoPath, commitMsg string,
 	skipSecretScan bool,
 	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
 ) error {
 	clean, err := c.gitRepo.IsClean()
 	if err != nil {
@@ -128,7 +137,7 @@ func (c *PushCommand) commitAndPush(
 	}
 
 	if !skipSecretScan {
-		if scanErr := c.scanForSecrets(repoPath, encryptPatterns); scanErr != nil {
+		if scanErr := c.scanForSecrets(repoPath, encryptPatterns, config); scanErr != nil {
 			return scanErr
 		}
 	}
@@ -223,7 +232,8 @@ func (c *PushCommand) dryRunScanTool(
 			return nil
 		}
 
-		encrypted := encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0
+		encrypted := encryptPatterns.Matches(encryptMatchPath(toolName, relPath)) &&
+			len(config.Encryption.Recipients) > 0
 		if encrypted {
 			result.encrypted++
 			fmt.Fprintf(os.Stdout, "  %s/%s (encrypted)\n", toolName, relPath)
@@ -270,7 +280,7 @@ func (c *PushCommand) collectPersonalFiles(
 			return nil
 		}
 
-		if c.copyPersonalFile(path, relPath, personalDir, encryptPatterns, config) {
+		if c.copyPersonalFile(path, relPath, toolName, personalDir, encryptPatterns, config) {
 			copied++
 		}
 		return nil
@@ -281,8 +291,10 @@ func (c *PushCommand) collectPersonalFiles(
 
 // copyPersonalFile reads a single file, optionally encrypts it, and writes it to
 // the personal directory if it has changed. Returns true if the file was copied.
+// The toolName parameter is used to build the repo-relative path under
+// personal/<tool>/ for matching encrypt patterns.
 func (c *PushCommand) copyPersonalFile(
-	path, relPath, personalDir string,
+	path, relPath, toolName, personalDir string,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
 ) bool {
@@ -292,7 +304,9 @@ func (c *PushCommand) copyPersonalFile(
 		return false
 	}
 
-	if encryptPatterns.Matches(relPath) && len(config.Encryption.Recipients) > 0 {
+	matchedForEncryption := encryptPatterns.Matches(encryptMatchPath(toolName, relPath))
+	switch {
+	case matchedForEncryption && len(config.Encryption.Recipients) > 0:
 		encrypted, encErr := c.encryptionService.Encrypt(content, config.Encryption.Recipients)
 		if encErr != nil {
 			logger.Warnf("failed to encrypt %s: %v", relPath, encErr)
@@ -300,6 +314,22 @@ func (c *PushCommand) copyPersonalFile(
 		}
 		content = encrypted
 		relPath += ".age"
+	case matchedForEncryption:
+		// Pattern matches but no recipients are configured: the file is
+		// about to be written as plaintext. Warn loudly so operators
+		// notice the misconfiguration (typically a cloned repo with no
+		// imported age identity, or a stale `recipients: []` list). The
+		// secret scanner still runs on this file — see scanForSecrets.
+		// Route the path through encryptMatchPath so the log line shows
+		// the repo-relative form (`personal/<tool>/<rest>`) that matches
+		// what .gitattributes and .aisyncencrypt operate on, rather than
+		// a bare tool-relative path that is ambiguous when multiple
+		// tools are enabled.
+		logger.Warnf(
+			"file %s matches an encrypt pattern but no recipients are configured; "+
+				"writing as plaintext. Run `aisync key generate` or add a recipient to config.yaml.",
+			encryptMatchPath(toolName, relPath),
+		)
 	}
 
 	destPath := filepath.Clean(filepath.Join(personalDir, relPath))
@@ -375,11 +405,26 @@ func (c *PushCommand) loadEncryptPatterns(repoPath string) *entities.EncryptPatt
 // scanForSecrets walks the personal/ directory in the sync repo, collects all
 // unencrypted files (those not matching encrypt patterns), and runs the secret
 // scanner against them. Returns an error if any secrets are found.
-func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.EncryptPatterns) error {
+//
+// The config parameter is required so the skip-when-matched gate mirrors the
+// one in [PushCommand.copyPersonalFile]: a file is only considered "already
+// encrypted-at-commit" when its encrypt pattern matches AND the config has at
+// least one recipient. Without the recipients gate, a repo with
+// `recipients: []` (reachable via clone without key import, or a stale
+// config) would write pattern-matched files as plaintext via copyPersonalFile
+// and then have the scanner skip them here — exactly the silent plaintext
+// commit failure mode the secret scanner exists to prevent.
+func (c *PushCommand) scanForSecrets(
+	repoPath string,
+	encryptPatterns *entities.EncryptPatterns,
+	config *entities.Config,
+) error {
 	personalDir := filepath.Join(repoPath, "personal")
 	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
 		return nil
 	}
+
+	hasRecipients := len(config.Encryption.Recipients) > 0
 
 	unencrypted := make(map[string][]byte)
 	err := filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
@@ -398,8 +443,13 @@ func (c *PushCommand) scanForSecrets(repoPath string, encryptPatterns *entities.
 		}
 
 		// Skip files that would be encrypted (matching encrypt patterns)
-		relToPersonal, _ := filepath.Rel(personalDir, path)
-		if encryptPatterns.Matches(relToPersonal) {
+		// AND have at least one recipient configured. relPath is already
+		// the repo-relative form (e.g. "personal/claude/memories/foo.md"),
+		// so the match agrees with dryRunScanTool and copyPersonalFile
+		// without re-deriving the path. When recipients is empty we MUST
+		// scan the file, because copyPersonalFile writes it as plaintext
+		// in that configuration.
+		if hasRecipients && encryptPatterns.Matches(filepath.ToSlash(relPath)) {
 			return nil
 		}
 

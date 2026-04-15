@@ -437,6 +437,185 @@ func TestPushCommand_Execute(t *testing.T) {
 		assert.Equal(t, "ENCRYPTED-DATA", string(content))
 	})
 
+	t.Run("should encrypt files matching repo-relative personal/<tool>/ patterns", func(t *testing.T) {
+		// given — regression for a bug where .aisyncencrypt patterns like
+		// "personal/*/memories/**" never matched because the push command
+		// matched against tool-relative paths (e.g. "memories/foo.md") instead
+		// of the repo-relative path "personal/claude/memories/foo.md".
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "repo")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		// Pattern uses the repo-relative form documented in .gitattributes.
+		require.NoError(t, os.WriteFile(
+			filepath.Join(repoPath, ".aisyncencrypt"),
+			[]byte("personal/*/memories/**\npersonal/*/settings.local.json\n"),
+			0600,
+		))
+
+		claudeDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories", "nested"), 0700))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "memories", "user.md"),
+			[]byte("personal memory content"),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "memories", "nested", "user.md"),
+			[]byte("nested personal memory content"),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "settings.local.json"),
+			[]byte(`{"permissions":{}}`),
+			0600,
+		))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "CLAUDE.md"),
+			[]byte("# shared"),
+			0600,
+		))
+
+		config := &entities.Config{
+			Tools: map[string]entities.Tool{
+				"claude": {Path: claudeDir, Enabled: true},
+			},
+			Encryption: entities.EncryptionConfig{
+				Recipients: []string{"age1recipient123"},
+			},
+		}
+		configRepo := &doubles.MockConfigRepository{Config: config}
+		stateRepo := &doubles.MockStateRepository{
+			State:     entities.NewState("test-device"),
+			ExistsVal: true,
+		}
+		gitRepo := &doubles.MockGitRepository{
+			HasRemoteVal: true,
+			IsCleanVal:   false,
+		}
+		encryptionService := &doubles.MockEncryptionService{
+			EncryptedData: []byte("ENCRYPTED-DATA"),
+		}
+
+		cmd := commands.NewPushCommand(
+			configRepo, stateRepo, gitRepo,
+			encryptionService,
+			&doubles.MockManifestRepository{},
+			&doubles.MockSecretScanner{},
+		)
+
+		// when
+		err := cmd.Execute(
+			filepath.Join(repoPath, "config.yaml"),
+			repoPath, "test commit", true, false,
+		)
+
+		// then
+		require.NoError(t, err)
+		// memories/user.md, memories/nested/user.md, and settings.local.json
+		// should all be encrypted. The nested case guards against a regression
+		// where "personal/*/memories/**" only matched a single level because
+		// the underlying matcher did not support recursive "**".
+		assert.Equal(t, 3, encryptionService.EncryptCalls)
+
+		encryptedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "user.md.age")
+		_, statErr := os.Stat(encryptedMemory)
+		assert.NoError(t, statErr, "memories/user.md should have been encrypted")
+
+		encryptedNestedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "nested", "user.md.age")
+		_, statErr = os.Stat(encryptedNestedMemory)
+		assert.NoError(t, statErr, "memories/nested/user.md should have been encrypted")
+
+		encryptedSettings := filepath.Join(repoPath, "personal", "claude", "settings.local.json.age")
+		_, statErr = os.Stat(encryptedSettings)
+		assert.NoError(t, statErr, "settings.local.json should have been encrypted")
+
+		// CLAUDE.md is not matched and must remain plaintext.
+		plaintextClaude := filepath.Join(repoPath, "personal", "claude", "CLAUDE.md")
+		content, readErr := os.ReadFile(plaintextClaude)
+		require.NoError(t, readErr)
+		assert.Equal(t, "# shared", string(content))
+	})
+
+	t.Run("should still scan pattern-matched files when recipients is empty", func(t *testing.T) {
+		// given — regression for a secret-scanner bypass. When an encrypt
+		// pattern matches but config.Encryption.Recipients is empty (e.g.
+		// a cloned repo with no imported age key), copyPersonalFile falls
+		// back to writing the file as plaintext. scanForSecrets must NOT
+		// skip those files just because the pattern matches — otherwise
+		// secrets inside memories/*.md etc. would get silently committed
+		// in plaintext. The fix threads config through scanForSecrets and
+		// gates the skip on len(Recipients) > 0.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "repo")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		require.NoError(t, os.WriteFile(
+			filepath.Join(repoPath, ".aisyncencrypt"),
+			[]byte("personal/*/memories/**\n"),
+			0600,
+		))
+
+		claudeDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "memories"), 0700))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(claudeDir, "memories", "user.md"),
+			[]byte("api_key=SECRET\n"),
+			0600,
+		))
+
+		config := &entities.Config{
+			Tools: map[string]entities.Tool{
+				"claude": {Path: claudeDir, Enabled: true},
+			},
+			// Recipients is INTENTIONALLY empty to reproduce the bypass.
+			Encryption: entities.EncryptionConfig{Recipients: nil},
+		}
+		configRepo := &doubles.MockConfigRepository{Config: config}
+		stateRepo := &doubles.MockStateRepository{
+			State:     entities.NewState("test-device"),
+			ExistsVal: true,
+		}
+		gitRepo := &doubles.MockGitRepository{
+			HasRemoteVal: true,
+			IsCleanVal:   false,
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		// Scanner returns a finding so the push must fail — proving that
+		// the pattern-matched file was scanned rather than skipped.
+		scanner := &doubles.MockSecretScanner{
+			Findings: []repositories.SecretFinding{
+				{
+					Path:        "personal/claude/memories/user.md",
+					Line:        1,
+					Pattern:     "api_key",
+					Description: "detected API key",
+				},
+			},
+		}
+
+		cmd := commands.NewPushCommand(
+			configRepo, stateRepo, gitRepo,
+			encryptionService,
+			&doubles.MockManifestRepository{},
+			scanner,
+		)
+
+		// when
+		err := cmd.Execute(
+			filepath.Join(repoPath, "config.yaml"),
+			repoPath, "test commit", false, false,
+		)
+
+		// then
+		require.Error(t, err, "push must be blocked when a plaintext pattern-matched file contains a secret")
+		assert.Contains(t, err.Error(), "push blocked")
+		assert.Equal(t, 1, scanner.ScanCalls, "secret scanner must run when recipients is empty")
+		// No encryption happened (no recipients) and no commit was made.
+		assert.Equal(t, 0, encryptionService.EncryptCalls)
+		assert.Equal(t, 0, gitRepo.CommitAllCalls)
+	})
+
 	t.Run("should skip tool directory that does not exist", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()

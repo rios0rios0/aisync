@@ -2,9 +2,11 @@ package commands
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	logger "github.com/sirupsen/logrus"
@@ -12,6 +14,99 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
+
+// defaultAisyncIgnore is the starter content written to .aisyncignore by
+// `aisync init`. These are basename and simple-glob patterns for files that
+// users almost never want to sync across devices. Structural/directory-level
+// blocking (transcripts, runtime state, backups) lives in the compiled-in
+// deny-list in entities/denylist.go — that deny-list cannot be overridden,
+// whereas this file can.
+const defaultAisyncIgnore = `# aisync default ignore — user-overridable basename patterns.
+# For structural directory exclusions (transcripts, runtime state, caches,
+# backups) see the compiled-in deny-list in aisync. That list cannot be
+# overridden and ships updated with every aisync release.
+
+# editor / OS junk
+*.tmp
+*.swp
+*.bak
+*.old
+*.orig
+*.log
+*.backup
+*.backup.*
+.DS_Store
+Thumbs.db
+
+# AI-assistant planning documents.
+# Plans are generated from conversation context and frequently contain
+# internal repo paths, customer/project names, and other NDA-sensitive
+# strings. Comment out the lines below if you want to sync them anyway.
+plans/
+`
+
+// defaultAisyncEncrypt is the starter content written to .aisyncencrypt by
+// `aisync init`. Patterns match repo-relative paths under personal/<tool>/
+// (same form used by .gitattributes). Anything matched here is age-encrypted
+// before commit. The default set is deliberately over-cautious: we'd rather
+// encrypt an innocuous file than silently commit a credential in plaintext.
+// Users can tighten or remove patterns by editing this file.
+const defaultAisyncEncrypt = `# aisync default encrypt patterns.
+# Matched against repo-relative paths under personal/<tool>/. Anything matched
+# is age-encrypted before being committed. The list is deliberately broad —
+# it is safer to encrypt an innocuous file than to miss a credential.
+# Remove or tighten patterns here as needed; the compiled deny-list still
+# blocks outright-dangerous files regardless of this list.
+
+# ---------- user memories (all supported AI tools) ----------
+personal/**/memories/**
+
+# ---------- local / device-specific settings ----------
+personal/**/settings.local.json
+personal/**/*.local.json
+personal/**/local.settings.json
+
+# ---------- environment files ----------
+personal/**/.env
+personal/**/.env.*
+personal/**/.envrc
+
+# ---------- private keys (any format) ----------
+personal/**/*.key
+personal/**/*.pem
+personal/**/*.p12
+personal/**/*.pfx
+personal/**/*.jks
+personal/**/*.keystore
+personal/**/*.asc
+personal/**/*.gpg
+personal/**/secring.*
+personal/**/id_rsa
+personal/**/id_dsa
+personal/**/id_ecdsa
+personal/**/id_ed25519
+personal/**/keys/**
+personal/**/private_keys/**
+
+# ---------- generic credentials / tokens ----------
+personal/**/credentials
+personal/**/credentials.*
+personal/**/*.credentials
+personal/**/*.token
+personal/**/*.secret
+personal/**/*.private
+personal/**/secrets/**
+personal/**/auth.json
+personal/**/.netrc
+personal/**/.pypirc
+personal/**/.npmrc
+personal/**/.dockerconfigjson
+
+# ---------- session / cookie state ----------
+personal/**/*.session
+personal/**/*.cookies
+personal/**/sessions/**
+`
 
 // InitCommand creates or clones an aifiles repository.
 type InitCommand struct {
@@ -91,6 +186,15 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 	c.detectAndUpdateTools(repoPath)
 	if err := c.ensureStateExists(repoPath); err != nil {
 		return err
+	}
+
+	// Upgrade legacy cloned repos that predate default ignore/encrypt files.
+	// Never overwrite user-customised content; just fill in missing files.
+	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
+		logger.Warnf("failed to write default .aisyncignore: %v", err)
+	}
+	if err := c.writeDefaultEncryptIfMissing(repoPath); err != nil {
+		logger.Warnf("failed to write default .aisyncencrypt: %v", err)
 	}
 
 	logger.Info("aifiles repo cloned successfully")
@@ -185,13 +289,26 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 		return err
 	}
 
-	config := c.buildDefaultConfig()
-	if err := c.configRepo.Save(configPath, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
+	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
+		return fmt.Errorf("failed to write default .aisyncignore: %w", err)
+	}
+	if err := c.writeDefaultEncryptIfMissing(repoPath); err != nil {
+		return fmt.Errorf("failed to write default .aisyncencrypt: %w", err)
 	}
 
-	if err := c.generateAgeKeyIfMissing(configPath, config); err != nil {
+	config := c.buildDefaultConfig()
+
+	// Populate the age identity and recipient list in memory BEFORE writing
+	// config.yaml. Writing the recipient list and the config file in a single
+	// Save eliminates the interrupt window where the repo could otherwise
+	// land with `recipients: []` on disk and silently push plaintext secrets
+	// on the next `aisync push`.
+	if err := c.ensureAgeKeyAndRecipient(config); err != nil {
 		return err
+	}
+
+	if err := c.configRepo.Save(configPath, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
 	}
 
 	hostname, _ := os.Hostname()
@@ -217,20 +334,45 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	return nil
 }
 
-// scaffoldDirectories creates the standard aifiles directory structure with
-// .gitkeep files in each directory.
+// writeDefaultIgnoreIfMissing writes the default .aisyncignore content to the
+// repo root if no .aisyncignore file exists there. Existing files are left
+// untouched so user customisations survive re-runs of init.
+func (c *InitCommand) writeDefaultIgnoreIfMissing(repoPath string) error {
+	return writeFileIfMissing(filepath.Join(repoPath, ".aisyncignore"), []byte(defaultAisyncIgnore))
+}
+
+// writeDefaultEncryptIfMissing writes the default .aisyncencrypt content to
+// the repo root if no .aisyncencrypt file exists there. Existing files are
+// left untouched so user customisations survive re-runs of init.
+func (c *InitCommand) writeDefaultEncryptIfMissing(repoPath string) error {
+	return writeFileIfMissing(filepath.Join(repoPath, ".aisyncencrypt"), []byte(defaultAisyncEncrypt))
+}
+
+// writeFileIfMissing writes content to path only if path does not already
+// exist. If the file exists, nothing is changed and nil is returned.
+func writeFileIfMissing(path string, content []byte) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", path, err)
+	}
+	return os.WriteFile(path, content, 0600)
+}
+
+// scaffoldDirectories creates the minimal aifiles directory layout: the two
+// namespace roots (personal/ and shared/) plus the .aisync/ device-state
+// directory. Tool-specific subdirectories (e.g. personal/claude/rules/) are
+// deliberately NOT pre-created — they emerge organically when push/pull
+// calls [os.MkdirAll] for the tools that are actually installed on each
+// device. This keeps fresh repos from being polluted with empty placeholder
+// directories for AI tools the user does not use.
 func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	dirs := []string{
-		"shared/claude/rules", "shared/claude/commands", "shared/claude/agents",
-		"shared/claude/hooks", "shared/claude/skills",
-		"shared/cursor/rules", "shared/cursor/skills",
-		"shared/copilot/instructions",
-		"shared/codex/rules",
-		"personal/claude/rules", "personal/claude/commands", "personal/claude/agents",
-		"personal/claude/hooks", "personal/claude/memories",
-		"personal/cursor/rules",
-		"personal/copilot/instructions",
-		"personal/codex/rules",
+		"personal",
+		"shared",
 		".aisync",
 	}
 
@@ -247,9 +389,21 @@ func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	return nil
 }
 
-// buildDefaultConfig creates the default aifiles config with detected tools.
+// buildDefaultConfig creates the default aifiles config with ONLY the tools
+// that are actually installed on this device. Tools that are not detected
+// are left out of the fresh config entirely (rather than included with
+// `enabled: false`). This keeps the file small and focused on what the user
+// actually uses. To enable an additional tool later, add it to config.yaml
+// by hand or re-run `aisync init` on a machine where the tool is installed.
 func (c *InitCommand) buildDefaultConfig() *entities.Config {
 	detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
+	enabled := make(map[string]entities.Tool, len(detected))
+	for name, tool := range detected {
+		if tool.Enabled {
+			enabled[name] = tool
+		}
+	}
+
 	return &entities.Config{
 		Sync: entities.SyncConfig{
 			Remote:       "",
@@ -262,7 +416,7 @@ func (c *InitCommand) buildDefaultConfig() *entities.Config {
 			Identity:   "~/.config/aisync/key.txt",
 			Recipients: []string{},
 		},
-		Tools:   detected,
+		Tools:   enabled,
 		Sources: []entities.Source{},
 		Watch: entities.WatchConfig{
 			PollingInterval: "30s",
@@ -271,14 +425,40 @@ func (c *InitCommand) buildDefaultConfig() *entities.Config {
 	}
 }
 
-// generateAgeKeyIfMissing auto-generates an age key pair when the identity file
-// does not exist and updates the config with the public key as a recipient.
-func (c *InitCommand) generateAgeKeyIfMissing(configPath string, config *entities.Config) error {
+// ensureAgeKeyAndRecipient makes sure the fresh repo has a working age
+// identity AND that its public key is registered as a recipient on the
+// given config struct. It mutates config in memory only — callers are
+// expected to persist the updated config themselves, which is how
+// [InitCommand.executeCreate] keeps the config write atomic.
+//
+// There are two cases:
+//
+//  1. The identity file does not exist — generate a new keypair and set
+//     config.Encryption.Recipients to the new public key.
+//  2. The identity file already exists (e.g. carried over from a previous
+//     aisync install, imported from 1Password, or shared across repos) —
+//     derive the public key via [repositories.EncryptionService.ExportPublicKey]
+//     and append it to the recipient list if it is not already there.
+//
+// Before this change, case 2 silently left Recipients empty, which caused
+// `aisync push` to skip encryption entirely and commit memories /
+// settings.local.json as plaintext.
+func (c *InitCommand) ensureAgeKeyAndRecipient(config *entities.Config) error {
 	identityPath := ExpandHome(config.Encryption.Identity)
-	if _, statErr := os.Stat(identityPath); !os.IsNotExist(statErr) {
-		return nil
+
+	if _, statErr := os.Stat(identityPath); os.IsNotExist(statErr) {
+		return c.generateAndRegisterNewKey(identityPath, config)
+	} else if statErr != nil {
+		return fmt.Errorf("failed to stat identity file %s: %w", identityPath, statErr)
 	}
 
+	return c.registerExistingKey(identityPath, config)
+}
+
+// generateAndRegisterNewKey creates a fresh age keypair at identityPath and
+// sets the new public key as the sole recipient on the given config struct.
+// It mutates config in memory only; the caller is expected to persist it.
+func (c *InitCommand) generateAndRegisterNewKey(identityPath string, config *entities.Config) error {
 	if err := os.MkdirAll(filepath.Dir(identityPath), 0700); err != nil {
 		return fmt.Errorf("failed to create identity directory: %w", err)
 	}
@@ -289,10 +469,27 @@ func (c *InitCommand) generateAgeKeyIfMissing(configPath string, config *entitie
 	}
 
 	config.Encryption.Recipients = []string{publicKey}
-	if err := c.configRepo.Save(configPath, config); err != nil {
-		return fmt.Errorf("failed to update config with recipient: %w", err)
-	}
 	logger.Infof("generated age key pair at %s", identityPath)
+	return nil
+}
+
+// registerExistingKey derives the public key from an existing identity file
+// and appends it to the recipient list on the given config struct if it is
+// not already present. It mutates config in memory only; the caller is
+// expected to persist it.
+func (c *InitCommand) registerExistingKey(identityPath string, config *entities.Config) error {
+	publicKey, err := c.encryptionService.ExportPublicKey(identityPath)
+	if err != nil {
+		return fmt.Errorf("failed to derive public key from existing identity %s: %w", identityPath, err)
+	}
+
+	if slices.Contains(config.Encryption.Recipients, publicKey) {
+		logger.Infof("reused existing age identity at %s (recipient already registered)", identityPath)
+		return nil
+	}
+
+	config.Encryption.Recipients = append(config.Encryption.Recipients, publicKey)
+	logger.Infof("reused existing age identity at %s and registered its public key as a recipient", identityPath)
 	return nil
 }
 

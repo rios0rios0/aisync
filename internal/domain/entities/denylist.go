@@ -6,15 +6,70 @@ import (
 )
 
 // DenyList contains patterns for files that must never be synced. These are
-// compiled into the binary and cannot be overridden by the user.
+// compiled into the binary and cannot be overridden by the user. The list is
+// grouped by tool so it is easy to extend as new AI assistants are adopted.
+//
+// Matching semantics (see [matchesDenyPattern]):
+//   - A pattern ending in "/" matches any contiguous sequence of path segments,
+//     so ".claude/projects/" blocks every file under any ".claude/projects/"
+//     directory regardless of depth.
+//   - A pattern containing "*" uses [filepath.Match] against path segments.
+//   - A bare pattern matches the full path or any suffix.
 var DenyList = []string{ //nolint:gochecknoglobals // compiled-in deny patterns that cannot be overridden
+	// Claude — credentials and OAuth state.
 	".claude/.credentials.json",
 	".claude/.oauth*",
+	".claude/.claude.json",
+	// Claude — conversation transcripts and per-session runtime state.
+	// These files contain verbatim user/assistant messages plus tool calls,
+	// which routinely include private source code, internal hostnames,
+	// customer data, and NDA-protected context.
+	".claude/projects/",
+	".claude/sessions/",
+	".claude/tasks/",
+	".claude/history.jsonl",
+	".claude/shell-snapshots/",
+	".claude/session-env/",
+	".claude/ide/",
+	".claude/file-history/", // per-session snapshots of every file Claude touched — includes raw source of private code
+
+	// Claude — backups and caches.
+	// Backups of ".claude.json" contain "oauthAccount" blocks; cache
+	// directories hold resolved prompts and tool outputs.
+	".claude/backups/",
+	".claude/cache/",
 	".claude/statsig/",
 	".claude/todos/",
-	".claude/projects/*/session*",
 	".claude/plugins/",
-	".claude/.claude.json",
+
+	// Cursor — chat databases, conversation transcripts, IDE state, and
+	// CLI configuration that leaks workspace / MCP server names.
+	".cursor/projects/",
+	".cursor/chats/",
+	".cursor/snapshots/",
+	".cursor/ide_state.json",
+	".cursor/cli-config.json",
+	".cursor/unified_repo_list.json",
+	".cursor/mcp.json",
+	".cursor/blocklist",
+
+	// Codex — session transcripts and cached data.
+	".codex/sessions/",
+	".codex/cache/",
+
+	// Other AI assistants — runtime and cache directories that commonly
+	// carry conversation state. The deny-list covers these proactively so
+	// enabling any of them via config does not silently leak data.
+	".gemini/sessions/",
+	".gemini/cache/",
+	".cline/tasks/",
+	".continue/sessions/",
+	".roo/cache/",
+
+	// aisync — per-device state file, never shared across devices.
+	".aisync/state.json",
+
+	// Generic junk and VCS metadata.
 	".DS_Store",
 	"Thumbs.db",
 	".git/",
