@@ -87,12 +87,20 @@ On interruption, the next invocation detects the incomplete journal and resumes 
 - **Desktop (Linux/macOS/Windows)** — `FSNotifyWatchService` using OS-native events (`inotify`, `FSEvents`, `ReadDirectoryChangesW`).
 - **Termux (Android)** — `PollingWatchService` with 30-second interval. Detected via `runtime.GOOS == "android"` or `ANDROID_ROOT` env var.
 
-### Two-Tier Ignore System
+### Four-Layer Push Protection Stack
 
-- **Tier 1: Compiled-in deny-list** (`entities/denylist.go`) — Hardcoded patterns for credentials, OAuth tokens, session transcripts, plugin caches. Cannot be overridden. Safety net against accidental secret leaks.
-- **Tier 2: User-configurable `.aisyncignore`** — Gitignore-syntax file for additional exclusions. Additive with the deny-list.
+`aisync push` runs four orthogonal protections on every file. Any layer firing blocks the push. Each layer catches a different leak class — they compose, they don't overlap.
 
-The `RegexSecretScanner` (15 compiled regex patterns) runs before every push and blocks if secrets are found in non-encrypted files.
+1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`. Replaces the old compiled deny-list — unknown content is now never synced rather than silently leaking when a vendor ships a new runtime directory.
+2. **`.aisyncignore`** — Gitignore-syntax file for additional path exclusions on top of the allowlist. Additive, user-configurable.
+3. **`.aisyncencrypt` + age** — Paths matching the patterns are written as ciphertext using `config.Encryption.Recipients`. Has two independent gates: pattern match AND non-empty recipients. Mismatched gates have previously caused silent plaintext commits.
+4. **Content scanners** — Two scanners run in sequence on the unencrypted file map (the same map the encrypt path produced):
+   - **`RegexSecretScanner`** (`services/regex_secret_scanner.go`) — 15 compiled regexes for credential FORMATS (AWS keys, GitHub tokens, JWTs, private key blocks). Bypassable with `--skip-secret-scan`.
+   - **`CompositeNDAChecker`** (`services/nda_content_checker.go`) — Composes three sources of forbidden terms: (a) explicit user list, age-encrypted at `<repo>/.aisync-forbidden.age`, default canonical-form substring matching (lowercase + NFKD-stripped + alphanumeric-only) so `ZestSecurity` catches every spacing/casing/separator/accent variant from one entry; (b) auto-derived from machine state via `services/auto_deriver.go` + `repositories/exec_git_inspector.go` — extracts terms from `git config --global user.email`, `git remote get-url origin` for repos under `~/Development`/`~/workspace`/etc. to depth 4, the `~/Development/dev.azure.com/<org>/<project>/` directory layout, and `~/.ssh/config` `Host <forge>-<alias>` entries; (c) compile-time heuristic shape checks (`services/nda_scanner.go:heuristicChecks`) — hardcoded home paths, WSL OneDrive paths, ADO org URLs, ssh-host alias patterns. Findings are tagged with the source (`user`, `auto-derived:<origin>`, `heuristic:<name>`) so the user can see exactly which knob fixes each hit. Bypassable with `--skip-nda-scan`. Per-device cache at `~/.cache/aisync/derived-terms.txt` (1h TTL, `0600`, never committed).
+
+`PushCommand.Execute` runs the scanners both in the real-push path (`commitAndPush`) AND the dry-run path (`executeDryRun`) so `--dry-run` previews the actual blocks a real push would trigger.
+
+The `aisync nda` command group (`add`, `remove`, `list`, `ignore`) manages the explicit forbidden list and the `nda.auto_derive_exclude` config entry. The `NDACommand` is in the domain layer and depends only on `ConfigRepository` + `ForbiddenTermsRepository`; the heuristic count is injected via constructor (`services.HeuristicCount()`) so the domain layer never imports infrastructure.
 
 ### Precedence Order
 
@@ -110,4 +118,4 @@ When applying files to local AI tool directories: personal files > last-listed s
 
 ## Configuration
 
-Users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config lives at `<repo>/config.yaml` with sections for sync, encryption, tools (30+ AI tools auto-detected on init), sources, watch, and `hooks_exclude`. The `.aisyncencrypt` file declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions. External sources are fetched as GitHub tarballs (zero API calls, no rate limiting) with ETag caching in `.aisync/state.json`.
+Users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config lives at `<repo>/config.yaml` with sections for sync, encryption, tools (30+ AI tools, `aisync init` only enables ones it detects on the device), sources, watch, `hooks_exclude`, and `nda` (auto_derive on/off, heuristics on/off, auto_derive_exclude per-device false positives, dev_roots override). The `.aisyncencrypt` file declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions. The encrypted `.aisync-forbidden.age` (created on first `aisync nda add`) carries the explicit NDA forbidden-terms list — it lives at the repo root and travels between devices via the normal git flow, encrypted to the same age recipients as everything else. External sources are fetched as GitHub tarballs (zero API calls, no rate limiting) with ETag caching in `.aisync/state.json`.
