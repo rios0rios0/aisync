@@ -56,9 +56,11 @@ func TestInitCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// Config is saved twice: once by buildDefaultConfig, a second time
-		// by registerExistingKey after deriving the public key.
-		assert.Equal(t, 2, configRepo.SaveCalls)
+		// Config is saved exactly once, AFTER ensureAgeKeyAndRecipient has
+		// populated the recipient list. A second Save would reopen the
+		// interrupt window where the repo could land with `recipients: []`
+		// on disk and silently push plaintext secrets.
+		assert.Equal(t, 1, configRepo.SaveCalls)
 		assert.Equal(t, 1, stateRepo.SaveCalls)
 		assert.Equal(t, 1, gitRepo.InitCalls)
 		assert.Equal(t, repoPath, gitRepo.InitDir)
@@ -247,8 +249,10 @@ func TestInitCommand_Execute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, encryptionService.GenerateCalls)
 		assert.Equal(t, 1, toolDetector.DetectCalls)
-		// Config should be saved twice: once initially, once with the new recipient
-		assert.Equal(t, 2, configRepo.SaveCalls)
+		// Config should be saved exactly once, with the new recipient already
+		// populated — two separate writes would reopen the interrupt window
+		// that previously left repos with `recipients: []` on disk.
+		assert.Equal(t, 1, configRepo.SaveCalls)
 	})
 
 	t.Run("should return error when import key fails during clone", func(t *testing.T) {
