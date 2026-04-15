@@ -157,13 +157,16 @@ func TestForbiddenTerms_Match_Word(t *testing.T) {
 		{name: "should NOT match QA inside equal", line: "the two are equal in importance", matches: false},
 		{name: "should NOT match qa inside cliqa", line: "is cliqa a real word?", matches: false},
 		// Regression for the canonical-index → byte-offset mapping bug:
-		// `é` (one rune in NFC, two in NFKD) and the `ﬁ` ligature (one
-		// rune in NFC, two in NFKD) used to make the boundary-check
-		// indices fall into the middle of a multi-byte source rune,
-		// either failing to fire or asserting in `runeAt`. Both should
-		// now match cleanly because the canonical→original mapping
-		// preserves the source rune offsets.
+		// `é` (one rune in NFC, two in NFKD), `ñ`, the `ﬁ` ligature,
+		// and `ï` all used to make the boundary-check indices fall into
+		// the middle of a multi-byte source rune, producing false
+		// negatives on word-mode terms preceded by an accented word on
+		// the same line. Each case below is the reviewer's exact
+		// canonical-form failing input or a near variant.
 		{name: "should match QA preceded by accented char", line: "Café QA report", matches: true},
+		{name: "should match QA after accented word (cafés)", line: "cafés QA today", matches: true},
+		{name: "should match QA after diaeresis word", line: "naïve QA approach", matches: true},
+		{name: "should match QA after tilde word", line: "piñata QA lessons", matches: true},
 		{name: "should NOT match QA inside an accented word", line: "the aquaréum is closed", matches: false},
 		{name: "should match QA preceded by ligature", line: "ﬁt QA in the schedule", matches: true},
 	}
