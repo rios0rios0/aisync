@@ -21,6 +21,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 - added default `.aisyncignore` and `.aisyncencrypt` scaffolding to `aisync init` — fresh repos start with safe basename-ignore patterns and a broad default encrypt pattern set covering memories, local settings, private keys (`*.key`, `*.pem`, `*.p12`, `*.pfx`, `*.jks`, `id_rsa`, `id_ed25519`, GPG keyrings), credential files (`.netrc`, `.pypirc`, `.npmrc`, `.dockerconfigjson`, `credentials*`, `auth.json`, `*.token`, `*.credentials`), env files, and session/cookie state
 - added legacy-repo upgrade path in `aisync init` clone mode: missing `.aisyncignore`/`.aisyncencrypt` files are backfilled with defaults while existing user-customized content is left untouched
 - added automatic recipient registration in `aisync init` create mode when an age identity already exists at the configured path: the public key is derived via `ExportPublicKey` and added to `config.Encryption.Recipients` so fresh configs on machines with a pre-existing key immediately encrypt as expected (previously the fresh config silently shipped `recipients: []` and push would write plaintext)
+- added `.github/copilot-instructions.md` with architecture, testing, security, and anti-pattern guidance so GitHub Copilot and other AI assistants produce code matching the project's Clean Architecture layout, BDD test discipline, and encrypt/scan gates
 
 ### Changed
 
