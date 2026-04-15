@@ -109,44 +109,11 @@ func TestIgnorePatterns_Matches(t *testing.T) {
 	}
 }
 
-func TestIgnorePatterns_IsIgnored_MatchesIgnorePatterns(t *testing.T) {
-	// given
-	p := &entities.IgnorePatterns{Patterns: []string{"*.tmp", "*.log"}}
-
-	// when / then
-	assert.True(t, p.IsIgnored("data.tmp"))
-	assert.True(t, p.IsIgnored("server.log"))
-	assert.False(t, p.IsIgnored("readme.md"))
-}
-
-func TestIgnorePatterns_IsIgnored_MatchesDenyList(t *testing.T) {
-	// given
-	p := &entities.IgnorePatterns{Patterns: []string{}}
-
-	// when / then
-	assert.True(t, p.IsIgnored(".DS_Store"))
-	assert.True(t, p.IsIgnored("Thumbs.db"))
-	assert.True(t, p.IsIgnored(".git/config"))
-	assert.True(t, p.IsIgnored(".claude/.credentials.json"))
-}
-
-func TestIgnorePatterns_IsIgnored_CombinesIgnoreAndDeny(t *testing.T) {
-	// given
-	p := &entities.IgnorePatterns{Patterns: []string{"*.bak"}}
-
-	// when / then
-	assert.True(t, p.IsIgnored("file.bak"), "should match ignore pattern")
-	assert.True(t, p.IsIgnored(".DS_Store"), "should match deny list")
-	assert.False(t, p.IsIgnored("rules/clean.md"), "should not match either")
-}
-
-func TestIgnorePatterns_IsIgnored_DenyListTakesPriority(t *testing.T) {
-	// given
-	p := &entities.IgnorePatterns{Patterns: []string{}}
-
-	// when
-	result := p.IsIgnored(".claude/.credentials.json")
-
-	// then
-	assert.True(t, result, "denylist entries should be ignored even with empty user patterns")
-}
+// Note: the old TestIgnorePatterns_IsIgnored_* tests were removed along with
+// the IsIgnored() method and the compiled deny-list. Under the allowlist
+// model in allowlist.go, "what must never sync" is expressed as the inverse
+// of ToolAllowlists rather than a secondary deny-list on IgnorePatterns.
+// Coverage for that invariant lives in allowlist_test.go under the negative
+// cases for each tool. IgnorePatterns is now a pure subtractive filter on
+// the already-allowlisted set, and its behavior is exercised by Matches
+// directly.

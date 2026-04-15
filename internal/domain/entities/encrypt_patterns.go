@@ -87,6 +87,39 @@ func matchesAnyPattern(path string, patterns []string) bool {
 	return false
 }
 
+// matchesAnchoredPattern is a stricter variant of [matchesAnyPattern] that
+// does NOT fall back to basename matching for patterns without "/". It still
+// honors trailing-slash directory patterns and gitwildmatch-style "**"
+// globs, but a bare filename pattern like "CLAUDE.md" matches only when the
+// path IS that filename at the tool root — never a file coincidentally
+// named CLAUDE.md inside a runtime cache dir. Used by the allowlist layer
+// in allowlist.go, where lenient basename matching would be a security
+// regression (a vendor could ship a "new-runtime-thing/CLAUDE.md" and have
+// it slip through).
+func matchesAnchoredPattern(path string, patterns []string) bool {
+	normalized := filepath.ToSlash(path)
+
+	for _, pattern := range patterns {
+		pattern = filepath.ToSlash(pattern)
+
+		// Directory pattern ("plans/") — still matches any depth by design,
+		// so users can write `my-research/` in extra_allowlist to cover a
+		// whole subtree. This is the same semantics the deny-list used.
+		if before, ok := strings.CutSuffix(pattern, "/"); ok {
+			if matchesDirectoryPattern(normalized, before) {
+				return true
+			}
+			continue
+		}
+
+		// Segment-based recursive glob. No basename fallback.
+		if matchesRecursiveGlob(normalized, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // matchesRecursiveGlob matches a slash-separated path against a pattern that
 // may contain "**" (matches zero or more path segments) or "*" (matches
 // within a single segment via [filepath.Match]). Both inputs are split on

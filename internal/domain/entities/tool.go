@@ -1,9 +1,18 @@
 package entities
 
 // Tool represents an AI coding assistant whose configuration is managed by aisync.
+//
+// ExtraAllowlist is an optional user-supplied list of gitwildmatch-style glob
+// patterns (tool-relative) that extend the compiled-in allowlist for this
+// tool. Matched paths are allowed to sync in addition to whatever is in
+// [ToolAllowlists] or [DefaultAllowlist]. It lets users opt in to syncing
+// files that the shipped allowlist deliberately omits (e.g. a custom
+// research subdirectory) without editing aisync source code. Leave nil to
+// rely purely on the compiled-in list — which is what almost everyone wants.
 type Tool struct {
-	Path    string `yaml:"path"`
-	Enabled bool   `yaml:"enabled"`
+	Path           string   `yaml:"path"`
+	Enabled        bool     `yaml:"enabled"`
+	ExtraAllowlist []string `yaml:"extra_allowlist,omitempty"`
 }
 
 // DefaultTools returns the Tier 1 AI tools that aisync detects out of the box.

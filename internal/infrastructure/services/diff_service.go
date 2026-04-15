@@ -50,7 +50,7 @@ func (s *FSDiffService) ComputeSharedDiff(
 			localRel := strings.TrimPrefix(relPath, prefix)
 			localPath := filepath.Join(toolDir, localRel)
 
-			if entities.IsDenied(localPath) {
+			if !entities.IsSyncable(toolName, localRel, tool.ExtraAllowlist) {
 				continue
 			}
 
@@ -119,7 +119,7 @@ func (s *FSDiffService) ComputeLocalDiff(
 		}
 
 		personalDir := filepath.Join(repoPath, "personal", toolName)
-		toolChanges := s.diffLocalToolDir(toolName, toolDir, personalDir)
+		toolChanges := s.diffLocalToolDir(toolName, toolDir, personalDir, tool.ExtraAllowlist)
 		changes = append(changes, toolChanges...)
 	}
 
@@ -128,7 +128,10 @@ func (s *FSDiffService) ComputeLocalDiff(
 
 // diffLocalToolDir walks a single tool directory and compares each file against
 // the corresponding file in the personal directory of the sync repo.
-func (s *FSDiffService) diffLocalToolDir(toolName, toolDir, personalDir string) []entities.FileChange {
+func (s *FSDiffService) diffLocalToolDir(
+	toolName, toolDir, personalDir string,
+	extraAllowlist []string,
+) []entities.FileChange {
 	var changes []entities.FileChange
 
 	_ = filepath.WalkDir(toolDir, func(path string, d os.DirEntry, err error) error {
@@ -136,11 +139,11 @@ func (s *FSDiffService) diffLocalToolDir(toolName, toolDir, personalDir string) 
 			return err
 		}
 
-		if entities.IsDenied(path) {
+		relPath, _ := filepath.Rel(toolDir, path)
+		if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
 			return nil
 		}
 
-		relPath, _ := filepath.Rel(toolDir, path)
 		change := s.compareLocalFile(toolName, relPath, path, personalDir, d)
 		if change != nil {
 			changes = append(changes, *change)
