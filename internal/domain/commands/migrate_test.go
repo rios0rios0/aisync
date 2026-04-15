@@ -256,8 +256,9 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "test.md"), []byte("content"), 0600))
+		// test.md lives under rules/ so it matches the claude allowlist.
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(claudeDir, "rules", "test.md"), []byte("content"), 0600))
 
 		config := &entities.Config{
 			Sources: []entities.Source{
@@ -280,7 +281,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		// File should be classified as personal since source fetch failed
-		personalPath := filepath.Join(repoPath, "personal", "claude", "test.md")
+		personalPath := filepath.Join(repoPath, "personal", "claude", "rules", "test.md")
 		content, readErr := os.ReadFile(personalPath)
 		require.NoError(t, readErr)
 		assert.Equal(t, "content", string(content))

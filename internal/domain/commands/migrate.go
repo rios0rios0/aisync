@@ -122,7 +122,16 @@ func (c *MigrateCommand) migrateTool(
 		if err != nil || d.IsDir() {
 			return err
 		}
-		n, matched := c.migrateFile(path, toolDir, toolName, repoPath, knownShared, manifest, dryRun)
+		n, matched := c.migrateFile(
+			path,
+			toolDir,
+			toolName,
+			repoPath,
+			knownShared,
+			manifest,
+			dryRun,
+			tool.ExtraAllowlist,
+		)
 		result.migrated += n
 		maps.Copy(result.matched, matched)
 		return nil
@@ -152,15 +161,16 @@ func (c *MigrateCommand) migrateFile(
 	knownShared map[string]knownSharedEntry,
 	manifest *entities.Manifest,
 	dryRun bool,
+	extraAllowlist []string,
 ) (int, map[string]knownSharedEntry) {
 	matched := make(map[string]knownSharedEntry)
 
-	if entities.IsDenied(path) {
+	relPath, _ := filepath.Rel(toolDir, path)
+	if relPath == ".aisync-manifest.json" {
 		return 0, matched
 	}
 
-	relPath, _ := filepath.Rel(toolDir, path)
-	if relPath == ".aisync-manifest.json" {
+	if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
 		return 0, matched
 	}
 

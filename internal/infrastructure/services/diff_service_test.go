@@ -135,9 +135,10 @@ func TestFSDiffService_ComputeLocalDiff_ShouldDetectNewLocalFile(t *testing.T) {
 	toolDir := filepath.Join(tmpDir, "claude")
 	repoDir := filepath.Join(tmpDir, "repo")
 
-	// Create a local file with no counterpart in the repo
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "custom-rule.md"), []byte("my custom rule"), 0600))
+	// Create a local file with no counterpart in the repo. The file lives
+	// under rules/ so it matches the claude allowlist (rules/**).
+	assert.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0700))
+	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules", "custom-rule.md"), []byte("my custom rule"), 0600))
 
 	// Create personal dir in repo without the file
 	personalDir := filepath.Join(repoDir, "personal", "claude")

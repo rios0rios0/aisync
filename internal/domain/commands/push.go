@@ -71,11 +71,17 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 	encryptPatterns := c.loadEncryptPatterns(repoPath)
 
 	if dryRun {
-		return c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns)
+		if dryErr := c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns); dryErr != nil {
+			return dryErr
+		}
+		c.warnLegacyRepoFiles(config, repoPath)
+		return nil
 	}
 
 	copied := c.collectAllPersonalFiles(config, repoPath, ignorePatterns, encryptPatterns)
 	logger.Infof("collected %d personal files into sync repo", copied)
+
+	c.warnLegacyRepoFiles(config, repoPath)
 
 	if err = c.commitAndPush(repoPath, commitMsg, skipSecretScan, encryptPatterns, config); err != nil {
 		return err
@@ -87,6 +93,100 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, skipSecret
 
 	fmt.Fprintf(os.Stdout, "Push complete: %d files collected.\n", copied)
 	return nil
+}
+
+// ageSuffix is the filename suffix [PushCommand.copyPersonalFile] appends
+// to files that matched an encrypt pattern. [warnLegacyRepoFiles] strips
+// it before checking the allowlist so a legitimately-encrypted file whose
+// plaintext equivalent is allowlisted is not flagged as legacy.
+const ageSuffix = ".age"
+
+// legacyHit records a single file under personal/<tool>/ whose tool-relative
+// path no longer passes the current allowlist.
+type legacyHit struct {
+	toolName string
+	relPath  string
+	fullPath string
+}
+
+// warnLegacyRepoFiles walks personal/<tool>/ directories in the sync repo
+// and emits a loud warning for any file whose tool-relative path is no
+// longer syncable under the current allowlist. These are typically legacy
+// entries committed under an older, more permissive deny-list-based
+// version of aisync (e.g. projects/*.jsonl, paste-cache/*, plugins/**).
+// The function never deletes anything — cleanup is the user's call. The
+// warning includes the exact git command to remove obsolete paths.
+func (c *PushCommand) warnLegacyRepoFiles(config *entities.Config, repoPath string) {
+	var legacy []legacyHit
+	for toolName, tool := range config.Tools {
+		if !tool.Enabled {
+			continue
+		}
+		legacy = append(legacy, c.collectLegacyHitsForTool(repoPath, toolName, tool.ExtraAllowlist)...)
+	}
+
+	if len(legacy) == 0 {
+		return
+	}
+
+	logLegacyWarning(repoPath, legacy)
+}
+
+// collectLegacyHitsForTool walks personal/<tool>/ and returns any file whose
+// tool-relative path no longer passes the allowlist. Never deletes.
+func (c *PushCommand) collectLegacyHitsForTool(repoPath, toolName string, extra []string) []legacyHit {
+	personalDir := filepath.Join(repoPath, "personal", toolName)
+	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	var hits []legacyHit
+	_ = filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info.IsDir() {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
+		}
+		relPath, relErr := filepath.Rel(personalDir, path)
+		if relErr != nil {
+			return nil //nolint:nilerr // return nil to continue Walk traversal
+		}
+		// .age-encrypted copies are allowed even when the plaintext
+		// equivalent is syncable — strip the suffix for the allowlist check.
+		checkPath := relPath
+		if filepath.Ext(checkPath) == ageSuffix {
+			checkPath = checkPath[:len(checkPath)-len(ageSuffix)]
+		}
+		if entities.IsSyncable(toolName, checkPath, extra) {
+			return nil
+		}
+		hits = append(hits, legacyHit{
+			toolName: toolName,
+			relPath:  relPath,
+			fullPath: filepath.Join("personal", toolName, relPath),
+		})
+		return nil
+	})
+	return hits
+}
+
+// logLegacyWarning prints the WARN block for legacy files with a ready-to-run
+// git rm command so users can clean up obsolete entries on demand.
+func logLegacyWarning(repoPath string, legacy []legacyHit) {
+	logger.Warnf(
+		"%d file(s) under personal/ are no longer in the allowlist and will be LEFT UNTOUCHED in the repo:",
+		len(legacy),
+	)
+	for _, hit := range legacy {
+		logger.Warnf("  %s", hit.fullPath)
+	}
+	logger.Warn("To clean them up, run:")
+	logger.Warnf("  git -C %s rm -r \\", repoPath)
+	for i, hit := range legacy {
+		if i == len(legacy)-1 {
+			logger.Warnf("    %s", hit.fullPath)
+			continue
+		}
+		logger.Warnf("    %s \\", hit.fullPath)
+	}
 }
 
 // collectAllPersonalFiles iterates over all enabled tools and collects personal
@@ -110,7 +210,16 @@ func (c *PushCommand) collectAllPersonalFiles(
 		}
 
 		manifest := c.loadManifest(toolDir)
-		n, err := c.collectPersonalFiles(toolDir, toolName, repoPath, manifest, ignorePatterns, encryptPatterns, config)
+		n, err := c.collectPersonalFiles(
+			toolDir,
+			toolName,
+			repoPath,
+			manifest,
+			ignorePatterns,
+			encryptPatterns,
+			config,
+			tool.ExtraAllowlist,
+		)
 		if err != nil {
 			logger.Warnf("failed to collect personal files for %s: %v", toolName, err)
 			continue
@@ -197,7 +306,7 @@ func (c *PushCommand) executeDryRun(
 			continue
 		}
 
-		result := c.dryRunScanTool(toolName, toolDir, ignorePatterns, encryptPatterns, config)
+		result := c.dryRunScanTool(toolName, toolDir, ignorePatterns, encryptPatterns, config, tool.ExtraAllowlist)
 		totalFiles += result.files
 		encryptedFiles += result.encrypted
 	}
@@ -214,6 +323,7 @@ func (c *PushCommand) dryRunScanTool(
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
+	extraAllowlist []string,
 ) dryRunToolResult {
 	manifest := c.loadManifest(toolDir)
 	var result dryRunToolResult
@@ -228,7 +338,9 @@ func (c *PushCommand) dryRunScanTool(
 			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		if entities.IsDenied(path) || ignorePatterns.Matches(relPath) || c.isSharedFile(relPath, manifest) {
+		if !entities.IsSyncable(toolName, relPath, extraAllowlist) ||
+			ignorePatterns.Matches(relPath) ||
+			c.isSharedFile(relPath, manifest) {
 			return nil
 		}
 
@@ -259,6 +371,7 @@ func (c *PushCommand) collectPersonalFiles(
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
 	config *entities.Config,
+	extraAllowlist []string,
 ) (int, error) {
 	personalDir := filepath.Join(repoPath, "personal", toolName)
 	if err := os.MkdirAll(personalDir, 0700); err != nil {
@@ -276,7 +389,9 @@ func (c *PushCommand) collectPersonalFiles(
 			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		if entities.IsDenied(path) || ignorePatterns.Matches(relPath) || c.isSharedFile(relPath, manifest) {
+		if !entities.IsSyncable(toolName, relPath, extraAllowlist) ||
+			ignorePatterns.Matches(relPath) ||
+			c.isSharedFile(relPath, manifest) {
 			return nil
 		}
 
@@ -313,7 +428,7 @@ func (c *PushCommand) copyPersonalFile(
 			return false
 		}
 		content = encrypted
-		relPath += ".age"
+		relPath += ageSuffix
 	case matchedForEncryption:
 		// Pattern matches but no recipients are configured: the file is
 		// about to be written as plaintext. Warn loudly so operators
@@ -438,7 +553,7 @@ func (c *PushCommand) scanForSecrets(
 		}
 
 		// Skip files that are already encrypted (.age suffix)
-		if filepath.Ext(path) == ".age" {
+		if filepath.Ext(path) == ageSuffix {
 			return nil
 		}
 
