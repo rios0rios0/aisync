@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	logger "github.com/sirupsen/logrus"
 
@@ -169,7 +170,7 @@ func (c *NDACommand) Ignore(repoPath, term string) error {
 		return errors.New("nda ignore: term cannot be empty")
 	}
 
-	configPath := repoPath + "/config.yaml"
+	configPath := filepath.Join(repoPath, "config.yaml")
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("nda ignore: failed to load config: %w", err)
@@ -234,7 +235,7 @@ func containsTerm(existing []entities.ForbiddenTerm, candidate entities.Forbidde
 // config file is missing, returns a zero-valued Config so callers can
 // still display a sensible result (e.g. List on a fresh repo).
 func (c *NDACommand) loadConfig(repoPath string) (*entities.Config, error) {
-	configPath := repoPath + "/config.yaml"
+	configPath := filepath.Join(repoPath, "config.yaml")
 	config, err := c.configRepo.Load(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {

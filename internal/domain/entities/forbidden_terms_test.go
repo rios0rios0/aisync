@@ -156,6 +156,16 @@ func TestForbiddenTerms_Match_Word(t *testing.T) {
 		{name: "should NOT match QA inside aquarium", line: "visit the aquarium next week", matches: false},
 		{name: "should NOT match QA inside equal", line: "the two are equal in importance", matches: false},
 		{name: "should NOT match qa inside cliqa", line: "is cliqa a real word?", matches: false},
+		// Regression for the canonical-index → byte-offset mapping bug:
+		// `é` (one rune in NFC, two in NFKD) and the `ﬁ` ligature (one
+		// rune in NFC, two in NFKD) used to make the boundary-check
+		// indices fall into the middle of a multi-byte source rune,
+		// either failing to fire or asserting in `runeAt`. Both should
+		// now match cleanly because the canonical→original mapping
+		// preserves the source rune offsets.
+		{name: "should match QA preceded by accented char", line: "Café QA report", matches: true},
+		{name: "should NOT match QA inside an accented word", line: "the aquaréum is closed", matches: false},
+		{name: "should match QA preceded by ligature", line: "ﬁt QA in the schedule", matches: true},
 	}
 
 	for _, tt := range tests {
