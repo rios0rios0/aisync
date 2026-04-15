@@ -573,30 +573,7 @@ func newNDASubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
 		},
 	}
 
-	//nolint:exhaustruct // cobra command does not require all fields
-	listCmd := &cobra.Command{
-		Use:   "list",
-		Short: "Show the current forbidden-terms summary",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			show, _ := cmd.Flags().GetBool("show")
-			summary, err := ndaCmd.List(resolveRepoPath(cmd), show)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(),
-				"Explicit: %d term(s)  |  Compile-time heuristics: %d  (auto-derive count is per-push)\n",
-				summary.Explicit, summary.Heuristics,
-			)
-			if show {
-				fmt.Fprintln(cmd.OutOrStdout())
-				for _, t := range summary.ExplicitAll {
-					fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", t.Original)
-				}
-			}
-			return nil
-		},
-	}
+	listCmd := newNDAListSubcmd(ndaCmd)
 	listCmd.Flags().Bool("show", false,
 		"print the full explicit list (default hides it so terminal scrollback cannot leak terms)")
 
@@ -612,6 +589,55 @@ func newNDASubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
 
 	parent.AddCommand(addCmd, removeCmd, listCmd, ignoreCmd)
 	return parent
+}
+
+// newNDAListSubcmd builds the `aisync nda list` subcommand. Extracted
+// from [newNDASubcmd] so the parent stays under the gocognit threshold;
+// the cosmetic `disabled in config` branch makes the inline definition
+// too cyclomatic to keep nested.
+func newNDAListSubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
+	//nolint:exhaustruct // cobra command does not require all fields
+	return &cobra.Command{
+		Use:   "list",
+		Short: "Show the current forbidden-terms summary",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			show, _ := cmd.Flags().GetBool("show")
+			summary, err := ndaCmd.List(resolveRepoPath(cmd), show)
+			if err != nil {
+				return err
+			}
+			printNDASummary(cmd, summary)
+			return nil
+		},
+	}
+}
+
+// printNDASummary formats the `aisync nda list` summary line and the
+// optional explicit-term list. Distinguishes "0 active because
+// nda.heuristics is false" from "the binary defines no heuristics" so a
+// user reading "0" doesn't assume the wrong thing.
+func printNDASummary(cmd *cobra.Command, summary commands.ListSummary) {
+	heuristicTotal := services.HeuristicCount()
+	if summary.Heuristics == 0 && heuristicTotal > 0 {
+		fmt.Fprintf(
+			cmd.OutOrStdout(),
+			"Explicit: %d term(s)  |  Compile-time heuristics: %d available, disabled in config  (auto-derive count is per-push)\n",
+			summary.Explicit,
+			heuristicTotal,
+		)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(),
+			"Explicit: %d term(s)  |  Compile-time heuristics: %d  (auto-derive count is per-push)\n",
+			summary.Explicit, summary.Heuristics,
+		)
+	}
+	if len(summary.ExplicitAll) > 0 {
+		fmt.Fprintln(cmd.OutOrStdout())
+		for _, t := range summary.ExplicitAll {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", t.Original)
+		}
+	}
 }
 
 func newDeviceSubcmd(deviceCmd *commands.DeviceCommand) *cobra.Command {

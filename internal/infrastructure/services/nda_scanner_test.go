@@ -75,7 +75,7 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		assert.Equal(t, "heuristic:home-path", findings[0].Kind)
 	})
 
-	t.Run("should fire ado-org-url heuristic", func(t *testing.T) {
+	t.Run("should fire ado-org-url heuristic and report URL without leading boundary char", func(t *testing.T) {
 		t.Parallel()
 
 		// given
@@ -86,14 +86,60 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		found := false
-		for _, f := range findings {
+		var hit *entities.NDAFinding
+		for i, f := range findings {
 			if f.Kind == "heuristic:ado-org-url" {
-				found = true
+				hit = &findings[i]
 				break
 			}
 		}
-		assert.True(t, found, "expected ado-org-url heuristic to fire")
+		require.NotNil(t, hit, "expected ado-org-url heuristic to fire")
+		// The capture group strips the leading boundary char so the
+		// reported Term is the URL itself, not " https://...".
+		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term)
+	})
+
+	t.Run("should NOT fire ado-org-url heuristic when dev.azure.com is a substring of an attacker host", func(t *testing.T) {
+		t.Parallel()
+
+		// given — the (?:^|[^A-Za-z0-9.]) leading anchor is the part
+		// CodeQL recognizes as a real URL boundary. Without it, the
+		// pattern would match `dev.azure.com/Foo` as a substring of an
+		// attacker-controlled host like `evil.dev.azure.com.example/`.
+		scanner := services.NewForbiddenTermsScanner(nil, nil, true)
+		content := []byte("Bogus URL: https://attacker.dev.azure.com.example/Foo")
+
+		// when
+		findings := scanner.Scan(map[string][]byte{"t.md": content})
+
+		// then
+		for _, f := range findings {
+			assert.NotEqual(t, "heuristic:ado-org-url", f.Kind,
+				"attacker host should not fire ado-org-url heuristic")
+		}
+	})
+
+	t.Run("should fire ado-org-url heuristic at start of line", func(t *testing.T) {
+		t.Parallel()
+
+		// given — verifies the `^` half of the `(?:^|[^A-Za-z0-9.])`
+		// alternation: a URL with no leading char must still fire.
+		scanner := services.NewForbiddenTermsScanner(nil, nil, true)
+		content := []byte("https://dev.azure.com/CorporateOrg/Project")
+
+		// when
+		findings := scanner.Scan(map[string][]byte{"t.md": content})
+
+		// then
+		var hit *entities.NDAFinding
+		for i, f := range findings {
+			if f.Kind == "heuristic:ado-org-url" {
+				hit = &findings[i]
+				break
+			}
+		}
+		require.NotNil(t, hit, "expected ado-org-url heuristic to fire at start-of-line")
+		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term)
 	})
 
 	t.Run("should NOT fire ado-org-url heuristic for placeholder", func(t *testing.T) {

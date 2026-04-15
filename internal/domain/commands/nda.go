@@ -212,6 +212,17 @@ func buildForbiddenTerm(term string, mode AddMode) (entities.ForbiddenTerm, erro
 
 // containsTerm reports whether a term with the same canonical form (or,
 // for regex terms, the same pattern text) already exists in the list.
+//
+// **Cross-mode behavior is by design.** Dedupe is scoped to terms with
+// the same Mode: a user who runs `aisync nda add ZestSecurity` followed
+// by `aisync nda add --word ZestSecurity` ends up with two entries in
+// the list. This is intentional — different modes produce findings with
+// different `kind` tags in block messages, which lets power users
+// distinguish "this hit is a substring leak" from "this hit is a
+// stand-alone word leak". Collapsing across modes would silently lose
+// that distinction. The downside is one extra finding per line for
+// users who add the same term twice; the upside is no surprising
+// silent merge.
 func containsTerm(existing []entities.ForbiddenTerm, candidate entities.ForbiddenTerm) bool {
 	candCanon := entities.Canonicalize(candidate.Original)
 	for _, t := range existing {

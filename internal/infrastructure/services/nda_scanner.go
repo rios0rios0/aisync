@@ -31,14 +31,19 @@ var heuristicChecks = []heuristicCheck{ //nolint:gochecknoglobals // compile-tim
 	},
 	{
 		name: "ado-org-url",
-		// \bhttps://dev.azure.com/<Capitalized-or-Numeric-Org>
+		// (^|non-host-char) https://dev.azure.com/<Capitalized-or-Numeric-Org>
 		// Allow alphanumeric + dash + underscore; require at least one
 		// uppercase letter in the first 12 characters to skip lowercase
-		// placeholder words like `<org>`. The leading `\b` anchor stops
-		// the pattern from matching `dev.azure.com` as a substring of an
-		// attacker-controlled host like `https://evil.dev.azure.com.example/`
-		// (CodeQL "Missing regular expression anchor").
-		re: regexp.MustCompile(`\bhttps?://(?:ssh\.)?dev\.azure\.com/[A-Za-z0-9][A-Za-z0-9_-]*[A-Z][A-Za-z0-9_-]*`),
+		// placeholder words like `<org>`. The leading `(?:^|[^A-Za-z0-9.])`
+		// anchor (which CodeQL recognizes as a real URL boundary, unlike
+		// `\b` which fires inside attacker-controlled hosts) stops the
+		// pattern from matching `dev.azure.com` as a substring of
+		// `https://evil.dev.azure.com.example/`. The actual URL is captured
+		// in group 1 so [runHeuristics] reports the URL as the `Term`
+		// without the leading boundary char.
+		re: regexp.MustCompile(
+			`(?:^|[^A-Za-z0-9.])(https?://(?:ssh\.)?dev\.azure\.com/[A-Za-z0-9][A-Za-z0-9_-]*[A-Z][A-Za-z0-9_-]*)`,
+		),
 	},
 	{
 		name: "ssh-host-alias",
@@ -114,21 +119,30 @@ func (s *ForbiddenTermsScanner) Scan(files map[string][]byte) []entities.NDAFind
 }
 
 // runHeuristics applies every compile-time heuristic check to the content,
-// producing a finding per hit tagged with `heuristic:<name>`.
+// producing a finding per hit tagged with `heuristic:<name>`. When a
+// heuristic regex contains a capture group (e.g. an ADO URL pattern that
+// brackets a leading boundary char to satisfy CodeQL), the reported `Term`
+// is the contents of group 1; otherwise the full match.
 func runHeuristics(path string, content []byte) []entities.NDAFinding {
 	var findings []entities.NDAFinding
 	contentStr := string(content)
 	lines := splitLines(contentStr)
 	for _, check := range heuristicChecks {
 		for lineIdx, line := range lines {
-			loc := check.re.FindStringIndex(line)
+			loc := check.re.FindStringSubmatchIndex(line)
 			if loc == nil {
 				continue
+			}
+			spanStart, spanEnd := loc[0], loc[1]
+			// loc length 4+ means the regex has at least one capture
+			// group; loc[2] >= 0 means group 1 actually matched.
+			if len(loc) >= 4 && loc[2] >= 0 {
+				spanStart, spanEnd = loc[2], loc[3]
 			}
 			findings = append(findings, entities.NDAFinding{
 				Path:    path,
 				Line:    lineIdx + 1,
-				Term:    line[loc[0]:loc[1]],
+				Term:    line[spanStart:spanEnd],
 				Kind:    "heuristic:" + check.name,
 				Snippet: clampLine(line),
 			})
