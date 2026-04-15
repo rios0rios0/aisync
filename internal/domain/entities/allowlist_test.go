@@ -416,6 +416,54 @@ func TestIsSyncable(t *testing.T) {
 			expected:       false,
 		},
 
+		// Bare directory segments — critical for watch-service pruning.
+		// Patterns like "rules/**" must match the bare segment "rules"
+		// via "**" collapsing to zero segments, otherwise addRecursive
+		// would prune the rules subtree on initial walk and later file
+		// events under it would be missed. Locked in by CI.
+		{
+			name:     "should match bare directory 'rules' against rules/**",
+			toolName: "claude",
+			relPath:  "rules",
+			expected: true,
+		},
+		{
+			name:     "should match bare directory 'agents' against agents/**",
+			toolName: "claude",
+			relPath:  "agents",
+			expected: true,
+		},
+		{
+			name:     "should match bare directory 'hooks' against hooks/**",
+			toolName: "claude",
+			relPath:  "hooks",
+			expected: true,
+		},
+		{
+			name:     "should match bare directory 'memories' against memories/**",
+			toolName: "claude",
+			relPath:  "memories",
+			expected: true,
+		},
+		{
+			name:     "should match bare directory 'skills-cursor' against cursor skills-cursor/**",
+			toolName: "cursor",
+			relPath:  "skills-cursor",
+			expected: true,
+		},
+		{
+			name:     "should not match bare directory 'projects' (not in any allowlist)",
+			toolName: "claude",
+			relPath:  "projects",
+			expected: false,
+		},
+		{
+			name:     "should not match bare directory 'paste-cache' (not in any allowlist)",
+			toolName: "claude",
+			relPath:  "paste-cache",
+			expected: false,
+		},
+
 		// Edge cases
 		{
 			name:     "should handle empty relPath",
