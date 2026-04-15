@@ -94,10 +94,20 @@ func (s *FSNotifyWatchService) eventLoop(callback func(event repositories.FileEv
 	}
 }
 
-// handleFSEvent processes a single filesystem event, filtering out paths
-// that are not in the allowlist for the tree they belong to, applying the
-// user-level ignore patterns, invoking the callback, and watching newly
-// created directories.
+// handleFSEvent processes a single filesystem event.
+//
+// Directory events (create on a new subdirectory) are handled BEFORE the
+// file-level allowlist check, because we want to add a watcher for any
+// new subtree that could contain allowlisted content — even if the bare
+// directory name is a plain literal. For the allowlisted-subtree check
+// we still use [entities.IsSyncable] because the gitwildmatch matcher
+// correctly handles the bare-directory case via "**" collapsing to zero
+// segments (e.g. "rules/**" matches the bare segment "rules"). A directory
+// create never invokes the callback — directories themselves are not
+// pushed; only the file events under them matter.
+//
+// File events (create/write/remove on a regular file) flow through the
+// allowlist + ignore filter and then the user callback.
 func (s *FSNotifyWatchService) handleFSEvent(
 	event fsnotify.Event,
 	callback func(event repositories.FileEvent),
@@ -106,6 +116,14 @@ func (s *FSNotifyWatchService) handleFSEvent(
 	if !ok {
 		return
 	}
+
+	if event.Op&fsnotify.Create != 0 {
+		if info, statErr := os.Stat(event.Name); statErr == nil && info.IsDir() {
+			s.watchNewSubtree(tree, event.Name, relPath)
+			return
+		}
+	}
+
 	if !entities.IsSyncable(tree.ToolName, relPath, tree.ExtraAllowlist) {
 		return
 	}
@@ -113,19 +131,28 @@ func (s *FSNotifyWatchService) handleFSEvent(
 		return
 	}
 
-	fe := repositories.FileEvent{
+	callback(repositories.FileEvent{
 		Path: event.Name,
 		Op:   mapOp(event.Op),
-	}
-	callback(fe)
+	})
+}
 
-	if event.Op&fsnotify.Create != 0 {
-		info, statErr := os.Stat(event.Name)
-		if statErr == nil && info.IsDir() {
-			if addErr := s.addRecursive(tree); addErr != nil {
-				logger.Warnf("failed to watch new directory %s: %v", event.Name, addErr)
-			}
-		}
+// watchNewSubtree registers watches for a newly-created directory and its
+// descendants, pruning non-allowlisted subtrees the same way the initial
+// walk does. Only the new subtree is traversed — not the whole tool root —
+// so a busy tool directory does not trigger an O(N) re-walk on every mkdir.
+func (s *FSNotifyWatchService) watchNewSubtree(
+	tree repositories.WatchedTree,
+	newDir, newDirRelPath string,
+) {
+	if !entities.IsSyncable(tree.ToolName, newDirRelPath, tree.ExtraAllowlist) {
+		return
+	}
+	if s.ignorePatterns != nil && s.ignorePatterns.Matches(newDirRelPath) {
+		return
+	}
+	if addErr := s.addRecursiveFrom(tree, newDir); addErr != nil {
+		logger.Warnf("failed to watch new directory %s: %v", newDir, addErr)
 	}
 }
 
@@ -146,26 +173,47 @@ func (s *FSNotifyWatchService) lookupTree(absPath string) (repositories.WatchedT
 	return repositories.WatchedTree{}, "", false
 }
 
-// addRecursive registers every directory under tree.Dir with the underlying
-// fsnotify watcher. Directory-level pruning via the allowlist would be
-// unsafe: patterns like "rules/**" match files whose first segment is
-// "rules" but do NOT match the bare directory segment "rules" itself, so
-// pruning by IsSyncable here would refuse to watch any subdir. Instead we
-// keep all directories watched and rely on per-file filtering in
-// handleFSEvent; only the user-level ignore patterns prune whole subtrees.
+// addRecursive walks tree.Dir and registers watches for every directory
+// whose tool-relative path is allowlisted (plus the tool root itself).
+// Non-allowlisted subtrees like ~/.claude/projects/ are pruned via
+// [filepath.SkipDir] so a busy tool home does not burn thousands of
+// inotify watches on runtime/cache directories whose events would be
+// filtered out anyway. Directory pruning is safe because the allowlist
+// matcher correctly handles the bare-directory case: a pattern like
+// "rules/**" matches the bare segment "rules" via "**" collapsing to
+// zero segments, so descending into allowlisted subtrees still works.
 func (s *FSNotifyWatchService) addRecursive(tree repositories.WatchedTree) error {
-	return filepath.WalkDir(tree.Dir, func(path string, d os.DirEntry, err error) error {
+	return s.addRecursiveFrom(tree, tree.Dir)
+}
+
+// addRecursiveFrom walks the subtree rooted at `root` (which may be
+// `tree.Dir` itself or a newly-created child) and adds watches for each
+// directory whose tool-relative path passes the allowlist check. The tool
+// root is always watched so top-level files like settings.json are seen.
+// User-level ignore patterns cause a SkipDir on matching subtrees.
+func (s *FSNotifyWatchService) addRecursiveFrom(tree repositories.WatchedTree, root string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !d.IsDir() {
 			return nil
 		}
-		if s.ignorePatterns != nil {
-			relPath, relErr := filepath.Rel(tree.Dir, path)
-			if relErr == nil && s.ignorePatterns.Matches(relPath) {
-				return filepath.SkipDir
-			}
+		relPath, relErr := filepath.Rel(tree.Dir, path)
+		if relErr != nil {
+			return nil //nolint:nilerr // return nil to continue WalkDir traversal
+		}
+		// Always watch the tool root (and any ancestor-rooted walk re-entry
+		// whose relative path is "." or ""). Root-level files like
+		// settings.json are discovered via this watch.
+		if relPath == "." || relPath == "" {
+			return s.watcher.Add(path)
+		}
+		if s.ignorePatterns != nil && s.ignorePatterns.Matches(relPath) {
+			return filepath.SkipDir
+		}
+		if !entities.IsSyncable(tree.ToolName, relPath, tree.ExtraAllowlist) {
+			return filepath.SkipDir
 		}
 		return s.watcher.Add(path)
 	})
