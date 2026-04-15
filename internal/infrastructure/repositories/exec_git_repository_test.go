@@ -45,7 +45,7 @@ func TestExecGitRepository_NewExecGitRepository_ShouldSucceedWhenGitOnPath(t *te
 	assert.NotNil(t, repo)
 }
 
-func TestExecGitRepository_Init_ShouldCreateGitDir(t *testing.T) {
+func TestExecGitRepository_Init_ShouldCreateGitDirAndSetHEADToMain(t *testing.T) {
 	// given
 	repo := skipIfNoGit(t)
 	dir := t.TempDir()
@@ -53,10 +53,15 @@ func TestExecGitRepository_Init_ShouldCreateGitDir(t *testing.T) {
 	// when
 	err := repo.Init(dir)
 
-	// then
+	// then — the .git directory exists AND HEAD points at refs/heads/main,
+	// regardless of the system's `init.defaultBranch` value.
 	require.NoError(t, err)
 	_, statErr := os.Stat(filepath.Join(dir, ".git", "HEAD"))
-	assert.NoError(t, statErr)
+	require.NoError(t, statErr)
+
+	headContent, readErr := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
+	require.NoError(t, readErr)
+	assert.Equal(t, "ref: refs/heads/main\n", string(headContent))
 }
 
 func TestExecGitRepository_Open_ShouldSucceedAfterInit(t *testing.T) {
@@ -179,7 +184,7 @@ func TestExecGitRepository_Clone_ShouldCloneFromLocalRepo(t *testing.T) {
 	// when
 	destDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := skipIfNoGit(t)
-	err := cloneRepo.Clone(srcDir, destDir, "master")
+	err := cloneRepo.Clone(srcDir, destDir, "main")
 
 	// then
 	require.NoError(t, err)

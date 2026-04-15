@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	logger "github.com/sirupsen/logrus"
@@ -45,34 +46,66 @@ plans/
 `
 
 // defaultAisyncEncrypt is the starter content written to .aisyncencrypt by
-// `aisync init`. Patterns are matched against the repo-relative path
-// personal/<tool>/<file> so they agree with .gitattributes and the secret
-// scanner. Anything matched here is age-encrypted before being committed.
+// `aisync init`. Patterns match repo-relative paths under personal/<tool>/
+// (same form used by .gitattributes). Anything matched here is age-encrypted
+// before commit. The default set is deliberately over-cautious: we'd rather
+// encrypt an innocuous file than silently commit a credential in plaintext.
+// Users can tighten or remove patterns by editing this file.
 const defaultAisyncEncrypt = `# aisync default encrypt patterns.
-# Patterns are matched against the repo-relative path under personal/<tool>/
-# (same form used by .gitattributes). Anything matched here is age-encrypted
-# before being committed. Add your own patterns for any file that may contain
-# secrets, credentials, or NDA-protected content.
+# Matched against repo-relative paths under personal/<tool>/. Anything matched
+# is age-encrypted before being committed. The list is deliberately broad —
+# it is safer to encrypt an innocuous file than to miss a credential.
+# Remove or tighten patterns here as needed; the compiled deny-list still
+# blocks outright-dangerous files regardless of this list.
 
-# Claude — user memories and local overrides.
-personal/claude/memories/**
-personal/claude/settings.local.json
-personal/claude/*.local.json
-personal/claude/keys/**
+# ---------- user memories (all supported AI tools) ----------
+personal/**/memories/**
 
-# Cursor — user memories and local overrides.
-personal/cursor/memories/**
-personal/cursor/settings.local.json
+# ---------- local / device-specific settings ----------
+personal/**/settings.local.json
+personal/**/*.local.json
+personal/**/local.settings.json
 
-# Codex — user memories.
-personal/codex/memories/**
-
-# Generic — anything the user explicitly marks private.
-personal/**/secrets/**
-personal/**/*.secret
-personal/**/*.private
+# ---------- environment files ----------
 personal/**/.env
 personal/**/.env.*
+personal/**/.envrc
+
+# ---------- private keys (any format) ----------
+personal/**/*.key
+personal/**/*.pem
+personal/**/*.p12
+personal/**/*.pfx
+personal/**/*.jks
+personal/**/*.keystore
+personal/**/*.asc
+personal/**/*.gpg
+personal/**/secring.*
+personal/**/id_rsa
+personal/**/id_dsa
+personal/**/id_ecdsa
+personal/**/id_ed25519
+personal/**/keys/**
+personal/**/private_keys/**
+
+# ---------- generic credentials / tokens ----------
+personal/**/credentials
+personal/**/credentials.*
+personal/**/*.credentials
+personal/**/*.token
+personal/**/*.secret
+personal/**/*.private
+personal/**/secrets/**
+personal/**/auth.json
+personal/**/.netrc
+personal/**/.pypirc
+personal/**/.npmrc
+personal/**/.dockerconfigjson
+
+# ---------- session / cookie state ----------
+personal/**/*.session
+personal/**/*.cookies
+personal/**/sessions/**
 `
 
 // InitCommand creates or clones an aifiles repository.
@@ -268,7 +301,7 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	if err := c.generateAgeKeyIfMissing(configPath, config); err != nil {
+	if err := c.ensureAgeKeyAndRecipient(configPath, config); err != nil {
 		return err
 	}
 
@@ -350,9 +383,21 @@ func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	return nil
 }
 
-// buildDefaultConfig creates the default aifiles config with detected tools.
+// buildDefaultConfig creates the default aifiles config with ONLY the tools
+// that are actually installed on this device. Tools that are not detected
+// are left out of the fresh config entirely (rather than included with
+// `enabled: false`). This keeps the file small and focused on what the user
+// actually uses. To enable an additional tool later, add it to config.yaml
+// by hand or re-run `aisync init` on a machine where the tool is installed.
 func (c *InitCommand) buildDefaultConfig() *entities.Config {
 	detected := c.toolDetector.DetectInstalled(entities.DefaultTools())
+	enabled := make(map[string]entities.Tool, len(detected))
+	for name, tool := range detected {
+		if tool.Enabled {
+			enabled[name] = tool
+		}
+	}
+
 	return &entities.Config{
 		Sync: entities.SyncConfig{
 			Remote:       "",
@@ -365,7 +410,7 @@ func (c *InitCommand) buildDefaultConfig() *entities.Config {
 			Identity:   "~/.config/aisync/key.txt",
 			Recipients: []string{},
 		},
-		Tools:   detected,
+		Tools:   enabled,
 		Sources: []entities.Source{},
 		Watch: entities.WatchConfig{
 			PollingInterval: "30s",
@@ -374,14 +419,35 @@ func (c *InitCommand) buildDefaultConfig() *entities.Config {
 	}
 }
 
-// generateAgeKeyIfMissing auto-generates an age key pair when the identity file
-// does not exist and updates the config with the public key as a recipient.
-func (c *InitCommand) generateAgeKeyIfMissing(configPath string, config *entities.Config) error {
+// ensureAgeKeyAndRecipient makes sure the fresh repo has a working age
+// identity AND that its public key is registered as a recipient in
+// config.yaml. There are two cases:
+//
+//  1. The identity file does not exist — generate a new keypair, write the
+//     new public key as the sole recipient, and persist.
+//  2. The identity file already exists (e.g. carried over from a previous
+//     aisync install, imported from 1Password, or shared across repos) —
+//     derive the public key via [repositories.EncryptionService.ExportPublicKey]
+//     and add it to the recipient list if it is not already there.
+//
+// Before this change, case 2 silently left Recipients empty, which caused
+// `aisync push` to skip encryption entirely and commit memories /
+// settings.local.json as plaintext.
+func (c *InitCommand) ensureAgeKeyAndRecipient(configPath string, config *entities.Config) error {
 	identityPath := ExpandHome(config.Encryption.Identity)
-	if _, statErr := os.Stat(identityPath); !os.IsNotExist(statErr) {
-		return nil
+
+	if _, statErr := os.Stat(identityPath); os.IsNotExist(statErr) {
+		return c.generateAndRegisterNewKey(configPath, identityPath, config)
+	} else if statErr != nil {
+		return fmt.Errorf("failed to stat identity file %s: %w", identityPath, statErr)
 	}
 
+	return c.registerExistingKey(configPath, identityPath, config)
+}
+
+// generateAndRegisterNewKey creates a fresh age keypair at identityPath and
+// writes its public key as the sole recipient in config.
+func (c *InitCommand) generateAndRegisterNewKey(configPath, identityPath string, config *entities.Config) error {
 	if err := os.MkdirAll(filepath.Dir(identityPath), 0700); err != nil {
 		return fmt.Errorf("failed to create identity directory: %w", err)
 	}
@@ -396,6 +462,28 @@ func (c *InitCommand) generateAgeKeyIfMissing(configPath string, config *entitie
 		return fmt.Errorf("failed to update config with recipient: %w", err)
 	}
 	logger.Infof("generated age key pair at %s", identityPath)
+	return nil
+}
+
+// registerExistingKey derives the public key from an existing identity file
+// and appends it to the recipient list (if not already present), saving the
+// updated config. A no-op if the recipient is already registered.
+func (c *InitCommand) registerExistingKey(configPath, identityPath string, config *entities.Config) error {
+	publicKey, err := c.encryptionService.ExportPublicKey(identityPath)
+	if err != nil {
+		return fmt.Errorf("failed to derive public key from existing identity %s: %w", identityPath, err)
+	}
+
+	if slices.Contains(config.Encryption.Recipients, publicKey) {
+		logger.Infof("reused existing age identity at %s (recipient already registered)", identityPath)
+		return nil
+	}
+
+	config.Encryption.Recipients = append(config.Encryption.Recipients, publicKey)
+	if saveErr := c.configRepo.Save(configPath, config); saveErr != nil {
+		return fmt.Errorf("failed to update config with derived recipient: %w", saveErr)
+	}
+	logger.Infof("reused existing age identity at %s and registered its public key as a recipient", identityPath)
 	return nil
 }
 
