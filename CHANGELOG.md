@@ -39,6 +39,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 - simplified `aisync init` directory scaffolding to create only `personal/`, `shared/`, and `.aisync/` at the repo root; tool subdirectories (e.g. `personal/claude/rules/`) now emerge organically from `push`/`pull` as tools are detected, so fresh repos are no longer polluted with empty placeholder folders for AI tools the user does not actually use
 - changed `aisync init` create mode to include **only detected (installed) tools** in the fresh `config.yaml`; tools that are not present on the device are omitted entirely rather than shipped as `enabled: false` placeholders. To enable additional tools later, add them to `config.yaml` by hand or re-run `aisync init` on a machine where they are installed
 - pinned `aisync init` (create mode) to initialize the local Git repository on branch `main` regardless of the system's `init.defaultBranch` setting, so the fresh repo, `sync.branch` in `config.yaml`, and the assumed remote default always agree from the first commit
+- changed the Go version to `1.26.2` and updated all module dependencies
 
 ### Security
 
