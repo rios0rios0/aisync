@@ -87,23 +87,25 @@ func TestAutoDeriver_DeriveTerms(t *testing.T) {
 	t.Run("should apply user-provided excludes via canonical form", func(t *testing.T) {
 		t.Parallel()
 
-		// given — `back-end` and `BackEnd` canonicalize to the same form,
-		// so the exclude must filter the derived `BackEnd` term.
+		// given — `acme-one` and `AcmeOne` canonicalize to the same
+		// form, so the exclude must filter the derived `AcmeOne` term.
+		// Fixture names are deliberately distinctive so they don't
+		// collide with the compile-time `genericNames` stop list.
 		inspector := &doubles.MockGitInspector{
 			DirectoryLayoutVal: []repositories.DerivedTerm{
-				{Value: "BackEnd", Origin: "fs:~/Development/dev.azure.com/Org"},
-				{Value: "FrontEnd", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "AcmeOne", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "AcmeTwo", Origin: "fs:~/Development/dev.azure.com/Org"},
 			},
 		}
 		deriver := newAutoDeriverWithTempCache(t, inspector)
 
 		// when
-		terms, err := deriver.DeriveTerms(nil, []string{"back-end"})
+		terms, err := deriver.DeriveTerms(nil, []string{"acme-one"})
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, terms, 1)
-		assert.Equal(t, "FrontEnd", terms[0].Original)
+		assert.Equal(t, "AcmeTwo", terms[0].Original)
 	})
 
 	t.Run("should tolerate per-source errors and keep going", func(t *testing.T) {
@@ -191,10 +193,12 @@ func TestAutoDeriver_DeriveTerms(t *testing.T) {
 		// given — first call populates the cache with two terms, then
 		// the second call (cache-hit) passes a fresh exclude list. The
 		// cache-hit branch must apply the excludes too.
+		// Fixture names are distinctive so they don't collide with the
+		// compile-time `genericNames` stop list.
 		inspector := &doubles.MockGitInspector{
 			DirectoryLayoutVal: []repositories.DerivedTerm{
-				{Value: "BackEnd", Origin: "fs:~/Development/dev.azure.com/Org"},
-				{Value: "FrontEnd", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "AcmeOne", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "AcmeTwo", Origin: "fs:~/Development/dev.azure.com/Org"},
 			},
 		}
 		deriver := newAutoDeriverWithTempCache(t, inspector)
@@ -205,12 +209,12 @@ func TestAutoDeriver_DeriveTerms(t *testing.T) {
 		require.Len(t, warm, 2)
 
 		// when — second call hits the cache, but with a new exclude.
-		filtered, err := deriver.DeriveTerms(nil, []string{"back-end"})
+		filtered, err := deriver.DeriveTerms(nil, []string{"acme-one"})
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, filtered, 1)
-		assert.Equal(t, "FrontEnd", filtered[0].Original)
+		assert.Equal(t, "AcmeTwo", filtered[0].Original)
 		assert.Equal(t, 1, inspector.DirectoryLayoutCalls,
 			"cache hit must skip the inspector")
 	})
@@ -273,5 +277,41 @@ func TestAutoDeriver_DeriveTerms(t *testing.T) {
 		// Original spelling — just confirm the canonical form is
 		// preserved and the entry survived.
 		assert.Equal(t, "zestsecurity", entities.Canonicalize(terms[0].Original))
+	})
+
+	t.Run("should drop terms matching the compile-time generic-name stop list", func(t *testing.T) {
+		t.Parallel()
+
+		// given — the inspector emits a deliberately noisy mix: four
+		// generic project-layout names (`backend`, `frontend`, `src`,
+		// `docs`), one ADO URL-path convention (`v3`), one IDE marker
+		// (`idea`), three writing variants of `backend` that all
+		// canonicalize to the same form (`Back-End`, `BACKEND`,
+		// `back.end`), and ONE real org name (`ZestSecurity`). Only the
+		// real org name must survive the generic-name stop list.
+		inspector := &doubles.MockGitInspector{
+			DirectoryLayoutVal: []repositories.DerivedTerm{
+				{Value: "backend", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "Back-End", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "BACKEND", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "back.end", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "frontend", Origin: "fs:~/Development/dev.azure.com/Org"},
+				{Value: "src", Origin: "fs:~/Development/github.com/Org"},
+				{Value: "docs", Origin: "fs:~/Development/github.com/Org"},
+				{Value: "idea", Origin: "fs:~/Development/github.com/Org"},
+				{Value: "v3", Origin: "git-remote:dev.azure.com"},
+				{Value: "ZestSecurity", Origin: "git-remote:dev.azure.com"},
+			},
+		}
+		deriver := newAutoDeriverWithTempCache(t, inspector)
+
+		// when
+		terms, err := deriver.DeriveTerms(nil, nil)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, terms, 1,
+			"generic-name stop list must filter everything except the real org name")
+		assert.Equal(t, "ZestSecurity", terms[0].Original)
 	})
 }
