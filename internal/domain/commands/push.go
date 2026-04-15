@@ -320,10 +320,15 @@ func (c *PushCommand) copyPersonalFile(
 		// notice the misconfiguration (typically a cloned repo with no
 		// imported age identity, or a stale `recipients: []` list). The
 		// secret scanner still runs on this file — see scanForSecrets.
+		// Route the path through encryptMatchPath so the log line shows
+		// the repo-relative form (`personal/<tool>/<rest>`) that matches
+		// what .gitattributes and .aisyncencrypt operate on, rather than
+		// a bare tool-relative path that is ambiguous when multiple
+		// tools are enabled.
 		logger.Warnf(
 			"file %s matches an encrypt pattern but no recipients are configured; "+
 				"writing as plaintext. Run `aisync key generate` or add a recipient to config.yaml.",
-			relPath,
+			encryptMatchPath(toolName, relPath),
 		)
 	}
 
