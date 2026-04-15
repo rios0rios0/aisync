@@ -27,6 +27,15 @@ func (m *MockConfigRepository) Load(path string) (*entities.Config, error) {
 	if m.LoadErr != nil {
 		return nil, m.LoadErr
 	}
+	if m.Config == nil {
+		// Mirror the production repo's "missing file" semantics: return
+		// a fresh zero-value Config rather than (nil, nil), so a test
+		// that forgets to set Config gets a clean default instead of a
+		// nil-pointer-deref panic in the caller. The production
+		// YAMLConfigRepository never returns (nil, nil) — it always
+		// either succeeds with a non-nil Config or returns an error.
+		return &entities.Config{}, nil
+	}
 	return m.Config, nil
 }
 

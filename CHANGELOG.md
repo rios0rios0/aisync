@@ -41,6 +41,12 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 - pinned `aisync init` (create mode) to initialize the local Git repository on branch `main` regardless of the system's `init.defaultBranch` setting, so the fresh repo, `sync.branch` in `config.yaml`, and the assumed remote default always agree from the first commit
 - changed the Go version to `1.26.2` and updated all module dependencies
 
+### Fixed
+
+- fixed a slice-aliasing foot-gun in the NDA auto-deriver's `applyExcludes`: the exclude filter previously reused the input slice's backing array via `terms[:0:len(terms)]`, which was safe for current callers but would silently mutate the input for any future caller that kept its own reference to `terms`. Now allocates a fresh slice bounded at `len(terms)` capacity
+- fixed `MockConfigRepository.Load` to return a zero-value `*entities.Config` when the mock's `Config` field is nil, mirroring the production YAML repository's "missing file" semantics. Prevents a latent nil-pointer-deref foot-gun where a future test that forgot to set `Config` would crash the caller with a nil deref instead of getting a clean default config
+- tightened NDA auto-derivation test coverage with a cross-source canonical-form dedupe case, a strict boundary-only adversarial case for the `ado-org-url` heuristic (`xhttps://dev.azure.com/CorporateOrg` — the inner pattern is otherwise valid so only the `(?:^|[^A-Za-z0-9.])` anchor can reject it), and end-to-end tests for `ExecGitInspector.EmailDomain` covering the public-free-mail allowlist (gmail/outlook), case-folding, malformed emails, and unset `user.email`
+
 ### Security
 
 - closed the content-leak class that path allowlists, `.aisyncencrypt`, and credential regexes all miss by design: plaintext company names, project codenames, customer environment paths, and ADO/GitHub org URLs that legitimately live inside an allowlisted, unencrypted file (a `claude/rules/*.md` rule, an `agents/*.md` agent definition, etc.). The new NDA scanner runs on every push and blocks if any unencrypted file contains a forbidden term from the explicit list, the auto-derived machine-state list, or the compile-time heuristic shape checks. Findings are reported with the source tag (`user`, `auto-derived:<origin>`, `heuristic:<name>`) so the user can see exactly which knob fixes each hit, and the `aisync nda ignore <term>` workflow exists to silence specific false positives without disabling the whole pipeline

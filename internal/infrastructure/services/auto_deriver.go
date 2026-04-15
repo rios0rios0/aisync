@@ -188,7 +188,16 @@ func (d *AutoDeriver) applyExcludes(terms []entities.ForbiddenTerm, excludes []s
 		return terms
 	}
 	excludeSet := toSet(excludes)
-	out := terms[:0:len(terms)]
+	// Allocate a fresh backing array rather than aliasing `terms` via
+	// `terms[:0:len(terms)]`. Today's callers all pass freshly-built
+	// slices (the cache-hit branch goes through `parseCachedTerms`,
+	// which returns a new slice each call), so the previous in-place
+	// filter happened to be safe. But aliasing is a foot-gun for any
+	// future caller that would want to keep its own reference to the
+	// original `terms` and call `applyExcludes` on it: the in-place
+	// filter would silently mutate the original. The fresh allocation
+	// is bounded at `len(terms)` capacity so the cost is negligible.
+	out := make([]entities.ForbiddenTerm, 0, len(terms))
 	for _, term := range terms {
 		if _, skip := excludeSet[entities.Canonicalize(term.Original)]; skip {
 			continue
