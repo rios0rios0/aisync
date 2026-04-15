@@ -9,6 +9,7 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	repositories "github.com/rios0rios0/aisync/internal/infrastructure/repositories"
 )
@@ -221,7 +222,7 @@ func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
 	cloneRepo := repositories.NewGoGitRepository()
 
 	// when
-	err = cloneRepo.Clone(bareDir, cloneDir, "master")
+	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 
 	// then
 	assert.NoError(t, err)
@@ -244,7 +245,7 @@ func TestGoGitRepository_Pull_NotOpened(t *testing.T) {
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
-func TestGoGitRepository_Init_SetsHEADCorrectly(t *testing.T) {
+func TestGoGitRepository_Init_SetsHEADToMain(t *testing.T) {
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -252,12 +253,15 @@ func TestGoGitRepository_Init_SetsHEADCorrectly(t *testing.T) {
 	// when
 	err := repo.Init(dir)
 
-	// then
-	assert.NoError(t, err)
+	// then — HEAD must point to refs/heads/main regardless of any
+	// system-level init.defaultBranch setting. This is the invariant that
+	// lets aisync's config (`sync.branch: main`) and the assumed remote
+	// default agree with the fresh local repo from the first commit.
+	require.NoError(t, err)
 
 	headContent, readErr := os.ReadFile(filepath.Join(dir, ".git", "HEAD"))
-	assert.NoError(t, readErr)
-	assert.Contains(t, string(headContent), "ref: refs/heads/")
+	require.NoError(t, readErr)
+	assert.Equal(t, "ref: refs/heads/main\n", string(headContent))
 }
 
 func TestGoGitRepository_AddRemote_NotOpened(t *testing.T) {
@@ -297,7 +301,7 @@ func TestGoGitRepository_Pull_AlreadyUpToDate(t *testing.T) {
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
-	err = cloneRepo.Clone(bareDir, cloneDir, "master")
+	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 	assert.NoError(t, err)
 
 	// when -- pull when already up to date
@@ -357,7 +361,7 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
-	err = cloneRepo.Clone(bareDir, cloneDir, "master")
+	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 	assert.NoError(t, err)
 
 	// Add a new commit to the bare/origin repo
@@ -393,7 +397,7 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	// Clone it
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
-	err = cloneRepo.Clone(bareDir, cloneDir, "master")
+	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 	assert.NoError(t, err)
 
 	// Add a new file and commit
@@ -469,7 +473,7 @@ func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
 	cloneRepo := repositories.NewGoGitRepository()
 
 	// when
-	err = cloneRepo.Clone(bareDir, cloneDir, "master")
+	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 
 	// then
 	assert.NoError(t, err)

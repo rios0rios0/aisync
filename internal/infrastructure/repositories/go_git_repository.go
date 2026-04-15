@@ -64,11 +64,19 @@ func (r *GoGitRepository) Clone(url, dir, branch string) error {
 	return nil
 }
 
-// Init initializes a new Git repository at the given directory.
+// Init initializes a new Git repository at the given directory and points
+// HEAD at refs/heads/main. We pin the branch explicitly (instead of relying
+// on go-git's internal default) so aisync's config, the assumed remote
+// default, and the fresh local repo all agree from the first commit.
 func (r *GoGitRepository) Init(dir string) error {
 	repo, err := git.PlainInit(dir, false)
 	if err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
+	}
+
+	headRef := plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.ReferenceName("refs/heads/main"))
+	if err = repo.Storer.SetReference(headRef); err != nil {
+		return fmt.Errorf("failed to set HEAD to refs/heads/main: %w", err)
 	}
 
 	worktree, err := repo.Worktree()

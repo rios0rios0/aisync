@@ -38,11 +38,19 @@ func (r *ExecGitRepository) Clone(url, dir, branch string) error {
 	return nil
 }
 
-// Init initializes a new git repository at the given directory.
+// Init initializes a new git repository at the given directory and ensures
+// HEAD points to refs/heads/main. We pin the branch explicitly (instead of
+// inheriting init.defaultBranch from the system) so that aisync's config,
+// its assumed remote default, and the fresh local repo all agree from the
+// first commit — avoiding a subtle bug where a system configured with
+// init.defaultBranch=master would produce a repo whose local branch does
+// not match sync.branch in config.yaml.
 func (r *ExecGitRepository) Init(dir string) error {
-	_, err := r.run("", "init", dir)
-	if err != nil {
+	if _, err := r.run("", "init", dir); err != nil {
 		return fmt.Errorf("git init failed: %w", err)
+	}
+	if _, err := r.run(dir, "symbolic-ref", "HEAD", "refs/heads/main"); err != nil {
+		return fmt.Errorf("git symbolic-ref HEAD refs/heads/main failed: %w", err)
 	}
 	r.dir = dir
 	return nil
