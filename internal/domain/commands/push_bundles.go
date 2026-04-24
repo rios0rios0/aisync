@@ -65,8 +65,11 @@ func (c *PushCommand) produceToolBundle(
 	}
 
 	sourceRoot := filepath.Join(toolPath, spec.Source)
-	if _, statErr := os.Stat(sourceRoot); os.IsNotExist(statErr) {
-		return 0, nil
+	if _, statErr := os.Stat(sourceRoot); statErr != nil {
+		if os.IsNotExist(statErr) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("stat bundle source %s: %w", sourceRoot, statErr)
 	}
 
 	targetRoot := filepath.Join(repoPath, "personal", toolName, spec.Target)

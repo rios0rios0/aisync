@@ -86,22 +86,24 @@ func (c *PullCommand) applyToolBundles(
 			logger.Warnf("extract bundle %s: %v", bundlePath, extractErr)
 			continue
 		}
-		if !isSafePathSegment(manifest.OriginalName) {
-			logger.Warnf(
-				"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
-				bundlePath, manifest.OriginalName,
-			)
-			continue
-		}
-
 		// In subdirs mode each bundle restores into a per-project
-		// subdir under the source root; in whole mode the bundle
-		// covers the entire source directly so we drop straight
-		// into the source root itself.
+		// subdir under the source root, and manifest.OriginalName is
+		// joined into the destination path — so it MUST be a single
+		// safe path segment to prevent traversal. In whole mode the
+		// localDir is built from spec.Source alone and OriginalName
+		// is purely informational (e.g. spec.Source itself, which can
+		// legitimately contain "/"), so the check is skipped.
 		var localDir string
 		if spec.EffectiveMode() == entities.BundleModeWhole {
 			localDir = filepath.Join(toolPath, spec.Source)
 		} else {
+			if !isSafePathSegment(manifest.OriginalName) {
+				logger.Warnf(
+					"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
+					bundlePath, manifest.OriginalName,
+				)
+				continue
+			}
 			localDir = filepath.Join(toolPath, spec.Source, manifest.OriginalName)
 		}
 		report, mergeErr := c.bundleService.MergeIntoLocal(files, localDir, spec.EffectiveMergeStrategy())
