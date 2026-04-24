@@ -114,7 +114,11 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 			filepath.Join("personal", toolName, spec.Target, entry.Name()),
 			filepath.Join(toolPath, spec.Source),
 		)
-		if c.promptService != nil && !c.promptService.PromptConfirmation(prompt) {
+		if c.promptService == nil {
+			logger.Warnf("skip deleting %s: prompt service is not configured", bundlePath)
+			continue
+		}
+		if !c.promptService.PromptConfirmation(prompt) {
 			continue
 		}
 		if rmErr := os.Remove(bundlePath); rmErr != nil {

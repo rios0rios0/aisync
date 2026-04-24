@@ -74,15 +74,26 @@ func (r *JSONBundleStateRepository) Save(state *entities.BundleState) error {
 		return fmt.Errorf("create temp bundle state: %w", createErr)
 	}
 	tmpName := tmp.Name()
-	if _, writeErr := tmp.Write(data); writeErr != nil {
+	n, writeErr := tmp.Write(data)
+	if writeErr != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("write temp bundle state: %w", writeErr)
+	}
+	if n != len(data) {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("write temp bundle state: short write (%d/%d bytes)", n, len(data))
 	}
 	if chmodErr := tmp.Chmod(bundleStateFileMode); chmodErr != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("chmod bundle state: %w", chmodErr)
+	}
+	if syncErr := tmp.Sync(); syncErr != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("sync bundle state: %w", syncErr)
 	}
 	if closeErr := tmp.Close(); closeErr != nil {
 		_ = os.Remove(tmpName)
