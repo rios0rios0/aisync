@@ -66,6 +66,10 @@ personal/**/settings.local.json
 personal/**/*.local.json
 personal/**/local.settings.json
 
+# ---------- MCP / agent-server configs (often carry API tokens) ----------
+personal/**/mcp.json
+personal/**/mcp.local.json
+
 # ---------- environment files ----------
 personal/**/.env
 personal/**/.env.*
