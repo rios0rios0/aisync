@@ -16,6 +16,14 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Added
+
+- added per-tool project-bundle sync. Each `tools.<name>.bundles[]` entry in `config.yaml` declares a tool-relative source directory whose immediate subdirectories are each packaged into one age-encrypted gzip-compressed tarball under `personal/<tool>/<target>/<sha256(name)[:16]>.age`. The bundle filename is intentionally a hash so directory names that may contain project paths or company codenames never appear in the git tree. The internal `_aisync-manifest.json` carries the original directory name so pull-side code can restore it locally.
+- added bundle-aware push and pull pipelines. `aisync push` walks every configured `BundleSpec`, produces one bundle per source subdirectory, and writes the ciphertext under `personal/<tool>/<target>/`. The dry-run summary counts bundles toward both the file total and the encrypted total. `aisync pull` decrypts every bundle that arrived from the remote and merges its files into the matching local source directory using a configurable merge strategy.
+- added the `mtime` and `replace` bundle merge strategies. `mtime` (default) keeps whichever copy of a file has the newer modification time, preserves files that exist only locally, and adds files that exist only in the bundle — the right semantics for memory-style append-mostly content where two devices may both append independently. `replace` overwrites local content unconditionally for users who want bundle-first semantics.
+- added cross-device deletion detection backed by a per-device cache at `~/.cache/aisync/bundle-state.json` (mode `0600`, never committed). Pulls compute `removed = (cached hashes) - (remote hashes)` and prompt the user before removing each local source directory whose bundle disappeared upstream. Auto-removal is intentionally avoided so a transient `rm -rf` on one machine cannot turn into a remote nuke.
+- added the `aisync bundles prune` subcommand: walks every configured bundle target, asks the user about each `.age` file whose source directory no longer exists locally, and deletes the confirmed orphans from the sync repo (the deletion is committed by the next push).
+
 ### Fixed
 
 - fixed `ParseEncryptPatterns` to extract the first whitespace-separated token from each line, so `.gitattributes`-style rows like `personal/*/settings.local.json    encrypt` resolve to the path glob instead of being stored as a literal that never matches. Before this fix, a `.aisyncencrypt` shipped with the action keyword silently produced zero encrypted files on push.

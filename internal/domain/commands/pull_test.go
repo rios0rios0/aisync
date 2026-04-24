@@ -37,7 +37,9 @@ func newPullCmd(
 		conflictDetector, hooksMerger, settingsMerger,
 		sectionMerger, applyService,
 		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true, ConflictResolution: "remote"},
-	)
+		&doubles.MockBundleService{},
+		&doubles.MockBundleStateRepository{},
+)
 }
 
 func defaultPullDeps() (
@@ -118,7 +120,9 @@ func TestPullCommand_Execute(t *testing.T) {
 			configRepo, stateRepo, nil, manifestRepo, gitRepo,
 			encSvc, nil, nil, nil, nil, applySvc,
 			&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
-		)
+			&doubles.MockBundleService{},
+			&doubles.MockBundleStateRepository{},
+)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.PullOptions{Force: true})
@@ -130,7 +134,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewPullCommand(configRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		cmd := commands.NewPullCommand(configRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.PullOptions{})

@@ -54,6 +54,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			secretScanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -92,6 +93,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -109,7 +111,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewPushCommand(configRepo, nil, nil, nil, nil, nil, nil)
+		cmd := commands.NewPushCommand(configRepo, nil, nil, nil, nil, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", "", commands.PushOptions{})
@@ -142,6 +144,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -175,6 +178,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -226,6 +230,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			secretScanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -269,6 +274,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			secretScanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -306,6 +312,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -336,6 +343,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -369,6 +377,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -433,6 +442,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -517,6 +527,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -615,6 +626,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			scanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -659,6 +671,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -695,6 +708,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -731,6 +745,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -794,6 +809,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			manifestRepo,
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -841,6 +857,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -896,6 +913,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -944,6 +962,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			secretScanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -995,6 +1014,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -1036,6 +1056,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			secretScanner,
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -1074,6 +1095,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -1111,6 +1133,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -1161,6 +1184,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			&doubles.MockManifestRepository{},
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
@@ -1213,6 +1237,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			manifestRepo,
 			&doubles.MockSecretScanner{},
 			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
 		)
 
 		// when
