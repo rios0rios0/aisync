@@ -630,3 +630,85 @@ func (m *MockGitInspector) SSHHostAliases() ([]repositories.DerivedTerm, error) 
 	m.SSHHostAliasesCalls++
 	return m.SSHHostAliasesVal, m.SSHHostAliasesErr
 }
+
+// MockBundleService is a manual stub for repositories.BundleService. The
+// stub returns canned ciphertext / manifest values configured by tests.
+// HashName uses a simple deterministic transform so tests asserting the
+// produced filename can predict it.
+type MockBundleService struct {
+	BundleCipher      []byte
+	BundleManifest    *entities.BundleManifest
+	BundleErr         error
+	ExtractManifest   *entities.BundleManifest
+	ExtractFiles      []repositories.BundleFile
+	ExtractErr        error
+	MergeReport       *repositories.BundleMergeReport
+	MergeErr          error
+	BundleCalls       int
+	ExtractCalls      int
+	MergeCalls        int
+	HashCalls         int
+	LastBundleSrc     string
+	LastBundleName    string
+	LastExtractCipher []byte
+}
+
+func (m *MockBundleService) HashName(name string) string {
+	m.HashCalls++
+	return "h_" + name
+}
+
+func (m *MockBundleService) Bundle(
+	src, name string,
+	_ []string,
+) ([]byte, *entities.BundleManifest, error) {
+	m.BundleCalls++
+	m.LastBundleSrc = src
+	m.LastBundleName = name
+	return m.BundleCipher, m.BundleManifest, m.BundleErr
+}
+
+func (m *MockBundleService) Extract(
+	cipher []byte,
+	_ string,
+) (*entities.BundleManifest, []repositories.BundleFile, error) {
+	m.ExtractCalls++
+	m.LastExtractCipher = cipher
+	return m.ExtractManifest, m.ExtractFiles, m.ExtractErr
+}
+
+func (m *MockBundleService) MergeIntoLocal(
+	_ []repositories.BundleFile,
+	_ string,
+	_ entities.BundleMergeStrategy,
+) (*repositories.BundleMergeReport, error) {
+	m.MergeCalls++
+	return m.MergeReport, m.MergeErr
+}
+
+// MockBundleStateRepository is a manual stub for repositories.BundleStateRepository.
+type MockBundleStateRepository struct {
+	State     *entities.BundleState
+	LoadErr   error
+	SaveErr   error
+	LoadCalls int
+	SaveCalls int
+	Saved     *entities.BundleState
+}
+
+func (m *MockBundleStateRepository) Load() (*entities.BundleState, error) {
+	m.LoadCalls++
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	if m.State == nil {
+		return entities.NewBundleState(), nil
+	}
+	return m.State, nil
+}
+
+func (m *MockBundleStateRepository) Save(state *entities.BundleState) error {
+	m.SaveCalls++
+	m.Saved = state
+	return m.SaveErr
+}

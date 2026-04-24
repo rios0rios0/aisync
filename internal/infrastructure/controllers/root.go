@@ -69,6 +69,8 @@ var NewExecGitRepository = infraRepos.NewExecGitRepository //nolint:gochecknoglo
 // NewRootCommand builds the root cobra command with all subcommands. It returns
 // the root command and a function that swaps the git implementation to the
 // system git binary (called from PersistentPreRun when --use-system-git is set).
+//
+//nolint:funlen // composition root: wiring all repositories, services, and commands here is intentional
 func NewRootCommand(version string) (*cobra.Command, func(repositories.GitRepository)) {
 	// Git repo wrapped in a proxy so --use-system-git can swap the implementation
 	// after flag parsing but before any command runs.
@@ -85,6 +87,8 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	diffSvc := services.NewFSDiffService()
 	secretScanner := services.NewRegexSecretScanner()
 	conflictDetector := services.NewConflictDetector()
+	bundleSvc := services.NewTarAgeBundleService(encryptionSvc)
+	bundleStateRepo := infraRepos.NewJSONBundleStateRepository(defaultCacheDir())
 
 	forbiddenRepo, ndaChecker := buildNDAStack(encryptionSvc, configRepo)
 
@@ -112,10 +116,11 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 		gitProxy, encryptionSvc, conflictDetector,
 		hooksMerger, settingsMerger, sectionMerger,
 		atomicApplySvc, promptSvc,
+		bundleSvc, bundleStateRepo,
 	)
 	pushCmd := commands.NewPushCommand(
 		configRepo, stateRepo, gitProxy, encryptionSvc,
-		manifestRepo, secretScanner, ndaChecker,
+		manifestRepo, secretScanner, ndaChecker, bundleSvc,
 	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
@@ -126,6 +131,7 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
 	migrateCmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
 	ndaCmd := commands.NewNDACommand(configRepo, forbiddenRepo, services.HeuristicCount())
+	bundlesPruneCmd := commands.NewPruneBundlesCommand(configRepo, bundleSvc, promptSvc)
 	watchCmd := commands.NewWatchCommand(configRepo, watchSvc, pushCmd)
 
 	//nolint:exhaustruct // cobra command does not require all fields
@@ -166,6 +172,7 @@ Quick start:
 		newDoctorSubcmd(doctorCmd),
 		newMigrateSubcmd(migrateCmd),
 		newNDASubcmd(ndaCmd),
+		newBundlesSubcmd(bundlesPruneCmd),
 		newSelfUpdateSubcmd(version),
 		newVersionSubcmd(version),
 	)
@@ -206,6 +213,20 @@ func defaultConfigDir() string {
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "aisync")
+}
+
+// defaultCacheDir is the per-device storage location for caches that
+// must NEVER be committed to the sync repo (auto-derived NDA terms,
+// bundle-state.json). Falls back to UserHomeDir-based ~/.cache/aisync
+// on every platform; users on Windows still get a home-relative path
+// rather than %APPDATA% because the cache is conceptually per-user
+// rather than per-roaming-profile.
+func defaultCacheDir() string {
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		return filepath.Join(cacheDir, "aisync")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".cache", "aisync")
 }
 
 func resolveConfigPath(cmd *cobra.Command) string {
@@ -681,6 +702,36 @@ func newMigrateSubcmd(migrateCmd *commands.MigrateCommand) *cobra.Command {
 	}
 	cmd.Flags().Bool("dry-run", false, "preview migration without modifying files")
 	return cmd
+}
+
+// newBundlesSubcmd builds the `aisync bundles` parent command and its
+// `prune` child. Future subcommands (e.g. `bundles list`) hang off the
+// same parent without re-wiring the controllers root.
+func newBundlesSubcmd(pruneCmd *commands.PruneBundlesCommand) *cobra.Command {
+	//nolint:exhaustruct // cobra command does not require all fields
+	parent := &cobra.Command{
+		Use:   "bundles",
+		Short: "Manage opaque project bundles synced for tools that have BundleSpecs",
+	}
+
+	//nolint:exhaustruct // cobra command does not require all fields
+	prune := &cobra.Command{
+		Use:   "prune",
+		Short: "Remove bundles from the sync repo whose source dir no longer exists",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			result, err := pruneCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(),
+				"Scanned %d bundle(s); removed %d.\n", result.Scanned, result.Removed)
+			return nil
+		},
+	}
+
+	parent.AddCommand(prune)
+	return parent
 }
 
 func newSelfUpdateSubcmd(version string) *cobra.Command {
