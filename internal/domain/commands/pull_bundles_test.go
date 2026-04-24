@@ -60,13 +60,9 @@ func TestPullCommand_PromptToRemoveBundleDeletedUpstream(t *testing.T) {
 
 		cmd := newPullCommandWithBundles(bundleSvc, stateRepo, prompt)
 
-		// We have to call applyBundles via the public Execute path? It's
-		// unexported. Use a config-driven Execute is heavy; instead reach
-		// the unexported method by exposing the private hook through a
-		// thin wrapper file ... but pull_bundles.go's applyBundles is on
-		// PullCommand. Calling it directly requires same-package access.
-		// We expose deletion behaviour by re-running applyBundles via a
-		// trivial wiring: configure a config + repo that triggers it.
+		// Apply the bundle step through the exported test helper. This
+		// config wires the claude projects bundle to the temporary repo so
+		// the test exercises the deleted-upstream removal path.
 		config := &entities.Config{
 			Encryption: entities.EncryptionConfig{Identity: "/dev/null"},
 			Tools: map[string]entities.Tool{

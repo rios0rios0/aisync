@@ -86,6 +86,13 @@ func (c *PullCommand) applyToolBundles(
 			logger.Warnf("extract bundle %s: %v", bundlePath, extractErr)
 			continue
 		}
+		if !isSafePathSegment(manifest.OriginalName) {
+			logger.Warnf(
+				"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
+				bundlePath, manifest.OriginalName,
+			)
+			continue
+		}
 
 		localDir := filepath.Join(toolPath, spec.Source, manifest.OriginalName)
 		report, mergeErr := c.bundleService.MergeIntoLocal(files, localDir, spec.EffectiveMergeStrategy())
@@ -94,7 +101,7 @@ func (c *PullCommand) applyToolBundles(
 			continue
 		}
 
-		current.Bundles[hash] = entities.BundleStateEntry{
+		current.Bundles[bundleStateKey(toolName, spec.Target, hash)] = entities.BundleStateEntry{
 			OriginalName: manifest.OriginalName,
 			Tool:         toolName,
 			Target:       spec.Target,
@@ -121,8 +128,8 @@ func (c *PullCommand) promptForRemovedBundles(
 	cached, current *entities.BundleState,
 	config *entities.Config,
 ) {
-	for hash, entry := range cached.Bundles {
-		if _, stillPresent := current.Bundles[hash]; stillPresent {
+	for key, entry := range cached.Bundles {
+		if _, stillPresent := current.Bundles[key]; stillPresent {
 			continue
 		}
 		c.handleRemovedBundle(entry, config)
@@ -173,4 +180,32 @@ func bundleSourceRel(tool entities.Tool, target string) string {
 		}
 	}
 	return ""
+}
+
+// bundleStateKey builds the composite key used in the on-device
+// BundleState cache. The HashName() value alone is derived only from
+// the source directory name, so two different (tool, target) pairs
+// with the same project name would deterministically collide and the
+// deletion-detection diff would act on the wrong entry.
+func bundleStateKey(toolName, target, hash string) string {
+	return toolName + "/" + target + "/" + hash
+}
+
+// isSafePathSegment guards manifest.OriginalName before it is joined
+// into a local destination path. A malicious or corrupt bundle that
+// shipped "..", "foo/bar", or an absolute path would otherwise be
+// allowed to write outside <toolPath>/<spec.Source> and poison the
+// deletion cache. The check matches the contract enforced when the
+// bundle is *produced*: a single non-empty filesystem name component.
+func isSafePathSegment(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return false
+	}
+	if strings.ContainsRune(name, 0) {
+		return false
+	}
+	return true
 }

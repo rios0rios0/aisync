@@ -220,13 +220,17 @@ func defaultConfigDir() string {
 // bundle-state.json). Falls back to UserHomeDir-based ~/.cache/aisync
 // on every platform; users on Windows still get a home-relative path
 // rather than %APPDATA% because the cache is conceptually per-user
-// rather than per-roaming-profile.
+// rather than per-roaming-profile. If neither user cache nor home can
+// be resolved, it intentionally falls back to the system temp directory
+// to avoid returning a relative path.
 func defaultCacheDir() string {
 	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
 		return filepath.Join(cacheDir, "aisync")
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "aisync")
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, ".cache", "aisync")
+	}
+	return filepath.Join(os.TempDir(), "aisync")
 }
 
 func resolveConfigPath(cmd *cobra.Command) string {

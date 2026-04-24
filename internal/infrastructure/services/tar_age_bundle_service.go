@@ -298,35 +298,62 @@ func (s *TarAgeBundleService) readTarball(
 			continue
 		}
 		if hdr.Name == entities.BundleManifestFileName {
-			if hdr.Size > maxBundleManifestSize {
-				return nil, nil, fmt.Errorf("extract: manifest too large (%d bytes)", hdr.Size)
+			m, parseErr := readManifestEntry(tr, hdr)
+			if parseErr != nil {
+				return nil, nil, parseErr
 			}
-			data, readErr := io.ReadAll(io.LimitReader(tr, maxBundleManifestSize))
-			if readErr != nil {
-				return nil, nil, fmt.Errorf("extract: read manifest: %w", readErr)
-			}
-			var m entities.BundleManifest
-			if parseErr := json.Unmarshal(data, &m); parseErr != nil {
-				return nil, nil, fmt.Errorf("extract: parse manifest: %w", parseErr)
-			}
-			manifest = &m
+			manifest = m
 			continue
 		}
-		data, err := io.ReadAll(tr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("extract: read %s: %w", hdr.Name, err)
+		if manifest == nil {
+			return nil, nil, fmt.Errorf(
+				"extract: manifest must be the first non-directory entry, found %s before %s",
+				hdr.Name,
+				entities.BundleManifestFileName,
+			)
 		}
-		// Mask before the narrowing cast so a malformed header with
-		// high bits set cannot trip gosec G115 (and cannot inject any
-		// extra mode bits we did not put there ourselves on bundle).
-		files = append(files, repositories.BundleFile{
-			RelativePath: filepath.ToSlash(hdr.Name),
-			Content:      data,
-			ModTime:      hdr.ModTime.Unix(),
-			Mode:         uint32(hdr.Mode & bundlePermissionMask),
-		})
+		file, readErr := readFileEntry(tr, hdr)
+		if readErr != nil {
+			return nil, nil, readErr
+		}
+		files = append(files, file)
 	}
 	return manifest, files, nil
+}
+
+// readManifestEntry parses one manifest tar member, enforcing the size
+// limit so a hostile archive cannot force us to allocate megabytes for
+// what should be a small JSON document.
+func readManifestEntry(tr *tar.Reader, hdr *tar.Header) (*entities.BundleManifest, error) {
+	if hdr.Size > maxBundleManifestSize {
+		return nil, fmt.Errorf("extract: manifest too large (%d bytes)", hdr.Size)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(tr, maxBundleManifestSize))
+	if readErr != nil {
+		return nil, fmt.Errorf("extract: read manifest: %w", readErr)
+	}
+	var m entities.BundleManifest
+	if parseErr := json.Unmarshal(data, &m); parseErr != nil {
+		return nil, fmt.Errorf("extract: parse manifest: %w", parseErr)
+	}
+	return &m, nil
+}
+
+// readFileEntry materialises one payload tar member into a BundleFile,
+// masking the on-disk mode before the narrowing cast so a malformed
+// header with high bits set cannot trip gosec G115 nor inject any extra
+// mode bits we did not put there ourselves on bundle.
+func readFileEntry(tr *tar.Reader, hdr *tar.Header) (repositories.BundleFile, error) {
+	data, err := io.ReadAll(tr)
+	if err != nil {
+		return repositories.BundleFile{}, fmt.Errorf("extract: read %s: %w", hdr.Name, err)
+	}
+	return repositories.BundleFile{
+		RelativePath: filepath.ToSlash(hdr.Name),
+		Content:      data,
+		ModTime:      hdr.ModTime.Unix(),
+		Mode:         uint32(hdr.Mode & bundlePermissionMask),
+	}, nil
 }
 
 // writeMergedFile materialises one bundle file inside the local target
