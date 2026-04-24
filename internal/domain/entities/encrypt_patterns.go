@@ -12,12 +12,21 @@ type EncryptPatterns struct {
 }
 
 // ParseEncryptPatterns reads lines from the given content, skipping comments
-// (lines starting with #) and blank lines. Each remaining line is treated as
-// a glob pattern.
+// (lines starting with #) and blank lines. Each remaining line yields a glob
+// pattern from its first whitespace-separated token, so .gitattributes-style
+// rows like "personal/*/foo    encrypt" use the path as the pattern and
+// silently ignore trailing action keywords. Without this tokenization the
+// whole line ("personal/*/foo    encrypt") would be treated as a literal
+// glob and never match any real path.
 func ParseEncryptPatterns(content []byte) *EncryptPatterns {
-	return &EncryptPatterns{
-		Patterns: parsePatternLines(content),
+	lines := parsePatternLines(content)
+	patterns := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if token := strings.Fields(line); len(token) > 0 {
+			patterns = append(patterns, token[0])
+		}
 	}
+	return &EncryptPatterns{Patterns: patterns}
 }
 
 // Matches returns true if the given relative path matches any of the encrypt
