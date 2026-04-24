@@ -45,9 +45,11 @@ func (c *PushCommand) produceBundles(
 	return produced, nil
 }
 
-// produceToolBundle handles one BundleSpec for one tool: enumerates
-// source subdirectories, asks the bundle service to package each, and
-// writes the resulting ciphertext to the repo (skipped in dry-run).
+// produceToolBundle handles one BundleSpec for one tool. In subdirs
+// mode it walks immediate subdirectories of the source and produces
+// one bundle per subdir; in whole mode it produces a single bundle
+// covering the entire source tree (the right shape for flat-file dirs
+// like ~/.claude/plans/ where there are no subdirs to enumerate).
 func (c *PushCommand) produceToolBundle(
 	repoPath, toolName, toolPath string,
 	spec entities.BundleSpec,
@@ -63,12 +65,8 @@ func (c *PushCommand) produceToolBundle(
 	}
 
 	sourceRoot := filepath.Join(toolPath, spec.Source)
-	entries, err := os.ReadDir(sourceRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("read source: %w", err)
+	if _, statErr := os.Stat(sourceRoot); os.IsNotExist(statErr) {
+		return 0, nil
 	}
 
 	targetRoot := filepath.Join(repoPath, "personal", toolName, spec.Target)
@@ -78,6 +76,23 @@ func (c *PushCommand) produceToolBundle(
 		}
 	}
 
+	if spec.EffectiveMode() == entities.BundleModeWhole {
+		return c.produceWholeBundle(repoPath, sourceRoot, targetRoot, spec.Source, recipients, dryRun)
+	}
+	return c.produceSubdirBundles(repoPath, sourceRoot, targetRoot, recipients, dryRun)
+}
+
+// produceSubdirBundles is the original subdirs-mode behaviour: one
+// bundle per immediate subdirectory of sourceRoot.
+func (c *PushCommand) produceSubdirBundles(
+	repoPath, sourceRoot, targetRoot string,
+	recipients []string,
+	dryRun bool,
+) (int, error) {
+	entries, err := os.ReadDir(sourceRoot)
+	if err != nil {
+		return 0, fmt.Errorf("read source: %w", err)
+	}
 	produced := 0
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -90,24 +105,55 @@ func (c *PushCommand) produceToolBundle(
 			continue
 		}
 		if manifest.FileCount == 0 {
-			// Empty source directory — produce nothing rather than committing
-			// a 184-byte ciphertext that just wraps an empty manifest.
 			continue
 		}
-
 		hash := c.bundleService.HashName(entry.Name())
 		dest := filepath.Join(targetRoot, hash+".age")
-		if dryRun {
-			fmt.Fprintf(os.Stdout, "  %s (bundle)\n", relRepoPath(repoPath, dest))
-			produced++
-			continue
-		}
-		if writeErr := os.WriteFile(dest, ciphertext, 0o600); writeErr != nil {
-			return produced, fmt.Errorf("write bundle %s: %w", dest, writeErr)
+		if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
+			return produced, writeErr
 		}
 		produced++
 	}
 	return produced, nil
+}
+
+// produceWholeBundle is the whole-mode behaviour: one bundle covering
+// every file under sourceRoot. The bundle hash is derived from
+// sourceName so the same logical source always lands at the same
+// .age path across pushes (so git delta detection still applies).
+func (c *PushCommand) produceWholeBundle(
+	repoPath, sourceRoot, targetRoot, sourceName string,
+	recipients []string,
+	dryRun bool,
+) (int, error) {
+	ciphertext, manifest, bundleErr := c.bundleService.Bundle(sourceRoot, sourceName, recipients)
+	if bundleErr != nil {
+		logger.Warnf("skip bundle for %s: %v", sourceName, bundleErr)
+		return 0, nil
+	}
+	if manifest.FileCount == 0 {
+		return 0, nil
+	}
+	hash := c.bundleService.HashName(sourceName)
+	dest := filepath.Join(targetRoot, hash+".age")
+	if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
+		return 0, writeErr
+	}
+	return 1, nil
+}
+
+// writeOrLogBundle writes the bundle ciphertext to disk for a real
+// push or just logs the would-be path for a dry run. Centralised so
+// the two production paths cannot drift out of sync on path display.
+func writeOrLogBundle(repoPath, dest string, ciphertext []byte, dryRun bool) error {
+	if dryRun {
+		fmt.Fprintf(os.Stdout, "  %s (bundle)\n", relRepoPath(repoPath, dest))
+		return nil
+	}
+	if writeErr := os.WriteFile(dest, ciphertext, 0o600); writeErr != nil {
+		return fmt.Errorf("write bundle %s: %w", dest, writeErr)
+	}
+	return nil
 }
 
 // relRepoPath returns the slash-separated path of bundlePath relative to

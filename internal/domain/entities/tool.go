@@ -52,17 +52,48 @@ const (
 	BundlePruneManual BundlePruneStrategy = "manual"
 )
 
-// BundleSpec declares a directory whose immediate subdirectories should
-// each be packaged into one age-encrypted tarball during push and merged
-// back into the matching local subdirectory during pull. Source and Target
-// are tool-relative paths (so a Source of "projects" under the claude tool
-// resolves to ~/.claude/projects/). MergeStrategy and Prune fall back to
-// the BundleMerge*/BundlePrune* defaults when empty.
+// BundleMode controls whether the bundle producer walks the immediate
+// subdirectories of the source (one bundle per subdir) or treats the
+// whole source directory as a single unit (one bundle, with the
+// source-relative paths preserved inside the tarball).
+type BundleMode string
+
+const (
+	// BundleModeSubdirs is the default: one bundle per immediate
+	// subdirectory of the source. Right shape for `~/.claude/projects/`
+	// where each subdir is a self-contained project whose name encodes
+	// a filesystem path that must not appear in the git tree.
+	BundleModeSubdirs BundleMode = "subdirs"
+	// BundleModeWhole produces one bundle for the entire source
+	// directory, including any flat files at the top level. Right shape
+	// for `~/.claude/plans/` and `~/.claude/todos/` where the contents
+	// are loose files (not subdirs) but the directory as a whole still
+	// benefits from opaque encrypted shipping.
+	BundleModeWhole BundleMode = "whole"
+)
+
+// BundleSpec declares a directory whose contents should be packaged
+// into one or more age-encrypted tarballs during push and merged back
+// into the matching local directory during pull. Source and Target
+// are tool-relative paths (so a Source of "projects" under the claude
+// tool resolves to ~/.claude/projects/). Mode picks subdirs-vs-whole
+// behaviour; MergeStrategy and Prune fall back to the
+// BundleMerge*/BundlePrune* defaults when empty.
 type BundleSpec struct {
 	Source        string              `yaml:"source"`
 	Target        string              `yaml:"target"`
+	Mode          BundleMode          `yaml:"mode,omitempty"`
 	MergeStrategy BundleMergeStrategy `yaml:"merge_strategy,omitempty"`
 	Prune         BundlePruneStrategy `yaml:"prune,omitempty"`
+}
+
+// EffectiveMode returns the configured bundle mode or the safe default
+// ([BundleModeSubdirs]) when none is set.
+func (b BundleSpec) EffectiveMode() BundleMode {
+	if b.Mode == "" {
+		return BundleModeSubdirs
+	}
+	return b.Mode
 }
 
 // EffectiveMergeStrategy returns the configured merge strategy or the
