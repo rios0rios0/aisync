@@ -36,7 +36,9 @@ func newTestPullCommand(
 		&doubles.MockMerger{},
 		applyService,
 		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
-	)
+		&doubles.MockBundleService{},
+		&doubles.MockBundleStateRepository{},
+)
 }
 
 // newTestPushCommand creates a PushCommand wired with test doubles for sync tests.
@@ -53,6 +55,7 @@ func newTestPushCommand(
 		&doubles.MockManifestRepository{},
 		&doubles.MockSecretScanner{},
 		&doubles.MockNDAContentChecker{},
+		&doubles.MockBundleService{},
 	)
 }
 
