@@ -22,6 +22,7 @@ type PushCommand struct {
 	manifestRepo      repositories.ManifestRepository
 	secretScanner     repositories.SecretScanner
 	ndaChecker        repositories.NDAContentChecker
+	bundleService     repositories.BundleService
 }
 
 // NewPushCommand creates a new PushCommand.
@@ -33,6 +34,7 @@ func NewPushCommand(
 	manifestRepo repositories.ManifestRepository,
 	secretScanner repositories.SecretScanner,
 	ndaChecker repositories.NDAContentChecker,
+	bundleService repositories.BundleService,
 ) *PushCommand {
 	return &PushCommand{
 		configRepo:        configRepo,
@@ -42,6 +44,7 @@ func NewPushCommand(
 		manifestRepo:      manifestRepo,
 		secretScanner:     secretScanner,
 		ndaChecker:        ndaChecker,
+		bundleService:     bundleService,
 	}
 }
 
@@ -82,8 +85,20 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 	ignorePatterns := c.loadIgnorePatterns(repoPath)
 	encryptPatterns := c.loadEncryptPatterns(repoPath)
 
+	bundleCount, bundleErr := c.produceBundles(config, repoPath, opts.DryRun)
+	if bundleErr != nil {
+		return bundleErr
+	}
+
 	if opts.DryRun {
-		if dryErr := c.executeDryRun(config, repoPath, ignorePatterns, encryptPatterns, opts); dryErr != nil {
+		if dryErr := c.executeDryRun(
+			config,
+			repoPath,
+			ignorePatterns,
+			encryptPatterns,
+			opts,
+			bundleCount,
+		); dryErr != nil {
 			return dryErr
 		}
 		c.warnLegacyRepoFiles(config, repoPath)
@@ -91,7 +106,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 	}
 
 	copied := c.collectAllPersonalFiles(config, repoPath, ignorePatterns, encryptPatterns)
-	logger.Infof("collected %d personal files into sync repo", copied)
+	logger.Infof("collected %d personal files and %d project bundle(s) into sync repo", copied, bundleCount)
 
 	c.warnLegacyRepoFiles(config, repoPath)
 
@@ -134,7 +149,9 @@ func (c *PushCommand) warnLegacyRepoFiles(config *entities.Config, repoPath stri
 		if !tool.Enabled {
 			continue
 		}
-		legacy = append(legacy, c.collectLegacyHitsForTool(repoPath, toolName, tool.ExtraAllowlist)...)
+		extras := append([]string{}, tool.ExtraAllowlist...)
+		extras = append(extras, bundleTargetExtraAllowlist(tool)...)
+		legacy = append(legacy, c.collectLegacyHitsForTool(repoPath, toolName, extras)...)
 	}
 
 	if len(legacy) == 0 {
@@ -316,6 +333,7 @@ func (c *PushCommand) executeDryRun(
 	ignorePatterns *entities.IgnorePatterns,
 	encryptPatterns *entities.EncryptPatterns,
 	opts PushOptions,
+	bundleCount int,
 ) error {
 	totalFiles := 0
 	encryptedFiles := 0
@@ -344,8 +362,13 @@ func (c *PushCommand) executeDryRun(
 		encryptedFiles += result.encrypted
 	}
 
-	fmt.Fprintf(os.Stdout, "\n[dry-run] %d file(s) to push, %d encrypted, %d tool(s) skipped\n",
-		totalFiles, encryptedFiles, skippedTools)
+	// Bundles count toward both totalFiles (every committed object goes through
+	// the count) and encryptedFiles (every bundle is age ciphertext by design).
+	totalFiles += bundleCount
+	encryptedFiles += bundleCount
+
+	fmt.Fprintf(os.Stdout, "\n[dry-run] %d file(s) to push, %d encrypted (%d project bundle(s)), %d tool(s) skipped\n",
+		totalFiles, encryptedFiles, bundleCount, skippedTools)
 
 	if !opts.SkipSecretScan && len(unencrypted) > 0 {
 		if scanErr := c.runSecretScan(unencrypted); scanErr != nil {

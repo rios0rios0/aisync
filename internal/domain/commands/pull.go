@@ -40,6 +40,8 @@ type PullCommand struct {
 	sectionMerger     repositories.Merger
 	applyService      repositories.ApplyService
 	promptService     repositories.PromptService
+	bundleService     repositories.BundleService
+	bundleStateRepo   repositories.BundleStateRepository
 }
 
 // NewPullCommand creates a new PullCommand.
@@ -56,6 +58,8 @@ func NewPullCommand(
 	sectionMerger repositories.Merger,
 	applyService repositories.ApplyService,
 	promptService repositories.PromptService,
+	bundleService repositories.BundleService,
+	bundleStateRepo repositories.BundleStateRepository,
 ) *PullCommand {
 	return &PullCommand{
 		configRepo:        configRepo,
@@ -70,6 +74,8 @@ func NewPullCommand(
 		sectionMerger:     sectionMerger,
 		applyService:      applyService,
 		promptService:     promptService,
+		bundleService:     bundleService,
+		bundleStateRepo:   bundleStateRepo,
 	}
 }
 
@@ -161,6 +167,11 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 			logger.Warnf("failed to apply to tool %s: %v", toolName, applyErr)
 		}
 	}
+
+	// Step 8b: Apply project bundles (post-file-apply so individual files
+	// always land first; bundle merging only runs after the rest of the
+	// pull has finished writing).
+	c.applyBundles(config, repoPath)
 
 	// Step 9: Update state timestamps after successful pull.
 	state.LastPull = time.Now()
