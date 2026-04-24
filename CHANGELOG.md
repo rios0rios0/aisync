@@ -16,6 +16,10 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Fixed
+
+- fixed `ParseEncryptPatterns` to extract the first whitespace-separated token from each line, so `.gitattributes`-style rows like `personal/*/settings.local.json    encrypt` resolve to the path glob instead of being stored as a literal that never matches. Before this fix, a `.aisyncencrypt` shipped with the action keyword silently produced zero encrypted files on push.
+
 ## [1.0.3] - 2026-04-24
 
 ### Changed
