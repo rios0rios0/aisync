@@ -76,6 +76,22 @@ func TestParseEncryptPatterns_TrimsWhitespace(t *testing.T) {
 	assert.Equal(t, "secrets/*.key", patterns.Patterns[1])
 }
 
+func TestParseEncryptPatterns_StripsTrailingActionKeywords(t *testing.T) {
+	// given — gitattributes-style rows where the line carries an action
+	// keyword after the pattern. Without tokenization the whole line would
+	// be stored as the glob and never match any real path.
+	content := []byte("personal/*/memories/**    encrypt\npersonal/*/settings.local.json\tencrypt\n")
+
+	// when
+	patterns := entities.ParseEncryptPatterns(content)
+
+	// then
+	assert.Len(t, patterns.Patterns, 2)
+	assert.Equal(t, "personal/*/memories/**", patterns.Patterns[0])
+	assert.Equal(t, "personal/*/settings.local.json", patterns.Patterns[1])
+	assert.True(t, patterns.Matches("personal/claude/settings.local.json"))
+}
+
 func TestEncryptPatterns_Matches(t *testing.T) {
 	tests := []struct {
 		name         string
