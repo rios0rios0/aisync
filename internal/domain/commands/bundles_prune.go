@@ -96,7 +96,7 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 		return 0, 0, fmt.Errorf("read %s: %w", targetDir, err)
 	}
 
-	expected := c.expectedHashes(toolPath, spec.Source)
+	expected := c.expectedHashes(toolPath, spec)
 
 	scanned, removed := 0, 0
 	for _, entry := range bundles {
@@ -133,9 +133,19 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 
 // expectedHashes returns the set of bundle hashes that the current
 // local source directories would produce on the next push. Any bundle
-// in the sync repo whose hash is NOT in this set is an orphan.
-func (c *PruneBundlesCommand) expectedHashes(toolPath, source string) map[string]struct{} {
-	sourceRoot := filepath.Join(toolPath, source)
+// in the sync repo whose hash is NOT in this set is an orphan. The
+// shape of the set depends on the spec's mode: subdirs mode produces
+// one hash per immediate subdirectory; whole mode produces exactly
+// one hash (HashName of the source label) iff the source dir exists.
+func (c *PruneBundlesCommand) expectedHashes(toolPath string, spec entities.BundleSpec) map[string]struct{} {
+	sourceRoot := filepath.Join(toolPath, spec.Source)
+	if spec.EffectiveMode() == entities.BundleModeWhole {
+		expected := map[string]struct{}{}
+		if _, statErr := os.Stat(sourceRoot); statErr == nil {
+			expected[c.bundleService.HashName(spec.Source)] = struct{}{}
+		}
+		return expected
+	}
 	entries, err := os.ReadDir(sourceRoot)
 	if err != nil {
 		return map[string]struct{}{}

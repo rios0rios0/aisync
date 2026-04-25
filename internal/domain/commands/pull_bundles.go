@@ -86,15 +86,26 @@ func (c *PullCommand) applyToolBundles(
 			logger.Warnf("extract bundle %s: %v", bundlePath, extractErr)
 			continue
 		}
-		if !isSafePathSegment(manifest.OriginalName) {
-			logger.Warnf(
-				"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
-				bundlePath, manifest.OriginalName,
-			)
-			continue
+		// In subdirs mode each bundle restores into a per-project
+		// subdir under the source root, and manifest.OriginalName is
+		// joined into the destination path — so it MUST be a single
+		// safe path segment to prevent traversal. In whole mode the
+		// localDir is built from spec.Source alone and OriginalName
+		// is purely informational (e.g. spec.Source itself, which can
+		// legitimately contain "/"), so the check is skipped.
+		var localDir string
+		if spec.EffectiveMode() == entities.BundleModeWhole {
+			localDir = filepath.Join(toolPath, spec.Source)
+		} else {
+			if !isSafePathSegment(manifest.OriginalName) {
+				logger.Warnf(
+					"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
+					bundlePath, manifest.OriginalName,
+				)
+				continue
+			}
+			localDir = filepath.Join(toolPath, spec.Source, manifest.OriginalName)
 		}
-
-		localDir := filepath.Join(toolPath, spec.Source, manifest.OriginalName)
 		report, mergeErr := c.bundleService.MergeIntoLocal(files, localDir, spec.EffectiveMergeStrategy())
 		if mergeErr != nil {
 			logger.Warnf("merge bundle %s: %v", bundlePath, mergeErr)
@@ -148,17 +159,28 @@ func (c *PullCommand) handleRemovedBundle(
 	if !ok || !tool.Enabled {
 		return
 	}
-	sourceRel := bundleSourceRel(tool, entry.Target)
-	if sourceRel == "" {
+	spec, found := bundleSpecByTarget(tool, entry.Target)
+	if !found {
 		return
 	}
-	localDir := filepath.Join(ExpandHome(tool.Path), sourceRel, entry.OriginalName)
+	// Whole-mode bundle: the local target IS the source dir, and a
+	// disappearance upstream means the user wiped the whole dir on
+	// another machine. Subdirs mode: the local target is a per-project
+	// subdir inside the source root and only that one project went away.
+	var localDir, label string
+	if spec.EffectiveMode() == entities.BundleModeWhole {
+		localDir = filepath.Join(ExpandHome(tool.Path), spec.Source)
+		label = filepath.Join(tool.Path, spec.Source)
+	} else {
+		localDir = filepath.Join(ExpandHome(tool.Path), spec.Source, entry.OriginalName)
+		label = filepath.Join(tool.Path, spec.Source, entry.OriginalName)
+	}
 	if _, statErr := os.Stat(localDir); os.IsNotExist(statErr) {
 		return
 	}
 	prompt := fmt.Sprintf(
-		"Project %q (under %s) was removed on another device. Remove locally too?",
-		entry.OriginalName, filepath.Join(tool.Path, sourceRel),
+		"Bundle for %q was removed on another device. Remove %s locally too?",
+		entry.OriginalName, label,
 	)
 	if c.promptService == nil || !c.promptService.PromptConfirmation(prompt) {
 		return
@@ -170,16 +192,16 @@ func (c *PullCommand) handleRemovedBundle(
 	fmt.Fprintf(os.Stdout, "  removed %s\n", localDir)
 }
 
-// bundleSourceRel returns the BundleSpec.Source whose Target matches
-// the recorded target of a removed cache entry, or "" if the user
-// removed the spec from config.yaml between syncs.
-func bundleSourceRel(tool entities.Tool, target string) string {
+// bundleSpecByTarget returns the BundleSpec from tool.Bundles that has
+// the given target plus a found-flag, so callers can distinguish a
+// missing spec from a spec with a zero-valued field.
+func bundleSpecByTarget(tool entities.Tool, target string) (entities.BundleSpec, bool) {
 	for _, spec := range tool.Bundles {
 		if spec.Target == target {
-			return spec.Source
+			return spec, true
 		}
 	}
-	return ""
+	return entities.BundleSpec{}, false
 }
 
 // bundleStateKey builds the composite key used in the on-device

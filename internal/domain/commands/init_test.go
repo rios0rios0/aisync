@@ -382,6 +382,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Contains(t, string(encryptContent), "personal/**/*.key", "private keys should be in default encrypt list")
 		assert.Contains(t, string(encryptContent), "personal/**/id_ed25519", "SSH private keys should be in default encrypt list")
 		assert.Contains(t, string(encryptContent), "personal/**/.netrc", ".netrc should be in default encrypt list")
+		assert.Contains(t, string(encryptContent), "personal/**/mcp.json", "MCP server configs should be in default encrypt list")
 		assert.Contains(t, string(encryptContent), "personal/**/auth.json", "auth.json should be in default encrypt list")
 	})
 
