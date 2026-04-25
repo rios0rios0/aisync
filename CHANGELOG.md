@@ -16,17 +16,18 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-25
+
 ### Added
 
-- added the `BundleModeWhole` bundle mode (`tools.<name>.bundles[].mode: whole`) for source directories that contain loose files instead of subdirectories (e.g. `~/.claude/plans/`, `~/.claude/todos/`). In whole mode the entire source is packaged as one age-encrypted tarball, complementing the existing default `subdirs` mode that produces one bundle per immediate subdirectory.
 - added `~/.claude/scripts/**` to the compiled-in claude allowlist so personal helper scripts referenced from `hooks.json` can sync alongside their callers without per-user `extra_allowlist` configuration.
 - added `~/.cursor/mcp.json` to the compiled-in cursor allowlist, paired with a default `personal/**/mcp.json` entry in the `aisync init` `.aisyncencrypt` template so MCP server configs (which often carry API tokens or workspace-leaking paths) sync as age ciphertext on every fresh device.
-
-- added per-tool project-bundle sync. Each `tools.<name>.bundles[]` entry in `config.yaml` declares a tool-relative source directory whose immediate subdirectories are each packaged into one age-encrypted gzip-compressed tarball under `personal/<tool>/<target>/<sha256(name)[:16]>.age`. The bundle filename is intentionally a hash so directory names that may contain project paths or company codenames never appear in the git tree. The internal `_aisync-manifest.json` carries the original directory name so pull-side code can restore it locally.
 - added bundle-aware push and pull pipelines. `aisync push` walks every configured `BundleSpec`, produces one bundle per source subdirectory, and writes the ciphertext under `personal/<tool>/<target>/`. The dry-run summary counts bundles toward both the file total and the encrypted total. `aisync pull` decrypts every bundle that arrived from the remote and merges its files into the matching local source directory using a configurable merge strategy.
-- added the `mtime` and `replace` bundle merge strategies. `mtime` (default) keeps whichever copy of a file has the newer modification time, preserves files that exist only locally, and adds files that exist only in the bundle — the right semantics for memory-style append-mostly content where two devices may both append independently. `replace` overwrites local content unconditionally for users who want bundle-first semantics.
 - added cross-device deletion detection backed by a per-device cache at `~/.cache/aisync/bundle-state.json` (mode `0600`, never committed). Pulls compute `removed = (cached hashes) - (remote hashes)` and prompt the user before removing each local source directory whose bundle disappeared upstream. Auto-removal is intentionally avoided so a transient `rm -rf` on one machine cannot turn into a remote nuke.
+- added per-tool project-bundle sync. Each `tools.<name>.bundles[]` entry in `config.yaml` declares a tool-relative source directory whose immediate subdirectories are each packaged into one age-encrypted gzip-compressed tarball under `personal/<tool>/<target>/<sha256(name)[:16]>.age`. The bundle filename is intentionally a hash so directory names that may contain project paths or company codenames never appear in the git tree. The internal `_aisync-manifest.json` carries the original directory name so pull-side code can restore it locally.
 - added the `aisync bundles prune` subcommand: walks every configured bundle target, asks the user about each `.age` file whose source directory no longer exists locally, and deletes the confirmed orphans from the sync repo (the deletion is committed by the next push).
+- added the `BundleModeWhole` bundle mode (`tools.<name>.bundles[].mode: whole`) for source directories that contain loose files instead of subdirectories (e.g. `~/.claude/plans/`, `~/.claude/todos/`). In whole mode the entire source is packaged as one age-encrypted tarball, complementing the existing default `subdirs` mode that produces one bundle per immediate subdirectory.
+- added the `mtime` and `replace` bundle merge strategies. `mtime` (default) keeps whichever copy of a file has the newer modification time, preserves files that exist only locally, and adds files that exist only in the bundle — the right semantics for memory-style append-mostly content where two devices may both append independently. `replace` overwrites local content unconditionally for users who want bundle-first semantics.
 
 ### Fixed
 
