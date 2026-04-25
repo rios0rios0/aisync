@@ -262,10 +262,10 @@ func TestIsSyncable(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "should deny cursor mcp.json (leaks workspace names)",
+			name:     "should allow cursor mcp.json (paired with the personal/cursor/mcp.json default age-encrypt pattern so cleartext never lands in the git tree)",
 			toolName: "cursor",
 			relPath:  "mcp.json",
-			expected: false,
+			expected: true,
 		},
 		{
 			name:     "should deny cursor cli-config.json",
