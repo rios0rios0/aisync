@@ -42,8 +42,8 @@ Clean Architecture with Hexagonal (Ports & Adapters) design. Dependencies always
 
 ```
 main.go → NewRootCommand(version)
-             ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo
-             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, ...
+             ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo, JSONBundleStateRepo
+             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, TarAgeBundleSvc, ...
              ├── creates domain commands (injecting interface deps)
              └── registers cobra subcommands → returns root *cobra.Command
 ```
@@ -80,6 +80,37 @@ The `AtomicApplyService` prevents partial updates to AI tool directories:
 
 On interruption, the next invocation detects the incomplete journal and resumes from where it left off. The `PullCommand` checks for pending journal recovery before starting a new pull.
 
+### Bundle Sync
+
+Per-tool project bundles allow syncing opaque directory trees (e.g. `~/.claude/projects/`, `~/.claude/plans/`) as age-encrypted tarballs so directory names that may contain company paths never appear in the git tree. Each `tools.<name>.bundles[]` entry in `config.yaml` declares a source directory and a target namespace.
+
+Two bundle modes exist:
+
+| Mode | Config value | Behavior |
+|------|-------------|----------|
+| `subdirs` (default) | `mode: subdirs` | Each immediate subdirectory is packaged as one `.age` tarball. Filename is `sha256(name)[:16].age`; the original name lives only inside the encrypted `_aisync-manifest.json`. |
+| `whole` | `mode: whole` | The entire source directory is one tarball — for loose-file directories like `plans/` or `todos/`. |
+
+Two merge strategies control how pull reconciles bundles with local state:
+
+| Strategy | Config value | Behavior |
+|----------|-------------|----------|
+| `mtime` (default) | `merge_strategy: mtime` | Keep the newer copy of each file by mtime; preserve local-only files; add bundle-only files. |
+| `replace` | `merge_strategy: replace` | Overwrite local content unconditionally from the bundle. |
+
+Cross-device deletion detection uses a per-device cache at `~/.cache/aisync/bundle-state.json` (`0600`, never committed). Pulls compute `removed = (cached) − (remote)` and prompt the user before deleting. Auto-removal is intentionally avoided.
+
+Key files:
+
+- `entities/bundle_manifest.go`, `entities/bundle_state.go` — value objects for bundle metadata and cross-device state.
+- `entities/tool.go` — `BundleSpec`, `BundleMode`, `BundleMergeStrategy` definitions.
+- `repositories/bundle_service.go` — `BundleService` interface (HashName, Bundle, Extract, MergeIntoLocal).
+- `repositories/bundle_state_repository.go` — `BundleStateRepository` interface.
+- `services/tar_age_bundle_service.go` — production implementation (tar+gzip+age).
+- `repositories/json_bundle_state_repository.go` — persistent state store.
+- `commands/push_bundles.go`, `commands/pull_bundles.go` — bundle pipeline integration.
+- `commands/bundles_prune.go` — `PruneBundlesCommand` (`aisync bundles prune`).
+
 ### Platform-Specific Watch Service
 
 `controllers/root.go` selects the watch implementation at startup:
@@ -95,7 +126,7 @@ On interruption, the next invocation detects the incomplete journal and resumes 
 2. **`.aisyncignore`** — Gitignore-syntax file for additional path exclusions on top of the allowlist. Additive, user-configurable.
 3. **`.aisyncencrypt` + age** — Paths matching the patterns are written as ciphertext using `config.Encryption.Recipients`. Has two independent gates: pattern match AND non-empty recipients. Mismatched gates have previously caused silent plaintext commits.
 4. **Content scanners** — Two scanners run in sequence on the unencrypted file map (the same map the encrypt path produced):
-   - **`RegexSecretScanner`** (`services/regex_secret_scanner.go`) — 15 compiled regexes for credential FORMATS (AWS keys, GitHub tokens, JWTs, private key blocks). Bypassable with `--skip-secret-scan`.
+   - **`RegexSecretScanner`** (`services/secret_scanner.go`) — 15 compiled regexes for credential FORMATS (AWS keys, GitHub tokens, JWTs, private key blocks). Bypassable with `--skip-secret-scan`.
    - **`CompositeNDAChecker`** (`services/nda_content_checker.go`) — Composes three sources of forbidden terms: (a) explicit user list, age-encrypted at `<repo>/.aisync-forbidden.age`, default canonical-form substring matching (lowercase + NFKD-stripped + alphanumeric-only) so `ZestSecurity` catches every spacing/casing/separator/accent variant from one entry; (b) auto-derived from machine state via `services/auto_deriver.go` + `repositories/exec_git_inspector.go` — extracts terms from `git config --global user.email`, `git remote get-url origin` for repos under `~/Development`/`~/workspace`/etc. to depth 4, the `~/Development/dev.azure.com/<org>/<project>/` directory layout, and `~/.ssh/config` `Host <forge>-<alias>` entries; (c) compile-time heuristic shape checks (`services/nda_scanner.go:heuristicChecks`) — hardcoded home paths, WSL OneDrive paths, ADO org URLs, ssh-host alias patterns. Findings are tagged with the source (`user`, `auto-derived:<origin>`, `heuristic:<name>`) so the user can see exactly which knob fixes each hit. Bypassable with `--skip-nda-scan`. Per-device cache at `~/.cache/aisync/derived-terms.txt` (1h TTL, `0600`, never committed).
 
 `PushCommand.Execute` runs the scanners both in the real-push path (`commitAndPush`) AND the dry-run path (`executeDryRun`) so `--dry-run` previews the actual blocks a real push would trigger.
@@ -118,4 +149,4 @@ When applying files to local AI tool directories: personal files > last-listed s
 
 ## Configuration
 
-Users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config lives at `<repo>/config.yaml` with sections for sync, encryption, tools (30+ AI tools, `aisync init` only enables ones it detects on the device), sources, watch, `hooks_exclude`, and `nda` (auto_derive on/off, heuristics on/off, auto_derive_exclude per-device false positives, dev_roots override). The `.aisyncencrypt` file declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions. The encrypted `.aisync-forbidden.age` (created on first `aisync nda add`) carries the explicit NDA forbidden-terms list — it lives at the repo root and travels between devices via the normal git flow, encrypted to the same age recipients as everything else. External sources are fetched as GitHub tarballs (zero API calls, no rate limiting) with ETag caching in `.aisync/state.json`.
+Users name their sync repo `aifiles` (like chezmoi's `dotfiles`). Config lives at `<repo>/config.yaml` with sections for sync, encryption, tools (30+ AI tools, `aisync init` only enables ones it detects on the device), sources, watch, `hooks_exclude`, `nda` (auto_derive on/off, heuristics on/off, auto_derive_exclude per-device false positives, dev_roots override), and per-tool `bundles[]` specs (source dir, target namespace, mode, merge strategy). The `.aisyncencrypt` file declares which paths get age-encrypted. The `.aisyncignore` file uses gitignore syntax for user-configurable exclusions. The encrypted `.aisync-forbidden.age` (created on first `aisync nda add`) carries the explicit NDA forbidden-terms list — it lives at the repo root and travels between devices via the normal git flow, encrypted to the same age recipients as everything else. External sources are fetched as GitHub tarballs (zero API calls, no rate limiting) with ETag caching in `.aisync/state.json`.

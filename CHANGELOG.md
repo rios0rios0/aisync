@@ -19,6 +19,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 
 - changed the Go module dependencies to their latest versions
+- refreshed `CLAUDE.md` and `.github/copilot-instructions.md` to document the bundle sync architecture added in 1.1.0 and fix the `RegexSecretScanner` source filename reference (`secret_scanner.go`, not `regex_secret_scanner.go`)
 
 ## [1.1.0] - 2026-04-25
 
