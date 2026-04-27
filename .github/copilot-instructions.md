@@ -90,6 +90,17 @@ Do not introduce a DI framework (Uber Dig, Wire, etc.). Manual constructor
 wiring is intentional — it keeps the composition root auditable and the
 domain layer framework-free.
 
+### Bundle Sync
+
+Per-tool project bundles (`tools.<name>.bundles[]` in `config.yaml`) sync opaque
+directory trees as age-encrypted tarballs so directory names never appear in the
+git tree. Two modes: `subdirs` (default, one tarball per immediate subdirectory,
+filename is `sha256(name)[:16].age`) and `whole` (entire source directory as one
+tarball). Two merge strategies on pull: `mtime` (default, newer-wins with
+local-only preservation) and `replace` (overwrite unconditionally). Cross-device
+deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
+removing. See `CLAUDE.md` § Bundle Sync for full details.
+
 ## Go Conventions
 
 - **File names:** `snake_case` (`list_users_command.go`, not `ListUsers.go`).
@@ -270,11 +281,15 @@ When asked to change something, read these files before suggesting edits:
 | Pull pipeline (fetch, merge, apply)            | `internal/domain/commands/pull.go`                                        |
 | Encrypt / ignore pattern matching              | `internal/domain/entities/{encrypt,ignore}_patterns.go`                   |
 | Per-tool allowlist (replaces old deny-list)    | `internal/domain/entities/allowlist.go`                                   |
-| Credential regex scanner                       | `internal/infrastructure/services/regex_secret_scanner.go`                |
+| Credential regex scanner                       | `internal/infrastructure/services/secret_scanner.go`                      |
 | NDA scanner (3 sources + heuristics)           | `internal/infrastructure/services/{nda_scanner,auto_deriver,nda_content_checker}.go` |
 | NDA forbidden-terms entity (canonical match)   | `internal/domain/entities/forbidden_terms.go`                             |
 | Encrypted forbidden-terms repo                 | `internal/infrastructure/repositories/age_forbidden_terms_repository.go`  |
 | `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
 | File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
 | Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply.go`                        |
+| Bundle sync (tar+age packaging)                | `internal/infrastructure/services/tar_age_bundle_service.go`              |
+| Bundle push / pull integration                 | `internal/domain/commands/{push,pull}_bundles.go`                         |
+| Bundle prune (`aisync bundles prune`)          | `internal/domain/commands/bundles_prune.go`                               |
+| Bundle entities + config (BundleSpec, modes)   | `internal/domain/entities/{bundle_manifest,bundle_state,tool}.go`         |
 | Test stubs                                     | `test/doubles/mocks.go`                                                   |
