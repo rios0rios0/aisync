@@ -16,6 +16,10 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Security
+
+- changed bundle ciphertext to be padded up to a fixed size bucket before age encryption. Each gzipped tarball is padded with cryptographic-random bytes (appended after the gzip end marker; gzip reader uses `Multistream(false)` on extract so the trailing bytes are ignored) up to the smallest entry in `bundleSizeBuckets` that fits — powers of 2 from 16 KiB to 128 MiB. Without this, an attacker reading bundle file sizes in the public-clone view could profile activity per project (a 9 MiB bundle is more interesting than an 88 KiB one) without decrypting anything; with this, two bundles in the same bucket are byte-length-indistinguishable. Smallest realistic project (88 KiB before padding) now lands at 128 KiB on disk; the largest tested case (9.3 MiB) lands at 16 MiB. Storage overhead per bundle averages ~25% (between an actual size and the next power of 2). Padding bytes are random rather than deterministic so two pushes of identical content still produce distinct ciphertext bytes — closing an equality-comparison oracle that would otherwise let an attacker correlate pushes across devices
+
 ### Added
 
 - added `aisync init --refresh-scaffolding` for upgrading older aifiles repos whose scaffolding pre-dates recent template changes. The flag overwrites `.gitignore`, `.aisyncignore`, and `.aisyncencrypt` with the latest default templates while leaving `config.yaml`, repo content, and Git state untouched. Without this flag, users who initialised their repo before the comprehensive `.aisyncencrypt` pattern list landed had no in-tool way to pick up new defaults like `personal/**/mcp.json` or `personal/**/*.key`, leaving credentials in plaintext on every push
