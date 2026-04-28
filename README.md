@@ -55,6 +55,18 @@ aisync init rios0rios0
 aisync init --remote-url git@github.com:rios0rios0/aifiles.git --key ~/.config/aisync/key.txt
 ```
 
+### Upgrade scaffolding on an existing repo
+
+If your aifiles repo was initialized before recent template changes (for example, before the comprehensive `.aisyncencrypt` patterns or the `**/.gitignore` exclusion in `.aisyncignore` were added), refresh the scaffolding files in place:
+
+```bash
+# Overwrites .gitignore, .aisyncignore, and .aisyncencrypt with current templates.
+# config.yaml, repo content, and Git state are left untouched.
+aisync init --refresh-scaffolding
+```
+
+Local edits to those three files are overwritten — review the changes with `git diff` before committing. Custom additions should be saved externally and reapplied after the refresh.
+
 ## The `aifiles` Convention
 
 Like chezmoi expects a `dotfiles` repo, aisync expects an `aifiles` repo:
