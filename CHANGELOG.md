@@ -16,6 +16,10 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Fixed
+
+- fixed `aisync init` not creating a `.gitignore` in the aifiles repo, which left `.aisync/state.json` (per-device ETag cache) and `.aisync/journal.json` (per-pull atomic-apply state) showing as untracked on every device. The default `.gitignore` excludes `.aisync/*` while preserving `.aisync/.gitkeep` so the directory itself stays tracked. Both the `executeCreate` and `executeClone` paths now backfill the file when missing.
+
 ### Changed
 
 - changed the Go module dependencies to their latest versions

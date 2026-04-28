@@ -15,6 +15,20 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
+// defaultGitignore is the starter content written to .gitignore by
+// `aisync init`. It excludes per-device runtime state under .aisync/ that
+// must never travel between devices: state.json (ETag cache for external
+// sources, registered-device list) and journal.json (pending atomic-apply
+// operations from in-progress pulls). The .gitkeep negation preserves the
+// .aisync/ directory itself so its presence is tracked even when empty.
+const defaultGitignore = `# aisync default ignore — per-device runtime state.
+# .aisync/ holds files that are local to each device (ETag cache, atomic-apply
+# journal) and must NOT be committed. The .gitkeep negation keeps the empty
+# directory tracked so a fresh clone still has the expected layout.
+.aisync/*
+!.aisync/.gitkeep
+`
+
 // defaultAisyncIgnore is the starter content written to .aisyncignore by
 // `aisync init`. These are basename and simple-glob patterns for files that
 // users almost never want to sync across devices. Structural/directory-level
@@ -194,6 +208,9 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 
 	// Upgrade legacy cloned repos that predate default ignore/encrypt files.
 	// Never overwrite user-customised content; just fill in missing files.
+	if err := c.writeDefaultGitignoreIfMissing(repoPath); err != nil {
+		logger.Warnf("failed to write default .gitignore: %v", err)
+	}
 	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
 		logger.Warnf("failed to write default .aisyncignore: %v", err)
 	}
@@ -293,6 +310,9 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 		return err
 	}
 
+	if err := c.writeDefaultGitignoreIfMissing(repoPath); err != nil {
+		return fmt.Errorf("failed to write default .gitignore: %w", err)
+	}
 	if err := c.writeDefaultIgnoreIfMissing(repoPath); err != nil {
 		return fmt.Errorf("failed to write default .aisyncignore: %w", err)
 	}
@@ -336,6 +356,15 @@ func (c *InitCommand) executeCreate(repoPath string) error {
 	fmt.Fprintln(os.Stdout, "Browse curated sources at https://github.com/rios0rios0/guide")
 
 	return nil
+}
+
+// writeDefaultGitignoreIfMissing writes the default .gitignore content to the
+// repo root if no .gitignore file exists there. Existing files are left
+// untouched so user customisations survive re-runs of init. Without this,
+// per-device .aisync/state.json and .aisync/journal.json end up staged on
+// every device.
+func (c *InitCommand) writeDefaultGitignoreIfMissing(repoPath string) error {
+	return writeFileIfMissing(filepath.Join(repoPath, ".gitignore"), []byte(defaultGitignore))
 }
 
 // writeDefaultIgnoreIfMissing writes the default .aisyncignore content to the
