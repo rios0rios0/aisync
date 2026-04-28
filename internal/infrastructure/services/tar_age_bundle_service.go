@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/hmac"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -59,6 +60,37 @@ const bundleManifestFileMode = 0o600
 // cast warning, so we strip it before storing.
 const bundlePermissionMask = 0o7777
 
+// bundleSizeBuckets is the set of target padded gzipped-tarball
+// plaintext sizes (in bytes) for size padding. Each gzipped tarball
+// is padded with cryptographic random bytes up to the smallest
+// bucket >= the gzipped size before age encryption, so the final
+// ciphertext size is the selected bucket plus age overhead. Buckets
+// are spaced as powers of 2 from 16 KiB to 128 MiB — fine enough
+// that small projects don't waste much space, coarse enough that an
+// attacker reading the public-clone view cannot distinguish two
+// bundles within the same bucket. Anything larger than the top
+// bucket is left unpadded (very rare for AI assistant project trees;
+// the privacy benefit at that scale is marginal and the storage cost
+// is large).
+//
+//nolint:gochecknoglobals // compile-time padding schedule, intentionally package-level
+var bundleSizeBuckets = []int{
+	16 << 10,  // 16 KiB
+	32 << 10,  // 32 KiB
+	64 << 10,  // 64 KiB
+	128 << 10, // 128 KiB
+	256 << 10, // 256 KiB
+	512 << 10, // 512 KiB
+	1 << 20,   // 1 MiB
+	2 << 20,   // 2 MiB
+	4 << 20,   // 4 MiB
+	8 << 20,   // 8 MiB
+	16 << 20,  // 16 MiB
+	32 << 20,  // 32 MiB
+	64 << 20,  // 64 MiB
+	128 << 20, // 128 MiB
+}
+
 // TarAgeBundleService implements [repositories.BundleService] using a
 // gzip-compressed tar archive as the on-the-wire format and age as the
 // outer encryption layer. The manifest is the very first member of the
@@ -67,6 +99,13 @@ const bundlePermissionMask = 0o7777
 type TarAgeBundleService struct {
 	encryption repositories.EncryptionService
 	now        func() time.Time
+
+	// randSource is the io.Reader used to draw bytes for size-bucket
+	// padding. Production code uses [crypto/rand.Reader]; tests can
+	// inject a deterministic reader (e.g. [bytes.Reader] over a fixed
+	// payload) to assert padding behaviour without depending on
+	// crypto/rand output.
+	randSource io.Reader
 
 	// nameKeysMu guards nameKeys.
 	nameKeysMu sync.RWMutex
@@ -77,11 +116,27 @@ type TarAgeBundleService struct {
 }
 
 // NewTarAgeBundleService builds a TarAgeBundleService that delegates the
-// outer encryption layer to the provided encryption service.
+// outer encryption layer to the provided encryption service. The
+// randomness source for size-bucket padding defaults to
+// [crypto/rand.Reader]; tests use [NewTarAgeBundleServiceWithRand] to
+// inject a deterministic reader.
 func NewTarAgeBundleService(encryption repositories.EncryptionService) *TarAgeBundleService {
+	return NewTarAgeBundleServiceWithRand(encryption, crand.Reader)
+}
+
+// NewTarAgeBundleServiceWithRand is like [NewTarAgeBundleService] but
+// accepts an explicit random source. Production callers should use
+// [NewTarAgeBundleService]; this constructor exists so tests can pass
+// a deterministic reader and assert padding bytes directly without
+// relying on crypto/rand output.
+func NewTarAgeBundleServiceWithRand(
+	encryption repositories.EncryptionService,
+	randSource io.Reader,
+) *TarAgeBundleService {
 	return &TarAgeBundleService{
 		encryption: encryption,
 		now:        time.Now,
+		randSource: randSource,
 		nameKeys:   make(map[string][]byte),
 	}
 }
@@ -209,11 +264,55 @@ func (s *TarAgeBundleService) Bundle(
 		return nil, nil, fmt.Errorf("bundle: write tarball: %w", err)
 	}
 
-	ciphertext, err := s.encryption.Encrypt(tarball, recipients)
+	padded, err := s.padToSizeBucket(tarball)
+	if err != nil {
+		return nil, nil, fmt.Errorf("bundle: pad tarball: %w", err)
+	}
+
+	ciphertext, err := s.encryption.Encrypt(padded, recipients)
 	if err != nil {
 		return nil, nil, fmt.Errorf("bundle: age encrypt: %w", err)
 	}
 	return ciphertext, manifest, nil
+}
+
+// pickSizeBucket returns the smallest [bundleSizeBuckets] entry >=
+// size, or size unchanged when size exceeds the top bucket. Returning
+// size unchanged for very large bundles avoids quadrupling repo space
+// for the rare giant-project case; the privacy benefit at that scale
+// is marginal because there are usually few such bundles to confuse
+// against each other.
+func pickSizeBucket(size int) int {
+	for _, bucket := range bundleSizeBuckets {
+		if bucket >= size {
+			return bucket
+		}
+	}
+	return size
+}
+
+// padToSizeBucket appends cryptographic-random bytes (drawn from
+// s.randSource) to gzipped so its final length equals the smallest
+// bucket >= len(gzipped). The padding goes AFTER the gzip end marker
+// so a gzip reader with `gz.Multistream(false)` will ignore it during
+// extract. Random bytes do not start with the gzip magic number with
+// any meaningful probability, so even a Multistream(true) reader would
+// fail loudly rather than silently mis-decode a fake second stream.
+//
+// The output slice is allocated once at the bucket size and the gzipped
+// prefix copied in directly, so peak memory is one bucket-sized
+// allocation per call instead of two.
+func (s *TarAgeBundleService) padToSizeBucket(gzipped []byte) ([]byte, error) {
+	target := pickSizeBucket(len(gzipped))
+	if target <= len(gzipped) {
+		return gzipped, nil
+	}
+	out := make([]byte, target)
+	copy(out, gzipped)
+	if _, err := io.ReadFull(s.randSource, out[len(gzipped):]); err != nil {
+		return nil, fmt.Errorf("read random padding: %w", err)
+	}
+	return out, nil
 }
 
 // Extract implements [repositories.BundleService].
@@ -230,6 +329,13 @@ func (s *TarAgeBundleService) Extract(
 	if err != nil {
 		return nil, nil, fmt.Errorf("extract: gzip: %w", err)
 	}
+	// Multistream(false) so the gzip reader stops at the end of the
+	// first stream and ignores any trailing bytes. Bundles produced by
+	// [TarAgeBundleService.Bundle] append cryptographic-random padding
+	// after the gzip end marker (size-bucket privacy padding) which
+	// would otherwise cause Multistream(true) to fail on the next
+	// "stream" attempt.
+	gz.Multistream(false)
 	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
