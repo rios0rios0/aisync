@@ -15,6 +15,21 @@ import (
 	"github.com/rios0rios0/aisync/test/doubles"
 )
 
+// writeFakeBundleIdentity writes a synthetic age identity file in a
+// per-test temp dir and returns its path. The mock bundle service does
+// not parse the file, but the up-front validation in produceBundles
+// requires the path to exist and the file to contain at least one
+// `AGE-SECRET-KEY-` line, so the fixture provides both.
+func writeFakeBundleIdentity(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "key.txt")
+	contents := "# created: 2026-01-01T00:00:00Z\n" +
+		"# public key: age1publictest\n" +
+		"AGE-SECRET-KEY-1FAKEFAKEFAKEFAKEFAKEFAKEFAKE\n"
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+	return path
+}
+
 // newPushCommandWithBundles wires a PushCommand with only the bits
 // produceBundles needs. Most fields stay nil so each test can focus on
 // the bundle producer alone.
@@ -43,6 +58,7 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 		// with the source root as the path and source label as the name.
 		toolPath := t.TempDir()
 		repoPath := t.TempDir()
+		identityPath := writeFakeBundleIdentity(t)
 		plansDir := filepath.Join(toolPath, "plans")
 		require.NoError(t, os.MkdirAll(plansDir, 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(plansDir, "alpha.md"), []byte("a"), 0o600))
@@ -59,7 +75,7 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
 				Encryption: entities.EncryptionConfig{
-					Identity:   "/tmp/key.txt",
+					Identity:   identityPath,
 					Recipients: []string{"age1xyz"},
 				},
 				Tools: map[string]entities.Tool{
@@ -96,6 +112,7 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 		// Confirms the existing subdirs-mode behaviour is preserved.
 		toolPath := t.TempDir()
 		repoPath := t.TempDir()
+		identityPath := writeFakeBundleIdentity(t)
 		for _, name := range []string{"alpha", "beta", "gamma"} {
 			subDir := filepath.Join(toolPath, "projects", name)
 			require.NoError(t, os.MkdirAll(subDir, 0o700))
@@ -111,7 +128,7 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
 				Encryption: entities.EncryptionConfig{
-					Identity:   "/tmp/key.txt",
+					Identity:   identityPath,
 					Recipients: []string{"age1xyz"},
 				},
 				Tools: map[string]entities.Tool{
@@ -137,5 +154,100 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 3, bundleSvc.BundleCalls,
 			"subdirs mode produces one bundle per immediate subdir")
+	})
+
+	t.Run("should fail fast with a direct error when bundles are configured but the age identity is missing", func(t *testing.T) {
+		// given — bundles + recipients are set up, but the configured
+		// identity path points to a nonexistent file. Without the
+		// up-front check, the user would see a wrapped "hash bundle
+		// name for X: open identity file ...: no such file or
+		// directory" mid-loop after some bundles already processed;
+		// the up-front check produces one direct, actionable error
+		// before any bundle work starts.
+		toolPath := t.TempDir()
+		repoPath := t.TempDir()
+		plansDir := filepath.Join(toolPath, "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(plansDir, "alpha.md"), []byte("a"), 0o600))
+
+		bundleSvc := &doubles.MockBundleService{
+			BundleCipher:   []byte("ciphertext"),
+			BundleManifest: &entities.BundleManifest{FileCount: 1},
+		}
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity:   filepath.Join(t.TempDir(), "does-not-exist.txt"),
+					Recipients: []string{"age1xyz"},
+				},
+				Tools: map[string]entities.Tool{
+					"claude": {
+						Path:    toolPath,
+						Enabled: true,
+						Bundles: []entities.BundleSpec{{
+							Source: "plans",
+							Target: "plans",
+							Mode:   entities.BundleModeWhole,
+						}},
+					},
+				},
+			},
+		}
+		cmd := newPushCommandWithBundles(configRepo, bundleSvc)
+
+		// when
+		err := cmd.Execute("/tmp/cfg.yaml", repoPath, "", commands.PushOptions{DryRun: true})
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bundles require a readable age identity",
+			"the failure message must point the user at the actual problem (missing identity), not a derived hashing error")
+		assert.Equal(t, 0, bundleSvc.BundleCalls,
+			"no bundle work must run when the up-front identity check fails")
+	})
+
+	t.Run("should fail fast when bundles are configured but encryption.identity is empty", func(t *testing.T) {
+		// given — recipients are set (so encryption is requested) but
+		// no identity path is configured at all. The validator should
+		// recommend `aisync key generate`.
+		toolPath := t.TempDir()
+		repoPath := t.TempDir()
+		plansDir := filepath.Join(toolPath, "plans")
+		require.NoError(t, os.MkdirAll(plansDir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(plansDir, "alpha.md"), []byte("a"), 0o600))
+
+		bundleSvc := &doubles.MockBundleService{
+			BundleCipher:   []byte("ciphertext"),
+			BundleManifest: &entities.BundleManifest{FileCount: 1},
+		}
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity:   "",
+					Recipients: []string{"age1xyz"},
+				},
+				Tools: map[string]entities.Tool{
+					"claude": {
+						Path:    toolPath,
+						Enabled: true,
+						Bundles: []entities.BundleSpec{{
+							Source: "plans",
+							Target: "plans",
+							Mode:   entities.BundleModeWhole,
+						}},
+					},
+				},
+			},
+		}
+		cmd := newPushCommandWithBundles(configRepo, bundleSvc)
+
+		// when
+		err := cmd.Execute("/tmp/cfg.yaml", repoPath, "", commands.PushOptions{DryRun: true})
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bundles require an age identity")
+		assert.Contains(t, err.Error(), "aisync key generate",
+			"the error must point the user at the recovery command")
 	})
 }

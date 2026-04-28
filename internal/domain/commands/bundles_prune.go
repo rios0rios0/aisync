@@ -141,6 +141,14 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 // shape of the set depends on the spec's mode: subdirs mode produces
 // one hash per immediate subdirectory; whole mode produces exactly
 // one hash (HashName of the source label) iff the source dir exists.
+//
+// Returns an empty set with a nil error when the source directory does
+// not exist on this device (treats every bundle as a candidate orphan
+// behind the per-file confirmation prompt). Returns a non-nil error
+// when the source directory cannot be read for any other reason or
+// when [repositories.BundleService.HashName] fails (e.g. the age
+// identity file is unreadable, which would otherwise produce
+// false-orphan deletions if the per-repo HMAC key cannot be derived).
 func (c *PruneBundlesCommand) expectedHashes(
 	toolPath, identityPath string,
 	spec entities.BundleSpec,

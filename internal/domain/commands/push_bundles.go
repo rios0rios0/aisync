@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +30,10 @@ func (c *PushCommand) produceBundles(
 	}
 
 	identityPath := ExpandHome(config.Encryption.Identity)
+	if err := validateBundleIdentity(config, identityPath); err != nil {
+		return 0, err
+	}
+
 	produced := 0
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled || len(tool.Bundles) == 0 {
@@ -47,6 +52,37 @@ func (c *PushCommand) produceBundles(
 		}
 	}
 	return produced, nil
+}
+
+// validateBundleIdentity fails fast when the user has bundles configured
+// AND encryption recipients set, but the age identity that bundle name
+// derivation depends on is missing. Without this pre-check, the user
+// would see a wrapped "hash bundle name for X: open identity file ...:
+// no such file or directory" mid-loop after some bundles already
+// processed; instead they get one direct, actionable error before any
+// bundle work starts.
+func validateBundleIdentity(config *entities.Config, identityPath string) error {
+	hasBundlesNeedingIdentity := false
+	for _, tool := range config.Tools {
+		if tool.Enabled && len(tool.Bundles) > 0 {
+			hasBundlesNeedingIdentity = true
+			break
+		}
+	}
+	if !hasBundlesNeedingIdentity || len(config.Encryption.Recipients) == 0 {
+		// No bundles to write, OR no recipients (push will skip the
+		// bundle work and warn separately). Identity not needed.
+		return nil
+	}
+	if config.Encryption.Identity == "" {
+		return errors.New("bundles require an age identity: set encryption.identity in config.yaml " +
+			"(e.g. ~/.config/aisync/key.txt) or run `aisync key generate`",
+		)
+	}
+	if _, err := os.Stat(identityPath); err != nil {
+		return fmt.Errorf("bundles require a readable age identity at %s: %w", identityPath, err)
+	}
+	return nil
 }
 
 // produceToolBundle handles one BundleSpec for one tool. In subdirs
