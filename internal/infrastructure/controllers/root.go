@@ -259,6 +259,10 @@ func newInitSubcmd(initCmd *commands.InitCommand) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoPath := resolveRepoPath(cmd)
+			refreshScaffolding, _ := cmd.Flags().GetBool("refresh-scaffolding")
+			if refreshScaffolding {
+				return initCmd.RefreshScaffolding(repoPath)
+			}
 			remoteURL, _ := cmd.Flags().GetString("remote-url")
 			githubUser := ""
 			if len(args) > 0 {
@@ -270,6 +274,8 @@ func newInitSubcmd(initCmd *commands.InitCommand) *cobra.Command {
 	}
 	cmd.Flags().String("remote-url", "", "full Git URL to clone (overrides github-user shorthand)")
 	cmd.Flags().String("key", "", "path to age identity file")
+	cmd.Flags().
+		Bool("refresh-scaffolding", false, "overwrite .gitignore, .aisyncignore, and .aisyncencrypt with the latest default templates (existing aifiles repo only)")
 	return cmd
 }
 

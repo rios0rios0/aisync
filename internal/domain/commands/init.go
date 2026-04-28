@@ -60,6 +60,16 @@ Thumbs.db
 # internal repo paths, customer/project names, and other NDA-sensitive
 # strings. Comment out the lines below if you want to sync them anyway.
 plans/
+
+# Tool-managed .gitignore files (e.g. ~/.cursor/.gitignore) typically
+# start with "*" to ignore everything in the tool dir and only un-ignore
+# allowlisted subpaths. When such a .gitignore is synced into
+# personal/<tool>/, it silently hides any sibling files git would
+# otherwise track — including files aisync just encrypted
+# (mcp.json.age, settings.local.json.age). Excluding tool-level
+# .gitignore files forces the repo root .gitignore to be the single
+# source of truth for git-ignore semantics inside the aifiles repo.
+**/.gitignore
 `
 
 // defaultAisyncEncrypt is the starter content written to .aisyncencrypt by
@@ -396,6 +406,57 @@ func writeFileIfMissing(path string, content []byte) error {
 		return fmt.Errorf("failed to create directory for %s: %w", path, err)
 	}
 	return os.WriteFile(path, content, 0600)
+}
+
+// writeFileForce writes content to path unconditionally, overwriting any
+// existing file. The parent directory is created if missing.
+func writeFileForce(path string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", path, err)
+	}
+	return os.WriteFile(path, content, 0600)
+}
+
+// RefreshScaffolding overwrites the scaffolding files (.gitignore,
+// .aisyncignore, .aisyncencrypt) with the latest default templates
+// shipped with this aisync release. Used to upgrade older aifiles repos
+// whose scaffolding pre-dates recent template changes — for example,
+// repos initialised before the comprehensive `.aisyncencrypt` pattern
+// list (which catches mcp.json, .env, private keys, credentials) was
+// added, or before the `**/.gitignore` exclusion was added to
+// `.aisyncignore`. config.yaml, repo content, and Git state are left
+// untouched.
+//
+// Local edits to these scaffolding files ARE overwritten — users with
+// custom additions should save them externally and reapply after the
+// refresh.
+func (c *InitCommand) RefreshScaffolding(repoPath string) error {
+	configPath := filepath.Join(repoPath, "config.yaml")
+	if !c.configRepo.Exists(configPath) {
+		return fmt.Errorf("no aifiles repo found at %s (run `aisync init` first)", repoPath)
+	}
+
+	files := []struct {
+		path    string
+		content string
+	}{
+		{filepath.Join(repoPath, ".gitignore"), defaultGitignore},
+		{filepath.Join(repoPath, ".aisyncignore"), defaultAisyncIgnore},
+		{filepath.Join(repoPath, ".aisyncencrypt"), defaultAisyncEncrypt},
+	}
+
+	for _, f := range files {
+		if err := writeFileForce(f.path, []byte(f.content)); err != nil {
+			return fmt.Errorf("failed to refresh %s: %w", f.path, err)
+		}
+		logger.WithField("file", filepath.Base(f.path)).Info("refreshed scaffolding file")
+	}
+
+	logger.Info("scaffolding files refreshed; review the changes with `git diff` before committing")
+	fmt.Fprintf(os.Stdout, "\nScaffolding refreshed at %s\n", repoPath)
+	fmt.Fprintln(os.Stdout, "Review changes: git diff -- .gitignore .aisyncignore .aisyncencrypt")
+	fmt.Fprintln(os.Stdout)
+	return nil
 }
 
 // scaffoldDirectories creates the minimal aifiles directory layout: the two

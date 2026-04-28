@@ -376,6 +376,12 @@ func TestInitCommand_Execute(t *testing.T) {
 		require.NoError(t, readErr)
 		assert.Contains(t, string(ignoreContent), "plans/", "default .aisyncignore should include plans/")
 		assert.Contains(t, string(ignoreContent), "*.tmp")
+		// Tool-managed .gitignore files (e.g. ~/.cursor/.gitignore) start with `*`
+		// and would silently hide encrypted .age files inside personal/<tool>/
+		// when synced. The default exclusion forces the repo root .gitignore
+		// to be the single source of truth for git-ignore semantics.
+		assert.Contains(t, string(ignoreContent), "**/.gitignore",
+			"default .aisyncignore must exclude tool-managed .gitignore files to prevent them from masking encrypted .age siblings")
 
 		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
 		require.NoError(t, readErr)
@@ -528,5 +534,77 @@ func TestInitCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, "https://custom.git/repo.git", gitRepo.CloneURL)
+	})
+
+	t.Run("should overwrite stale scaffolding files when RefreshScaffolding is called", func(t *testing.T) {
+		// given — repo with outdated minimal scaffolding from an older
+		// aisync release (e.g. .aisyncencrypt with only 2 patterns, missing
+		// the **/.gitignore line in .aisyncignore). The user runs
+		// `aisync init --refresh-scaffolding` to upgrade to the current
+		// templates without re-cloning or losing config.yaml.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		stalemarker := "# stale-from-old-aisync-release\n"
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(stalemarker), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncignore"), []byte(stalemarker), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncencrypt"), []byte(stalemarker), 0600))
+
+		configRepo := &doubles.MockConfigRepository{ExistsVal: true}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+
+		// when
+		err := cmd.RefreshScaffolding(repoPath)
+
+		// then
+		require.NoError(t, err)
+
+		gitignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".gitignore"))
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(gitignoreContent), "stale-from-old-aisync-release")
+		assert.Contains(t, string(gitignoreContent), ".aisync/*", "refreshed .gitignore must carry the latest template")
+
+		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(ignoreContent), "stale-from-old-aisync-release")
+		assert.Contains(t, string(ignoreContent), "**/.gitignore",
+			"refreshed .aisyncignore must include the **/.gitignore exclusion that prevents tool-managed gitignores from masking .age siblings")
+
+		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(encryptContent), "stale-from-old-aisync-release")
+		assert.Contains(t, string(encryptContent), "personal/**/mcp.json",
+			"refreshed .aisyncencrypt must include comprehensive default patterns")
+		assert.Contains(t, string(encryptContent), "personal/**/*.key")
+
+		// config.yaml must be left alone; the helper should not have
+		// rewritten it via configRepo.Save.
+		assert.Equal(t, 0, configRepo.SaveCalls, "RefreshScaffolding must not touch config.yaml")
+	})
+
+	t.Run("should error when RefreshScaffolding runs against a path with no aifiles repo", func(t *testing.T) {
+		// given — empty directory, no config.yaml.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		require.NoError(t, os.MkdirAll(repoPath, 0700))
+
+		configRepo := &doubles.MockConfigRepository{ExistsVal: false}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+
+		// when
+		err := cmd.RefreshScaffolding(repoPath)
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no aifiles repo found",
+			"refreshing a non-existent repo must fail loudly so the user does not accidentally drop default templates into an unrelated directory")
 	})
 }
