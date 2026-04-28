@@ -99,11 +99,16 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 			"different identity files MUST produce different hashes — that is what closes the SHA-256 oracle")
 	})
 
-	t.Run("should not match a plain sha256 of the same input", func(t *testing.T) {
-		// given — directly assert the migration property: HMAC-derived
-		// hashes are NOT computable from the source name alone, so an
-		// attacker without the identity cannot replicate the old
-		// `sha256(name)[:16]` and verify it against bundle filenames.
+	t.Run("should differ from the plain sha256 oracle for this fixture", func(t *testing.T) {
+		// given — exercises the migration property for one concrete
+		// fixture: with truncation to 16 hex chars (64 bits) a collision
+		// between the HMAC value and the legacy `sha256(name)[:16]` is
+		// theoretically possible (~1 in 2^64) but vanishingly unlikely.
+		// Asserting they differ for this specific input is enough to
+		// catch a bug where HMAC accidentally degenerates to a plain
+		// SHA-256 (e.g. by passing an all-zero key) — the actual
+		// security argument is that the HMAC is unforgeable without
+		// the per-repo key, not that any two specific values differ.
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		identity := writeFakeIdentity(t, "ORACLECHECKKEYPAYLOA")
 		name := "-home-user-Development-some-project"
@@ -116,7 +121,7 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 		legacy := sha256.Sum256([]byte(name))
 		legacyHex := hex.EncodeToString(legacy[:])[:16]
 		assert.NotEqual(t, legacyHex, hmacHash,
-			"new HMAC scheme must not produce the same string as the legacy sha256 oracle")
+			"HMAC value should differ from the legacy sha256 oracle for this fixture (collision is theoretically possible at ~1 in 2^64 but would indicate a key-derivation bug)")
 	})
 
 	t.Run("should fail when identityPath is empty", func(t *testing.T) {

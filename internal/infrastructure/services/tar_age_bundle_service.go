@@ -38,8 +38,8 @@ const bundleHashLength = 16
 const bundleNameKeyInfoV1 = "aisync-bundle-name-v1"
 
 // bundleNameKeyLength is the byte length of the HMAC-SHA256 key derived
-// from the age identity. 32 bytes matches HMAC-SHA256's natural block
-// size and provides 256-bit security.
+// from the age identity. 32 bytes matches SHA-256's output size and
+// provides 256-bit key material for the derived HMAC key.
 const bundleNameKeyLength = 32
 
 // maxBundleManifestSize bounds how many bytes Extract is willing to read
@@ -106,29 +106,37 @@ func (s *TarAgeBundleService) HashName(sourceDirName, identityPath string) (stri
 
 // loadOrDeriveNameKey returns the cached HMAC key for identityPath, or
 // derives one via HKDF-SHA256 from the AGE-SECRET-KEY entries inside
-// the identity file and caches it. The cache is keyed by absolute
-// identity path; passing different paths in the same process is
-// supported (e.g. tests).
+// the identity file and caches it. The cache is keyed by the absolute,
+// cleaned identity path so callers passing the same file via different
+// spellings (e.g. `~/.config/aisync/key.txt` vs the expanded
+// `/home/u/.config/aisync/key.txt`, or with redundant `./` segments)
+// hit the same entry.
 func (s *TarAgeBundleService) loadOrDeriveNameKey(identityPath string) ([]byte, error) {
+	cacheKey, err := filepath.Abs(identityPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve absolute identity path: %w", err)
+	}
+	cacheKey = filepath.Clean(cacheKey)
+
 	s.nameKeysMu.RLock()
-	if cached, ok := s.nameKeys[identityPath]; ok {
+	if cached, ok := s.nameKeys[cacheKey]; ok {
 		s.nameKeysMu.RUnlock()
 		return cached, nil
 	}
 	s.nameKeysMu.RUnlock()
 
-	derived, err := deriveBundleNameKey(identityPath)
+	derived, err := deriveBundleNameKey(cacheKey)
 	if err != nil {
 		return nil, err
 	}
 
 	s.nameKeysMu.Lock()
 	defer s.nameKeysMu.Unlock()
-	if cached, ok := s.nameKeys[identityPath]; ok {
+	if cached, ok := s.nameKeys[cacheKey]; ok {
 		// Another goroutine raced ahead; reuse its result.
 		return cached, nil
 	}
-	s.nameKeys[identityPath] = derived
+	s.nameKeys[cacheKey] = derived
 	return derived, nil
 }
 
