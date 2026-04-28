@@ -2,8 +2,10 @@ package services
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -14,17 +16,31 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/crypto/hkdf"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
-// bundleHashLength is the number of hex characters kept from sha256(name).
-// Sixteen is enough for ~10^19 namespace entries — vastly more than any
-// device will ever have project directories — while keeping the .age
-// filename short enough to display.
+// bundleHashLength is the number of hex characters kept from
+// HMAC-SHA256(name). Sixteen is enough for ~10^19 namespace entries —
+// vastly more than any device will ever have project directories —
+// while keeping the .age filename short enough to display.
 const bundleHashLength = 16
+
+// bundleNameKeyInfoV1 namespaces the HKDF derivation that produces the
+// per-repo HMAC key used for bundle filename hashing. Versioning here
+// lets a future migration command derive a v2 key from the same
+// identity material without colliding with the v1 names.
+const bundleNameKeyInfoV1 = "aisync-bundle-name-v1"
+
+// bundleNameKeyLength is the byte length of the HMAC-SHA256 key derived
+// from the age identity. 32 bytes matches HMAC-SHA256's natural block
+// size and provides 256-bit security.
+const bundleNameKeyLength = 32
 
 // maxBundleManifestSize bounds how many bytes Extract is willing to read
 // for the manifest entry. The manifest is a small JSON document; an
@@ -51,6 +67,13 @@ const bundlePermissionMask = 0o7777
 type TarAgeBundleService struct {
 	encryption repositories.EncryptionService
 	now        func() time.Time
+
+	// nameKeysMu guards nameKeys.
+	nameKeysMu sync.RWMutex
+	// nameKeys caches the HMAC key derived from each identity file path
+	// so HashName does not re-read and re-HKDF the identity on every
+	// call. Keyed by identityPath, value is the 32-byte HMAC key.
+	nameKeys map[string][]byte
 }
 
 // NewTarAgeBundleService builds a TarAgeBundleService that delegates the
@@ -59,13 +82,94 @@ func NewTarAgeBundleService(encryption repositories.EncryptionService) *TarAgeBu
 	return &TarAgeBundleService{
 		encryption: encryption,
 		now:        time.Now,
+		nameKeys:   make(map[string][]byte),
 	}
 }
 
-// HashName implements [repositories.BundleService].
-func (s *TarAgeBundleService) HashName(sourceDirName string) string {
-	sum := sha256.Sum256([]byte(sourceDirName))
-	return hex.EncodeToString(sum[:])[:bundleHashLength]
+// HashName implements [repositories.BundleService] using HMAC-SHA256
+// keyed by an HKDF derivation from the age identity at identityPath.
+// Without that identity an attacker cannot compute or verify a bundle
+// filename for a guessed source name — closing the confirmation oracle
+// that existed when filenames were `sha256(name)[:16]`.
+func (s *TarAgeBundleService) HashName(sourceDirName, identityPath string) (string, error) {
+	if identityPath == "" {
+		return "", errors.New("bundle: HashName requires an identity path to derive the per-repo HMAC key")
+	}
+	key, err := s.loadOrDeriveNameKey(identityPath)
+	if err != nil {
+		return "", fmt.Errorf("derive bundle name key: %w", err)
+	}
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(sourceDirName))
+	return hex.EncodeToString(mac.Sum(nil))[:bundleHashLength], nil
+}
+
+// loadOrDeriveNameKey returns the cached HMAC key for identityPath, or
+// derives one via HKDF-SHA256 from the AGE-SECRET-KEY entries inside
+// the identity file and caches it. The cache is keyed by absolute
+// identity path; passing different paths in the same process is
+// supported (e.g. tests).
+func (s *TarAgeBundleService) loadOrDeriveNameKey(identityPath string) ([]byte, error) {
+	s.nameKeysMu.RLock()
+	if cached, ok := s.nameKeys[identityPath]; ok {
+		s.nameKeysMu.RUnlock()
+		return cached, nil
+	}
+	s.nameKeysMu.RUnlock()
+
+	derived, err := deriveBundleNameKey(identityPath)
+	if err != nil {
+		return nil, err
+	}
+
+	s.nameKeysMu.Lock()
+	defer s.nameKeysMu.Unlock()
+	if cached, ok := s.nameKeys[identityPath]; ok {
+		// Another goroutine raced ahead; reuse its result.
+		return cached, nil
+	}
+	s.nameKeys[identityPath] = derived
+	return derived, nil
+}
+
+// deriveBundleNameKey reads the age identity file, gathers every line
+// that begins with `AGE-SECRET-KEY-` as input keying material, and
+// HKDF-extracts a 32-byte HMAC key namespaced by [bundleNameKeyInfoV1].
+//
+// Using the literal Bech32-encoded secret key string as IKM avoids
+// pulling a Bech32 decoder into the bundle service while still binding
+// the derivation to the secret material — anyone who can read the
+// identity file can already decrypt every bundle, so deriving an HMAC
+// key from it adds no new exposure.
+func deriveBundleNameKey(identityPath string) ([]byte, error) {
+	file, err := os.Open(identityPath)
+	if err != nil {
+		return nil, fmt.Errorf("open identity file %s: %w", identityPath, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	var ikm []byte
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "AGE-SECRET-KEY-") {
+			ikm = append(ikm, []byte(line)...)
+			ikm = append(ikm, '\n')
+		}
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		return nil, fmt.Errorf("scan identity file %s: %w", identityPath, scanErr)
+	}
+	if len(ikm) == 0 {
+		return nil, fmt.Errorf("no AGE-SECRET-KEY entry found in identity file %s", identityPath)
+	}
+
+	reader := hkdf.New(sha256.New, ikm, nil, []byte(bundleNameKeyInfoV1))
+	key := make([]byte, bundleNameKeyLength)
+	if _, readErr := io.ReadFull(reader, key); readErr != nil {
+		return nil, fmt.Errorf("hkdf expand: %w", readErr)
+	}
+	return key, nil
 }
 
 // Bundle implements [repositories.BundleService].

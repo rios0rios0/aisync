@@ -28,6 +28,7 @@ func (c *PushCommand) produceBundles(
 		return 0, nil
 	}
 
+	identityPath := ExpandHome(config.Encryption.Identity)
 	produced := 0
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled || len(tool.Bundles) == 0 {
@@ -35,7 +36,10 @@ func (c *PushCommand) produceBundles(
 		}
 		toolPath := ExpandHome(tool.Path)
 		for _, spec := range tool.Bundles {
-			n, err := c.produceToolBundle(repoPath, toolName, toolPath, spec, config.Encryption.Recipients, dryRun)
+			n, err := c.produceToolBundle(
+				repoPath, toolName, toolPath, spec,
+				config.Encryption.Recipients, identityPath, dryRun,
+			)
 			if err != nil {
 				return produced, fmt.Errorf("bundles for %s/%s: %w", toolName, spec.Source, err)
 			}
@@ -54,6 +58,7 @@ func (c *PushCommand) produceToolBundle(
 	repoPath, toolName, toolPath string,
 	spec entities.BundleSpec,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	if len(recipients) == 0 {
@@ -80,9 +85,9 @@ func (c *PushCommand) produceToolBundle(
 	}
 
 	if spec.EffectiveMode() == entities.BundleModeWhole {
-		return c.produceWholeBundle(repoPath, sourceRoot, targetRoot, spec.Source, recipients, dryRun)
+		return c.produceWholeBundle(repoPath, sourceRoot, targetRoot, spec.Source, recipients, identityPath, dryRun)
 	}
-	return c.produceSubdirBundles(repoPath, sourceRoot, targetRoot, recipients, dryRun)
+	return c.produceSubdirBundles(repoPath, sourceRoot, targetRoot, recipients, identityPath, dryRun)
 }
 
 // produceSubdirBundles is the original subdirs-mode behaviour: one
@@ -90,6 +95,7 @@ func (c *PushCommand) produceToolBundle(
 func (c *PushCommand) produceSubdirBundles(
 	repoPath, sourceRoot, targetRoot string,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	entries, err := os.ReadDir(sourceRoot)
@@ -110,7 +116,10 @@ func (c *PushCommand) produceSubdirBundles(
 		if manifest.FileCount == 0 {
 			continue
 		}
-		hash := c.bundleService.HashName(entry.Name())
+		hash, hashErr := c.bundleService.HashName(entry.Name(), identityPath)
+		if hashErr != nil {
+			return produced, fmt.Errorf("hash bundle name for %s: %w", entry.Name(), hashErr)
+		}
 		dest := filepath.Join(targetRoot, hash+".age")
 		if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
 			return produced, writeErr
@@ -127,6 +136,7 @@ func (c *PushCommand) produceSubdirBundles(
 func (c *PushCommand) produceWholeBundle(
 	repoPath, sourceRoot, targetRoot, sourceName string,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	ciphertext, manifest, bundleErr := c.bundleService.Bundle(sourceRoot, sourceName, recipients)
@@ -137,7 +147,10 @@ func (c *PushCommand) produceWholeBundle(
 	if manifest.FileCount == 0 {
 		return 0, nil
 	}
-	hash := c.bundleService.HashName(sourceName)
+	hash, hashErr := c.bundleService.HashName(sourceName, identityPath)
+	if hashErr != nil {
+		return 0, fmt.Errorf("hash bundle name for %s: %w", sourceName, hashErr)
+	}
 	dest := filepath.Join(targetRoot, hash+".age")
 	if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
 		return 0, writeErr

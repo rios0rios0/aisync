@@ -26,10 +26,13 @@ type BundleMergeReport struct {
 // each [entities.BundleSpec].
 type BundleService interface {
 	// HashName returns the deterministic 16-hex-character bundle filename
-	// used for a source directory name. Two devices computing this for
-	// the same source name MUST produce the same hash so git delta
-	// detection works on subsequent pushes.
-	HashName(sourceDirName string) string
+	// used for a source directory name. The hash is keyed by an HMAC key
+	// derived from the age identity at identityPath, so two devices that
+	// share the same age identity MUST produce the same hash (git delta
+	// detection still works) but an attacker without the identity cannot
+	// compute or verify a hash for a guessed source name. This closes
+	// the SHA-256 confirmation oracle that existed in earlier versions.
+	HashName(sourceDirName, identityPath string) (string, error)
 
 	// Bundle packages the contents of sourceDir (recursively) into a
 	// single age-encrypted gzip-compressed tarball, with a manifest entry
