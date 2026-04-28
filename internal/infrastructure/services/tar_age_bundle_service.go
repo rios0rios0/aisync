@@ -60,16 +60,18 @@ const bundleManifestFileMode = 0o600
 // cast warning, so we strip it before storing.
 const bundlePermissionMask = 0o7777
 
-// bundleSizeBuckets is the set of target ciphertext sizes (in bytes)
-// for size padding. Each gzipped tarball is padded with cryptographic
-// random bytes up to the smallest bucket >= the gzipped size before
-// age encryption. Buckets are spaced as powers of 2 from 16 KiB to
-// 128 MiB — fine enough that small projects don't waste much space,
-// coarse enough that an attacker reading the public-clone view cannot
-// distinguish two bundles within the same bucket. Anything larger
-// than the top bucket is left unpadded (very rare for AI assistant
-// project trees; the privacy benefit at that scale is marginal and
-// the storage cost is large).
+// bundleSizeBuckets is the set of target padded gzipped-tarball
+// plaintext sizes (in bytes) for size padding. Each gzipped tarball
+// is padded with cryptographic random bytes up to the smallest
+// bucket >= the gzipped size before age encryption, so the final
+// ciphertext size is the selected bucket plus age overhead. Buckets
+// are spaced as powers of 2 from 16 KiB to 128 MiB — fine enough
+// that small projects don't waste much space, coarse enough that an
+// attacker reading the public-clone view cannot distinguish two
+// bundles within the same bucket. Anything larger than the top
+// bucket is left unpadded (very rare for AI assistant project trees;
+// the privacy benefit at that scale is marginal and the storage cost
+// is large).
 //
 //nolint:gochecknoglobals // compile-time padding schedule, intentionally package-level
 var bundleSizeBuckets = []int{
@@ -98,6 +100,13 @@ type TarAgeBundleService struct {
 	encryption repositories.EncryptionService
 	now        func() time.Time
 
+	// randSource is the io.Reader used to draw bytes for size-bucket
+	// padding. Production code uses [crypto/rand.Reader]; tests can
+	// inject a deterministic reader (e.g. [bytes.Reader] over a fixed
+	// payload) to assert padding behaviour without depending on
+	// crypto/rand output.
+	randSource io.Reader
+
 	// nameKeysMu guards nameKeys.
 	nameKeysMu sync.RWMutex
 	// nameKeys caches the HMAC key derived from each identity file path
@@ -107,11 +116,27 @@ type TarAgeBundleService struct {
 }
 
 // NewTarAgeBundleService builds a TarAgeBundleService that delegates the
-// outer encryption layer to the provided encryption service.
+// outer encryption layer to the provided encryption service. The
+// randomness source for size-bucket padding defaults to
+// [crypto/rand.Reader]; tests use [NewTarAgeBundleServiceWithRand] to
+// inject a deterministic reader.
 func NewTarAgeBundleService(encryption repositories.EncryptionService) *TarAgeBundleService {
+	return NewTarAgeBundleServiceWithRand(encryption, crand.Reader)
+}
+
+// NewTarAgeBundleServiceWithRand is like [NewTarAgeBundleService] but
+// accepts an explicit random source. Production callers should use
+// [NewTarAgeBundleService]; this constructor exists so tests can pass
+// a deterministic reader and assert padding bytes directly without
+// relying on crypto/rand output.
+func NewTarAgeBundleServiceWithRand(
+	encryption repositories.EncryptionService,
+	randSource io.Reader,
+) *TarAgeBundleService {
 	return &TarAgeBundleService{
 		encryption: encryption,
 		now:        time.Now,
+		randSource: randSource,
 		nameKeys:   make(map[string][]byte),
 	}
 }
@@ -239,7 +264,7 @@ func (s *TarAgeBundleService) Bundle(
 		return nil, nil, fmt.Errorf("bundle: write tarball: %w", err)
 	}
 
-	padded, err := padToSizeBucket(tarball)
+	padded, err := s.padToSizeBucket(tarball)
 	if err != nil {
 		return nil, nil, fmt.Errorf("bundle: pad tarball: %w", err)
 	}
@@ -266,25 +291,27 @@ func pickSizeBucket(size int) int {
 	return size
 }
 
-// padToSizeBucket appends cryptographic-random bytes to gzipped so its
-// final length equals the smallest bucket >= len(gzipped). The padding
-// goes AFTER the gzip end marker so a gzip reader configured with
-// [compress/gzip.Reader.Multistream]`(false)` will ignore it during
+// padToSizeBucket appends cryptographic-random bytes (drawn from
+// s.randSource) to gzipped so its final length equals the smallest
+// bucket >= len(gzipped). The padding goes AFTER the gzip end marker
+// so a gzip reader with `gz.Multistream(false)` will ignore it during
 // extract. Random bytes do not start with the gzip magic number with
 // any meaningful probability, so even a Multistream(true) reader would
 // fail loudly rather than silently mis-decode a fake second stream.
-func padToSizeBucket(gzipped []byte) ([]byte, error) {
+//
+// The output slice is allocated once at the bucket size and the gzipped
+// prefix copied in directly, so peak memory is one bucket-sized
+// allocation per call instead of two.
+func (s *TarAgeBundleService) padToSizeBucket(gzipped []byte) ([]byte, error) {
 	target := pickSizeBucket(len(gzipped))
 	if target <= len(gzipped) {
 		return gzipped, nil
 	}
-	padding := make([]byte, target-len(gzipped))
-	if _, err := crand.Read(padding); err != nil {
+	out := make([]byte, target)
+	copy(out, gzipped)
+	if _, err := io.ReadFull(s.randSource, out[len(gzipped):]); err != nil {
 		return nil, fmt.Errorf("read random padding: %w", err)
 	}
-	out := make([]byte, 0, target)
-	out = append(out, gzipped...)
-	out = append(out, padding...)
 	return out, nil
 }
 
