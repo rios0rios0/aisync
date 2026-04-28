@@ -262,7 +262,7 @@ func TestYAMLConfigRepository_Save_ShouldEmitSingleQuotedStringValues(t *testing
 	assert.Contains(t, yamlText, "commit_prefix: 'sync'",
 		"string scalar `commit_prefix` must be single-quoted")
 	assert.Contains(t, yamlText, "identity: '~/.config/aisync/key.txt'",
-		"string starting with `~` must be single-quoted so YAML does not interpret it as null")
+		"string scalar `identity` must be single-quoted for explicit YAML string formatting")
 	assert.Contains(t, yamlText, "- 'age1abcd'",
 		"string sequence values must be single-quoted")
 	assert.Contains(t, yamlText, "- '*.tmp'",

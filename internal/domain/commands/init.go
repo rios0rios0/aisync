@@ -449,7 +449,7 @@ func (c *InitCommand) RefreshScaffolding(repoPath string) error {
 		if err := writeFileForce(f.path, []byte(f.content)); err != nil {
 			return fmt.Errorf("failed to refresh %s: %w", f.path, err)
 		}
-		logger.Infof("refreshed %s", filepath.Base(f.path))
+		logger.WithField("file", filepath.Base(f.path)).Info("refreshed scaffolding file")
 	}
 
 	logger.Info("scaffolding files refreshed; review the changes with `git diff` before committing")
