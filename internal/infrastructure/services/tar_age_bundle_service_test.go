@@ -3,6 +3,8 @@
 package services_test
 
 import (
+	"bytes"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -181,6 +183,160 @@ func TestTarAgeBundleService_BundleAndExtract_RoundTrip(t *testing.T) {
 	}
 	assert.Equal(t, []byte("# memory\n"), paths["MEMORY.md"])
 	assert.Equal(t, []byte("note"), paths["nested/note.md"])
+}
+
+func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should pad small bundles up to the smallest 16 KiB bucket", func(t *testing.T) {
+		// given — a tiny bundle (one short file). The gzipped tarball
+		// is well under 16 KiB, so the padded ciphertext must land
+		// exactly at the 16 KiB bucket. (passthroughEncryption returns
+		// the plaintext unchanged so we can read its length directly.)
+		service := services.NewTarAgeBundleService(passthroughEncryption{})
+		src := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(src, "small.txt"), []byte("hi"), 0o600))
+
+		// when
+		ciphertext, _, err := service.Bundle(src, "small-project", []string{"age1xyz"})
+		require.NoError(t, err)
+
+		// then
+		assert.Equal(t, 16<<10, len(ciphertext),
+			"a tiny bundle must be padded up to the 16 KiB bucket, not left at its natural compressed size")
+	})
+
+	t.Run("should produce identical ciphertext sizes for two same-bucket bundles with different content", func(t *testing.T) {
+		// given — two bundles with completely different short content.
+		// Both should fit in the 16 KiB bucket and therefore both
+		// ciphertexts must end up exactly 16 KiB long. This is the
+		// privacy property: an attacker reading the public-clone view
+		// cannot distinguish the two bundles by file size.
+		service := services.NewTarAgeBundleService(passthroughEncryption{})
+
+		srcA := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(srcA, "a.md"), []byte("project alpha notes"), 0o600))
+		cipherA, _, errA := service.Bundle(srcA, "alpha", []string{"age1xyz"})
+		require.NoError(t, errA)
+
+		srcB := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(srcB, "b.md"), []byte("a totally different second project"), 0o600))
+		cipherB, _, errB := service.Bundle(srcB, "bravo", []string{"age1xyz"})
+		require.NoError(t, errB)
+
+		// then
+		assert.Equal(t, len(cipherA), len(cipherB),
+			"two bundles in the same size bucket must produce equal-length ciphertext (this is the privacy property the padding protects)")
+		assert.Equal(t, 16<<10, len(cipherA))
+	})
+
+	t.Run("should round-trip cleanly after padding", func(t *testing.T) {
+		// given
+		service := services.NewTarAgeBundleService(passthroughEncryption{})
+		src := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(src, "MEMORY.md"), []byte("# memory\n"), 0o600))
+		require.NoError(t, os.MkdirAll(filepath.Join(src, "nested"), 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(src, "nested", "note.md"), []byte("note"), 0o600))
+
+		// when
+		ciphertext, _, bundleErr := service.Bundle(src, "round-trip-pad", []string{"age1xyz"})
+		require.NoError(t, bundleErr)
+		assert.Equal(t, 16<<10, len(ciphertext), "should land at the 16 KiB bucket")
+
+		gotManifest, files, extractErr := service.Extract(ciphertext, "")
+
+		// then — every file is recovered despite the trailing random
+		// padding past the gzip end marker.
+		require.NoError(t, extractErr)
+		assert.Equal(t, "round-trip-pad", gotManifest.OriginalName)
+		assert.Equal(t, 2, gotManifest.FileCount)
+		paths := map[string][]byte{}
+		for _, f := range files {
+			paths[f.RelativePath] = f.Content
+		}
+		assert.Equal(t, []byte("# memory\n"), paths["MEMORY.md"])
+		assert.Equal(t, []byte("note"), paths["nested/note.md"])
+	})
+
+	t.Run("should produce different ciphertext bytes on repeated runs (random padding)", func(t *testing.T) {
+		// given — same input bundled twice. With random padding, the
+		// two ciphertexts should DIFFER even though file contents are
+		// identical. This protects against equality-comparison oracles
+		// (an attacker noticing two devices produced the same byte
+		// sequence and inferring identical underlying content).
+		service := services.NewTarAgeBundleService(passthroughEncryption{})
+		src := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("identical content"), 0o600))
+
+		// when
+		first, _, errFirst := service.Bundle(src, "same-name", []string{"age1xyz"})
+		require.NoError(t, errFirst)
+		second, _, errSecond := service.Bundle(src, "same-name", []string{"age1xyz"})
+		require.NoError(t, errSecond)
+
+		// then — sizes match (same bucket) but the bytes differ
+		assert.Equal(t, len(first), len(second), "same content should land in the same bucket")
+		assert.NotEqual(t, first, second,
+			"random padding should make two bundles of identical content produce different ciphertext bytes")
+	})
+
+	t.Run("should accept an injected random source via NewTarAgeBundleServiceWithRand", func(t *testing.T) {
+		// given — the injection point for the random source is exposed
+		// via [services.NewTarAgeBundleServiceWithRand] so future
+		// benchmarks, fuzz tests, and stress tests can drive padding
+		// from a controlled stream. Full-pipeline byte-equality testing
+		// is impractical here because [gzip.Writer] and
+		// [BundleManifest.CreatedAt] introduce timestamp-based
+		// nondeterminism upstream of padding; what this test asserts
+		// is the contract: a service built with an alternative reader
+		// still produces a bucket-aligned ciphertext.
+		zeroSource := bytes.NewReader(bytes.Repeat([]byte{0x00}, 1<<20))
+		service := services.NewTarAgeBundleServiceWithRand(passthroughEncryption{}, zeroSource)
+		src := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("identical content"), 0o600))
+
+		// when
+		ciphertext, _, err := service.Bundle(src, "injected-source", []string{"age1xyz"})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 16<<10, len(ciphertext),
+			"injected random source must still produce a bucket-aligned ciphertext")
+	})
+
+	t.Run("should round up to a larger bucket for medium-sized bundles", func(t *testing.T) {
+		// given — a bundle whose payload (~20 KiB of incompressible
+		// random bytes plus some Lorem ipsum) compresses to more than
+		// 16 KiB. The exact compressed size depends on gzip's deflate
+		// behaviour and is not deterministic across Go versions, so
+		// the assertion just checks that the result lands on SOME
+		// configured bucket — that's the property the padding
+		// guarantees regardless of compressed size.
+		service := services.NewTarAgeBundleService(passthroughEncryption{})
+		src := t.TempDir()
+		// Mix of compressible and incompressible content so the
+		// gzipped output lands somewhere meaningful between the two
+		// buckets.
+		payload := bytes.Repeat([]byte("Lorem ipsum dolor sit amet, consectetur adipiscing elit. "), 400)
+		require.NoError(t, os.WriteFile(filepath.Join(src, "long.txt"), payload, 0o600))
+		// Add ~20 KiB of random bytes that don't compress.
+		random := make([]byte, 20<<10)
+		_, randErr := crand.Read(random)
+		require.NoError(t, randErr)
+		require.NoError(t, os.WriteFile(filepath.Join(src, "random.bin"), random, 0o600))
+
+		// when
+		ciphertext, _, err := service.Bundle(src, "medium-project", []string{"age1xyz"})
+		require.NoError(t, err)
+
+		// then — the actual size must equal one of the configured
+		// buckets, and must be at least 16 KiB (smallest bucket).
+		size := len(ciphertext)
+		assert.GreaterOrEqual(t, size, 16<<10)
+		buckets := []int{16 << 10, 32 << 10, 64 << 10, 128 << 10, 256 << 10}
+		assert.Contains(t, buckets, size,
+			"padded ciphertext must land on a configured bucket size, not a free-floating value")
+	})
 }
 
 func TestTarAgeBundleService_Bundle_RejectsEmptyRecipients(t *testing.T) {
