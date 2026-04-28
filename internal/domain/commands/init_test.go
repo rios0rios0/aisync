@@ -342,7 +342,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to initialize git repository")
 	})
 
-	t.Run("should write default .aisyncignore and .aisyncencrypt on create", func(t *testing.T) {
+	t.Run("should write default .gitignore, .aisyncignore and .aisyncencrypt on create", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "aifiles")
@@ -367,6 +367,11 @@ func TestInitCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
+		gitignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".gitignore"))
+		require.NoError(t, readErr)
+		assert.Contains(t, string(gitignoreContent), ".aisync/*", "default .gitignore must exclude per-device .aisync/ runtime state")
+		assert.Contains(t, string(gitignoreContent), "!.aisync/.gitkeep", "default .gitignore must keep .aisync/.gitkeep tracked")
+
 		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
 		require.NoError(t, readErr)
 		assert.Contains(t, string(ignoreContent), "plans/", "default .aisyncignore should include plans/")
@@ -386,14 +391,16 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Contains(t, string(encryptContent), "personal/**/auth.json", "auth.json should be in default encrypt list")
 	})
 
-	t.Run("should not overwrite existing .aisyncignore and .aisyncencrypt on clone", func(t *testing.T) {
+	t.Run("should not overwrite existing .gitignore, .aisyncignore and .aisyncencrypt on clone", func(t *testing.T) {
 		// given — simulate a clone that lands a repo with custom ignore/encrypt files.
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "aifiles")
 		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
+		customGitignore := "# user-customised\nbuild/\n"
 		customIgnore := "# user-customised\nfoo/\n"
 		customEncrypt := "# user-customised\npersonal/custom/**\n"
+		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(customGitignore), 0600))
 		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncignore"), []byte(customIgnore), 0600))
 		require.NoError(t, os.WriteFile(filepath.Join(repoPath, ".aisyncencrypt"), []byte(customEncrypt), 0600))
 
@@ -414,6 +421,10 @@ func TestInitCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
+		gitignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".gitignore"))
+		require.NoError(t, readErr)
+		assert.Equal(t, customGitignore, string(gitignoreContent), "existing .gitignore must not be overwritten")
+
 		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
 		require.NoError(t, readErr)
 		assert.Equal(t, customIgnore, string(ignoreContent), "existing .aisyncignore must not be overwritten")
@@ -423,7 +434,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Equal(t, customEncrypt, string(encryptContent), "existing .aisyncencrypt must not be overwritten")
 	})
 
-	t.Run("should write default .aisyncignore and .aisyncencrypt when missing after clone", func(t *testing.T) {
+	t.Run("should write default .gitignore, .aisyncignore and .aisyncencrypt when missing after clone", func(t *testing.T) {
 		// given — legacy cloned repo with no ignore/encrypt files yet.
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "aifiles")
@@ -446,7 +457,10 @@ func TestInitCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 
-		_, statErr := os.Stat(filepath.Join(repoPath, ".aisyncignore"))
+		_, statErr := os.Stat(filepath.Join(repoPath, ".gitignore"))
+		assert.NoError(t, statErr, "clone should backfill .gitignore when missing")
+
+		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncignore"))
 		assert.NoError(t, statErr, "clone should backfill .aisyncignore when missing")
 
 		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncencrypt"))
