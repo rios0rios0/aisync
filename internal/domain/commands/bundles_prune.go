@@ -60,6 +60,7 @@ func (c *PruneBundlesCommand) Execute(configPath, repoPath string) (*PruneResult
 		return &PruneResult{}, nil
 	}
 
+	identityPath := ExpandHome(config.Encryption.Identity)
 	result := &PruneResult{}
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled || len(tool.Bundles) == 0 {
@@ -67,7 +68,7 @@ func (c *PruneBundlesCommand) Execute(configPath, repoPath string) (*PruneResult
 		}
 		toolPath := ExpandHome(tool.Path)
 		for _, spec := range tool.Bundles {
-			scanned, removed, scanErr := c.pruneOneSpec(repoPath, toolName, toolPath, spec)
+			scanned, removed, scanErr := c.pruneOneSpec(repoPath, toolName, toolPath, identityPath, spec)
 			if scanErr != nil {
 				logger.Warnf("prune %s/%s: %v", toolName, spec.Source, scanErr)
 				continue
@@ -84,7 +85,7 @@ func (c *PruneBundlesCommand) Execute(configPath, repoPath string) (*PruneResult
 // confirmed ones. Returns (scanned, removed, error) so the caller can
 // build a meaningful summary line.
 func (c *PruneBundlesCommand) pruneOneSpec(
-	repoPath, toolName, toolPath string,
+	repoPath, toolName, toolPath, identityPath string,
 	spec entities.BundleSpec,
 ) (int, int, error) {
 	targetDir := filepath.Join(repoPath, "personal", toolName, spec.Target)
@@ -96,7 +97,10 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 		return 0, 0, fmt.Errorf("read %s: %w", targetDir, err)
 	}
 
-	expected := c.expectedHashes(toolPath, spec)
+	expected, expectedErr := c.expectedHashes(toolPath, identityPath, spec)
+	if expectedErr != nil {
+		return 0, 0, fmt.Errorf("compute expected hashes: %w", expectedErr)
+	}
 
 	scanned, removed := 0, 0
 	for _, entry := range bundles {
@@ -137,25 +141,51 @@ func (c *PruneBundlesCommand) pruneOneSpec(
 // shape of the set depends on the spec's mode: subdirs mode produces
 // one hash per immediate subdirectory; whole mode produces exactly
 // one hash (HashName of the source label) iff the source dir exists.
-func (c *PruneBundlesCommand) expectedHashes(toolPath string, spec entities.BundleSpec) map[string]struct{} {
+//
+// Returns an empty set with a nil error when the source directory does
+// not exist on this device (treats every bundle as a candidate orphan
+// behind the per-file confirmation prompt). Returns a non-nil error
+// when the source directory cannot be read for any other reason or
+// when [repositories.BundleService.HashName] fails (e.g. the age
+// identity file is unreadable, which would otherwise produce
+// false-orphan deletions if the per-repo HMAC key cannot be derived).
+func (c *PruneBundlesCommand) expectedHashes(
+	toolPath, identityPath string,
+	spec entities.BundleSpec,
+) (map[string]struct{}, error) {
 	sourceRoot := filepath.Join(toolPath, spec.Source)
 	if spec.EffectiveMode() == entities.BundleModeWhole {
 		expected := map[string]struct{}{}
 		if _, statErr := os.Stat(sourceRoot); statErr == nil {
-			expected[c.bundleService.HashName(spec.Source)] = struct{}{}
+			hash, hashErr := c.bundleService.HashName(spec.Source, identityPath)
+			if hashErr != nil {
+				return nil, fmt.Errorf("hash whole-mode source %s: %w", spec.Source, hashErr)
+			}
+			expected[hash] = struct{}{}
 		}
-		return expected
+		return expected, nil
 	}
 	entries, err := os.ReadDir(sourceRoot)
 	if err != nil {
-		return map[string]struct{}{}
+		if os.IsNotExist(err) {
+			// Source dir not present on this device yet — there are no
+			// hashes to expect, so every existing bundle is treated as
+			// a candidate orphan (and gated behind the per-file
+			// confirmation prompt before deletion).
+			return map[string]struct{}{}, nil
+		}
+		return nil, fmt.Errorf("read bundle source %s: %w", sourceRoot, err)
 	}
 	expected := make(map[string]struct{}, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		expected[c.bundleService.HashName(entry.Name())] = struct{}{}
+		hash, hashErr := c.bundleService.HashName(entry.Name(), identityPath)
+		if hashErr != nil {
+			return nil, fmt.Errorf("hash subdir %s: %w", entry.Name(), hashErr)
+		}
+		expected[hash] = struct{}{}
 	}
-	return expected
+	return expected, nil
 }

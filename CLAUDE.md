@@ -88,7 +88,7 @@ Two bundle modes exist:
 
 | Mode | Config value | Behavior |
 |------|-------------|----------|
-| `subdirs` (default) | `mode: subdirs` | Each immediate subdirectory is packaged as one `.age` tarball. Filename is `sha256(name)[:16].age`; the original name lives only inside the encrypted `_aisync-manifest.json`. |
+| `subdirs` (default) | `mode: subdirs` | Each immediate subdirectory is packaged as one `.age` tarball. Filename is `hmac_sha256(per_repo_key, name)[:16].age` where `per_repo_key` is HKDF-derived from the device's age identity (info string `aisync-bundle-name-v1`). The original name lives only inside the encrypted `_aisync-manifest.json`. Without the age identity, an attacker cannot compute or verify a filename for a guessed project name — closing the SHA-256 confirmation oracle that existed before. |
 | `whole` | `mode: whole` | The entire source directory is one tarball — for loose-file directories like `plans/` or `todos/`. |
 
 Two merge strategies control how pull reconciles bundles with local state:

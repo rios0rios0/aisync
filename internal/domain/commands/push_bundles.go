@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +29,11 @@ func (c *PushCommand) produceBundles(
 		return 0, nil
 	}
 
+	identityPath := ExpandHome(config.Encryption.Identity)
+	if err := validateBundleIdentity(config, identityPath); err != nil {
+		return 0, err
+	}
+
 	produced := 0
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled || len(tool.Bundles) == 0 {
@@ -35,7 +41,10 @@ func (c *PushCommand) produceBundles(
 		}
 		toolPath := ExpandHome(tool.Path)
 		for _, spec := range tool.Bundles {
-			n, err := c.produceToolBundle(repoPath, toolName, toolPath, spec, config.Encryption.Recipients, dryRun)
+			n, err := c.produceToolBundle(
+				repoPath, toolName, toolPath, spec,
+				config.Encryption.Recipients, identityPath, dryRun,
+			)
 			if err != nil {
 				return produced, fmt.Errorf("bundles for %s/%s: %w", toolName, spec.Source, err)
 			}
@@ -43,6 +52,37 @@ func (c *PushCommand) produceBundles(
 		}
 	}
 	return produced, nil
+}
+
+// validateBundleIdentity fails fast when the user has bundles configured
+// AND encryption recipients set, but the age identity that bundle name
+// derivation depends on is missing. Without this pre-check, the user
+// would see a wrapped "hash bundle name for X: open identity file ...:
+// no such file or directory" mid-loop after some bundles already
+// processed; instead they get one direct, actionable error before any
+// bundle work starts.
+func validateBundleIdentity(config *entities.Config, identityPath string) error {
+	hasBundlesNeedingIdentity := false
+	for _, tool := range config.Tools {
+		if tool.Enabled && len(tool.Bundles) > 0 {
+			hasBundlesNeedingIdentity = true
+			break
+		}
+	}
+	if !hasBundlesNeedingIdentity || len(config.Encryption.Recipients) == 0 {
+		// No bundles to write, OR no recipients (push will skip the
+		// bundle work and warn separately). Identity not needed.
+		return nil
+	}
+	if config.Encryption.Identity == "" {
+		return errors.New("bundles require an age identity: set encryption.identity in config.yaml " +
+			"(e.g. ~/.config/aisync/key.txt) or run `aisync key generate`",
+		)
+	}
+	if _, err := os.Stat(identityPath); err != nil {
+		return fmt.Errorf("bundles require a readable age identity at %s: %w", identityPath, err)
+	}
+	return nil
 }
 
 // produceToolBundle handles one BundleSpec for one tool. In subdirs
@@ -54,6 +94,7 @@ func (c *PushCommand) produceToolBundle(
 	repoPath, toolName, toolPath string,
 	spec entities.BundleSpec,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	if len(recipients) == 0 {
@@ -80,9 +121,9 @@ func (c *PushCommand) produceToolBundle(
 	}
 
 	if spec.EffectiveMode() == entities.BundleModeWhole {
-		return c.produceWholeBundle(repoPath, sourceRoot, targetRoot, spec.Source, recipients, dryRun)
+		return c.produceWholeBundle(repoPath, sourceRoot, targetRoot, spec.Source, recipients, identityPath, dryRun)
 	}
-	return c.produceSubdirBundles(repoPath, sourceRoot, targetRoot, recipients, dryRun)
+	return c.produceSubdirBundles(repoPath, sourceRoot, targetRoot, recipients, identityPath, dryRun)
 }
 
 // produceSubdirBundles is the original subdirs-mode behaviour: one
@@ -90,6 +131,7 @@ func (c *PushCommand) produceToolBundle(
 func (c *PushCommand) produceSubdirBundles(
 	repoPath, sourceRoot, targetRoot string,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	entries, err := os.ReadDir(sourceRoot)
@@ -110,7 +152,10 @@ func (c *PushCommand) produceSubdirBundles(
 		if manifest.FileCount == 0 {
 			continue
 		}
-		hash := c.bundleService.HashName(entry.Name())
+		hash, hashErr := c.bundleService.HashName(entry.Name(), identityPath)
+		if hashErr != nil {
+			return produced, fmt.Errorf("hash bundle name for %s: %w", entry.Name(), hashErr)
+		}
 		dest := filepath.Join(targetRoot, hash+".age")
 		if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
 			return produced, writeErr
@@ -127,6 +172,7 @@ func (c *PushCommand) produceSubdirBundles(
 func (c *PushCommand) produceWholeBundle(
 	repoPath, sourceRoot, targetRoot, sourceName string,
 	recipients []string,
+	identityPath string,
 	dryRun bool,
 ) (int, error) {
 	ciphertext, manifest, bundleErr := c.bundleService.Bundle(sourceRoot, sourceName, recipients)
@@ -137,7 +183,10 @@ func (c *PushCommand) produceWholeBundle(
 	if manifest.FileCount == 0 {
 		return 0, nil
 	}
-	hash := c.bundleService.HashName(sourceName)
+	hash, hashErr := c.bundleService.HashName(sourceName, identityPath)
+	if hashErr != nil {
+		return 0, fmt.Errorf("hash bundle name for %s: %w", sourceName, hashErr)
+	}
 	dest := filepath.Join(targetRoot, hash+".age")
 	if writeErr := writeOrLogBundle(repoPath, dest, ciphertext, dryRun); writeErr != nil {
 		return 0, writeErr
