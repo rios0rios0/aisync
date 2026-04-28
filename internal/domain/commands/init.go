@@ -31,14 +31,17 @@ const defaultGitignore = `# aisync default ignore — per-device runtime state.
 
 // defaultAisyncIgnore is the starter content written to .aisyncignore by
 // `aisync init`. These are basename and simple-glob patterns for files that
-// users almost never want to sync across devices. Structural/directory-level
-// blocking (transcripts, runtime state, backups) lives in the compiled-in
-// deny-list in entities/denylist.go — that deny-list cannot be overridden,
-// whereas this file can.
+// users almost never want to sync across devices. Structural exclusion
+// works inversely: the compiled-in per-tool allowlist in
+// entities/allowlist.go syncs only paths whose tool-relative form matches
+// an explicit entry, so unknown vendor directories are dropped by default
+// rather than silently leaking through a deny-list. The allowlist cannot
+// be overridden, whereas this file can.
 const defaultAisyncIgnore = `# aisync default ignore — user-overridable basename patterns.
-# For structural directory exclusions (transcripts, runtime state, caches,
-# backups) see the compiled-in deny-list in aisync. That list cannot be
-# overridden and ships updated with every aisync release.
+# Structural exclusion works the other way around: aisync's compiled-in
+# per-tool allowlist (entities/allowlist.go) syncs only paths that match
+# an explicit entry, so unknown vendor directories are dropped by default
+# and the allowlist ships updated with every aisync release.
 
 # editor / OS junk
 *.tmp
