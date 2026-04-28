@@ -16,7 +16,7 @@ Sync AI coding assistant configurations across devices. Pull shared rules from c
 - **Cross-device sync**: Git-backed, no cloud dependency, no SaaS subscription
 - **External sources**: Pull shared rules from any public Git repository (tarball-only, zero API calls)
 - **Shared/personal split**: Enforced namespaces — shared rules from sources, personal rules across devices
-- **Age encryption**: Memories and sensitive settings encrypted at rest — public repos are safe
+- **Age encryption**: Memories, MCP configs, and bundle contents encrypted at rest with HMAC-keyed filenames (closes the SHA-256 confirmation oracle on bundle names) and power-of-2 size-bucket padding (defeats traffic analysis on the public-clone view)
 - **File watching**: Real-time change detection with fsnotify + polling fallback for Termux
 - **Diff preview**: See what would change before applying, with recency detection
 - **Secret scanning**: 15 regex patterns block accidental credential leaks before push
@@ -77,7 +77,7 @@ Like chezmoi expects a `dotfiles` repo, aisync expects an `aifiles` repo:
 | Local clone | `~/.local/share/chezmoi/` | `~/.config/aisync/repo/` |
 | Shorthand | `chezmoi init <user>` | `aisync init <user>` |
 
-The `aifiles` repo can be **public** — personal data (memories, local settings) is encrypted with age.
+The `aifiles` repo **can** be public — bundle contents (memories, project history, MCP configs, local settings) are age-encrypted, bundle filenames are HMAC-derived from the device's identity (so guessed project names can't be confirmed against the public-clone view), and bundle ciphertext is padded to fixed power-of-2 size buckets (so file sizes don't profile per-project activity). What still rides as plaintext: rules, agents, commands, hooks, scripts, and skills under `personal/<tool>/` — review those before flipping visibility.
 
 ## Usage
 
