@@ -218,6 +218,115 @@ func TestYAMLConfigRepository_Save_ShouldCreateParentDirectories(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to write config file")
 }
 
+func TestYAMLConfigRepository_Save_ShouldEmitSingleQuotedStringValues(t *testing.T) {
+	// given — a config containing a mix of string, boolean, and integer-like
+	// fields. The YAML rule requires single-quoted string values, unquoted
+	// booleans/numbers, and unquoted map keys.
+	repo := repositories.NewYAMLConfigRepository()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	config := &entities.Config{
+		Sync: entities.SyncConfig{
+			Remote:       "git@github.com:user/repo.git",
+			Branch:       "main",
+			AutoPush:     true,
+			Debounce:     "60s",
+			CommitPrefix: "sync",
+		},
+		Encryption: entities.EncryptionConfig{
+			Identity:   "~/.config/aisync/key.txt",
+			Recipients: []string{"age1abcd"},
+		},
+		Tools: map[string]entities.Tool{
+			"claude": {Path: "~/.claude", Enabled: true},
+		},
+		Watch: entities.WatchConfig{
+			PollingInterval: "30s",
+			IgnoredPatterns: []string{"*.tmp", "*.swp"},
+		},
+	}
+
+	// when
+	err := repo.Save(path, config)
+
+	// then
+	assert.NoError(t, err)
+	raw, err := os.ReadFile(path)
+	assert.NoError(t, err)
+	yamlText := string(raw)
+
+	// String values must be wrapped in single quotes.
+	assert.Contains(t, yamlText, "remote: 'git@github.com:user/repo.git'",
+		"string scalar `remote` must be single-quoted")
+	assert.Contains(t, yamlText, "branch: 'main'",
+		"string scalar `branch` must be single-quoted")
+	assert.Contains(t, yamlText, "commit_prefix: 'sync'",
+		"string scalar `commit_prefix` must be single-quoted")
+	assert.Contains(t, yamlText, "identity: '~/.config/aisync/key.txt'",
+		"string starting with `~` must be single-quoted so YAML does not interpret it as null")
+	assert.Contains(t, yamlText, "- 'age1abcd'",
+		"string sequence values must be single-quoted")
+	assert.Contains(t, yamlText, "- '*.tmp'",
+		"glob string sequence values must be single-quoted")
+
+	// Booleans must remain unquoted so the YAML parser preserves their type.
+	assert.Contains(t, yamlText, "auto_push: true",
+		"boolean scalar must be emitted unquoted")
+	assert.NotContains(t, yamlText, "auto_push: 'true'",
+		"boolean scalar must NOT be quoted")
+	assert.NotContains(t, yamlText, `auto_push: "true"`,
+		"boolean scalar must NOT be double-quoted either")
+	assert.Contains(t, yamlText, "enabled: true",
+		"boolean scalar in nested map must be emitted unquoted")
+
+	// Map keys must be unquoted.
+	assert.Contains(t, yamlText, "sync:",
+		"top-level map keys must be unquoted")
+	assert.Contains(t, yamlText, "claude:",
+		"nested map key must be unquoted (no `'claude':`)")
+	assert.NotContains(t, yamlText, "'claude':",
+		"nested map key must NOT be single-quoted")
+}
+
+func TestYAMLConfigRepository_Save_QuotedStringRoundtripsCleanly(t *testing.T) {
+	// given — single-quoted output must round-trip back to the same Config
+	// so the new style does not silently change observed values.
+	repo := repositories.NewYAMLConfigRepository()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	original := &entities.Config{
+		Sync: entities.SyncConfig{
+			Remote:       "git@github.com:user/repo.git",
+			Branch:       "main",
+			AutoPush:     true,
+			Debounce:     "60s",
+			CommitPrefix: "sync",
+		},
+		Encryption: entities.EncryptionConfig{
+			Identity:   "~/.config/aisync/key.txt",
+			Recipients: []string{"age1abcd", "age1efgh"},
+		},
+		Tools: map[string]entities.Tool{
+			"claude": {Path: "~/.claude", Enabled: true},
+			"cursor": {Path: "~/.cursor", Enabled: false},
+		},
+		Watch: entities.WatchConfig{
+			PollingInterval: "30s",
+			IgnoredPatterns: []string{"*.tmp"},
+		},
+	}
+
+	// when
+	err := repo.Save(path, original)
+	assert.NoError(t, err)
+	loaded, err := repo.Load(path)
+
+	// then
+	assert.NoError(t, err)
+	assert.Equal(t, original.Sync, loaded.Sync)
+	assert.Equal(t, original.Encryption, loaded.Encryption)
+	assert.Equal(t, original.Tools, loaded.Tools)
+	assert.Equal(t, original.Watch, loaded.Watch)
+}
+
 func TestYAMLConfigRepository_Load_PartialConfigWithMissingOptionalFields(t *testing.T) {
 	// given
 	repo := repositories.NewYAMLConfigRepository()

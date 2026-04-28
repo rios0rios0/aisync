@@ -16,6 +16,18 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Added
+
+- added `aisync init --refresh-scaffolding` for upgrading older aifiles repos whose scaffolding pre-dates recent template changes. The flag overwrites `.gitignore`, `.aisyncignore`, and `.aisyncencrypt` with the latest default templates while leaving `config.yaml`, repo content, and Git state untouched. Without this flag, users who initialised their repo before the comprehensive `.aisyncencrypt` pattern list landed had no in-tool way to pick up new defaults like `personal/**/mcp.json` or `personal/**/*.key`, leaving credentials in plaintext on every push
+
+### Changed
+
+- changed `YAMLConfigRepository.Save` to emit string values in single-quoted style (`branch: 'main'`) while keeping booleans, integers, floats, and map keys unquoted. Aligns the file `aisync` writes during `init`, `source add`, `nda add`, `key add-recipient`, and other config-mutating commands with the project's YAML convention. Round-trips with `Load` are preserved verbatim — no observed values change
+
+### Fixed
+
+- fixed `aisync init` shipping an `.aisyncignore` template that did not exclude tool-managed `.gitignore` files. When `personal/cursor/.gitignore` (synced verbatim from `~/.cursor/.gitignore`, which begins with `*` to ignore everything in the tool dir) landed in a freshly-initialised aifiles repo, it silently caused git to ignore freshly-encrypted `personal/cursor/mcp.json.age` and any sibling `.age` file inside the same directory — `aisync push` would report "1 file collected" while the encrypted ciphertext never made it into the commit. The default `.aisyncignore` now contains `**/.gitignore`, forcing the repo root `.gitignore` to be the single source of truth for git-ignore semantics inside aifiles
+
 ## [1.1.1] - 2026-04-28
 
 ### Changed
