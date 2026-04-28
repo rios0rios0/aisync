@@ -634,7 +634,8 @@ func (m *MockGitInspector) SSHHostAliases() ([]repositories.DerivedTerm, error) 
 // MockBundleService is a manual stub for repositories.BundleService. The
 // stub returns canned ciphertext / manifest values configured by tests.
 // HashName uses a simple deterministic transform so tests asserting the
-// produced filename can predict it.
+// produced filename can predict it. HashErr can be set to simulate
+// identity-file failures (e.g. missing AGE-SECRET-KEY entry).
 type MockBundleService struct {
 	BundleCipher      []byte
 	BundleManifest    *entities.BundleManifest
@@ -644,18 +645,24 @@ type MockBundleService struct {
 	ExtractErr        error
 	MergeReport       *repositories.BundleMergeReport
 	MergeErr          error
+	HashErr           error
 	BundleCalls       int
 	ExtractCalls      int
 	MergeCalls        int
 	HashCalls         int
 	LastBundleSrc     string
 	LastBundleName    string
+	LastHashIdentity  string
 	LastExtractCipher []byte
 }
 
-func (m *MockBundleService) HashName(name string) string {
+func (m *MockBundleService) HashName(name, identityPath string) (string, error) {
 	m.HashCalls++
-	return "h_" + name
+	m.LastHashIdentity = identityPath
+	if m.HashErr != nil {
+		return "", m.HashErr
+	}
+	return "h_" + name, nil
 }
 
 func (m *MockBundleService) Bundle(
