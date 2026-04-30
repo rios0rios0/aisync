@@ -92,11 +92,11 @@ func (m *MockStateRepository) Exists(repoPath string) bool {
 
 // MockSourceRepository is a manual stub for repositories.SourceRepository.
 type MockSourceRepository struct {
-	Result           *repositories.FetchResult
-	ResultsBySource  map[string]*repositories.FetchResult // keyed by source name
-	FetchErr         error
-	FetchedSources   []*entities.Source
-	FetchCalls       int
+	Result          *repositories.FetchResult
+	ResultsBySource map[string]*repositories.FetchResult // keyed by source name
+	FetchErr        error
+	FetchedSources  []*entities.Source
+	FetchCalls      int
 }
 
 func (m *MockSourceRepository) Fetch(source *entities.Source, hints repositories.CacheHints) (*repositories.FetchResult, error) {
@@ -163,21 +163,21 @@ type MockGitRepository struct {
 	PushErr        error
 	IsCleanVal     bool
 	IsCleanErr     error
-	HasRemoteVal    bool
-	AddRemoteName    string
-	AddRemoteURL     string
-	AddRemoteErr     error
-	AddRemoteCalls   int
-	SetConfigKey     string
-	SetConfigValue   string
-	SetConfigErr     error
-	SetConfigCalls   int
-	CloneCalls      int
-	InitCalls       int
-	OpenCalls       int
-	PullCalls       int
-	CommitAllCalls  int
-	PushCalls       int
+	HasRemoteVal   bool
+	AddRemoteName  string
+	AddRemoteURL   string
+	AddRemoteErr   error
+	AddRemoteCalls int
+	SetConfigKey   string
+	SetConfigValue string
+	SetConfigErr   error
+	SetConfigCalls int
+	CloneCalls     int
+	InitCalls      int
+	OpenCalls      int
+	PullCalls      int
+	CommitAllCalls int
+	PushCalls      int
 }
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
@@ -246,6 +246,9 @@ type MockEncryptionService struct {
 	ImportSourcePath   string
 	ImportDestPath     string
 	ImportErr          error
+	ImportContent      []byte
+	ImportContentDest  string
+	ImportContentErr   error
 	ExportedPublicKey  string
 	ExportIdentityPath string
 	ExportErr          error
@@ -256,6 +259,7 @@ type MockEncryptionService struct {
 	DecryptErr         error
 	GenerateCalls      int
 	ImportCalls        int
+	ImportContentCalls int
 	ExportCalls        int
 	EncryptCalls       int
 	DecryptCalls       int
@@ -275,6 +279,13 @@ func (m *MockEncryptionService) ImportKey(sourcePath, destPath string) error {
 	m.ImportSourcePath = sourcePath
 	m.ImportDestPath = destPath
 	return m.ImportErr
+}
+
+func (m *MockEncryptionService) ImportKeyContent(content []byte, destPath string) error {
+	m.ImportContentCalls++
+	m.ImportContent = content
+	m.ImportContentDest = destPath
+	return m.ImportContentErr
 }
 
 func (m *MockEncryptionService) ExportPublicKey(identityPath string) (string, error) {
@@ -457,9 +468,9 @@ func (m *MockApplyService) Recover() error {
 
 // MockConflictDetector is a manual stub for repositories.ConflictDetector.
 type MockConflictDetector struct {
-	Conflicts  []entities.Conflict
-	DetectErr  error
-	ResolveErr error
+	Conflicts    []entities.Conflict
+	DetectErr    error
+	ResolveErr   error
 	DetectCalls  int
 	ResolveCalls int
 }
@@ -718,4 +729,23 @@ func (m *MockBundleStateRepository) Save(state *entities.BundleState) error {
 	m.SaveCalls++
 	m.Saved = state
 	return m.SaveErr
+}
+
+// MockOpSecretRepository is a manual stub for repositories.OpSecretRepository.
+type MockOpSecretRepository struct {
+	Identity         string
+	GetIdentityErr   error
+	RequestedVault   string
+	RequestedItem    string
+	GetIdentityCalls int
+}
+
+func (m *MockOpSecretRepository) GetIdentity(vault, item string) (string, error) {
+	m.GetIdentityCalls++
+	m.RequestedVault = vault
+	m.RequestedItem = item
+	if m.GetIdentityErr != nil {
+		return "", m.GetIdentityErr
+	}
+	return m.Identity, nil
 }

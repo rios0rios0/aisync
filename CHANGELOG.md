@@ -16,6 +16,11 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Added
+
+- added `aisync key import-from-op` to import an age identity from a 1Password item via the official `op` CLI. Activated by adding an `encryption.op` block to `config.yaml` (`enabled`, `vault`, optional `item` defaulting to `aisync.age`); the command reads the `private key` field of the named item and writes it to the same identity path every other key operation uses (`encryption.identity` → `AISYNC_KEY_FILE` → `~/.config/aisync/key.txt`), then appends the derived public key to `recipients`, which let new devices restore the existing aifiles age identity without copying the private key file between machines manually
+- added `EncryptionService.ImportKeyContent` for write-from-memory imports so secret material fetched from `op` (and future non-file sources) never lands in a temp file on disk
+
 ### Changed
 
 - changed the Go module dependencies to their latest versions
