@@ -27,7 +27,7 @@ func TestKeyCommand_Generate(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1testpublickey123",
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Generate("/tmp/config.yaml")
@@ -54,7 +54,7 @@ func TestKeyCommand_Generate(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1testpublickey123",
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Generate("/tmp/config.yaml")
@@ -78,7 +78,7 @@ func TestKeyCommand_Export(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ExportedPublicKey: "age1exportedkey456",
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Export("/tmp/config.yaml")
@@ -101,7 +101,7 @@ func TestKeyCommand_Export(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ExportErr: assert.AnError,
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Export("/tmp/config.yaml")
@@ -122,7 +122,7 @@ func TestKeyCommand_AddRecipient(t *testing.T) {
 				},
 			},
 		}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.AddRecipient("/tmp/config.yaml", "age1newrecipient")
@@ -144,7 +144,7 @@ func TestKeyCommand_AddRecipient(t *testing.T) {
 				},
 			},
 		}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.AddRecipient("/tmp/config.yaml", "age1existing")
@@ -159,7 +159,7 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.Generate("/tmp/config.yaml")
@@ -181,7 +181,7 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GenerateErr: assert.AnError,
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Generate("/tmp/config.yaml")
@@ -205,7 +205,7 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1key",
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Generate("/tmp/config.yaml")
@@ -220,7 +220,7 @@ func TestKeyCommand_Export_ErrorCases(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.Export("/tmp/config.yaml")
@@ -235,7 +235,7 @@ func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.AddRecipient("/tmp/config.yaml", "age1key")
@@ -255,7 +255,7 @@ func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
 			},
 			SaveErr: assert.AnError,
 		}
-		cmd := commands.NewKeyCommand(configRepo, nil)
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
 
 		// when
 		err := cmd.AddRecipient("/tmp/config.yaml", "age1newkey")
@@ -265,7 +265,6 @@ func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to save config")
 	})
 }
-
 
 func TestKeyCommand_Import(t *testing.T) {
 	t.Run("should call ImportKey and update config with exported public key", func(t *testing.T) {
@@ -281,7 +280,7 @@ func TestKeyCommand_Import(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ExportedPublicKey: "age1importedkey789",
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Import("/tmp/config.yaml", "/tmp/source-key.txt")
@@ -308,7 +307,7 @@ func TestKeyCommand_Import(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ImportErr: assert.AnError,
 		}
-		cmd := commands.NewKeyCommand(configRepo, encryptionService)
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, nil)
 
 		// when
 		err := cmd.Import("/tmp/config.yaml", "/tmp/source-key.txt")
@@ -316,5 +315,208 @@ func TestKeyCommand_Import(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to import age key")
+	})
+}
+
+func TestKeyCommand_ImportFromOp(t *testing.T) {
+	t.Run("should fetch identity from 1Password and update config recipients", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity:   "/tmp/dest-key.txt",
+					Recipients: []string{},
+					Op: &entities.OpConfig{
+						Enabled: true,
+						Vault:   "Personal",
+						Item:    "aisync.age",
+					},
+				},
+			},
+		}
+		encryptionService := &doubles.MockEncryptionService{
+			ExportedPublicKey: "age1importedfromop",
+		}
+		opRepo := &doubles.MockOpSecretRepository{
+			Identity: "AGE-SECRET-KEY-1FAKEIDENTITY",
+		}
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, opRepo.GetIdentityCalls)
+		assert.Equal(t, "Personal", opRepo.RequestedVault)
+		assert.Equal(t, "aisync.age", opRepo.RequestedItem)
+		assert.Equal(t, 1, encryptionService.ImportContentCalls)
+		assert.Equal(t, []byte("AGE-SECRET-KEY-1FAKEIDENTITY"), encryptionService.ImportContent)
+		assert.Equal(t, "/tmp/dest-key.txt", encryptionService.ImportContentDest)
+		assert.Equal(t, 1, encryptionService.ExportCalls)
+		assert.Equal(t, 1, configRepo.SaveCalls)
+		assert.Contains(t, configRepo.SavedConfig.Encryption.Recipients, "age1importedfromop")
+	})
+
+	t.Run("should default item name to aisync.age when Op.Item is empty", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/dest-key.txt",
+					Op:       &entities.OpConfig{Enabled: true, Vault: "Work"},
+				},
+			},
+		}
+		encryptionService := &doubles.MockEncryptionService{
+			ExportedPublicKey: "age1key",
+		}
+		opRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-1X"}
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "aisync.age", opRepo.RequestedItem)
+		assert.Equal(t, "Work", opRepo.RequestedVault)
+	})
+
+	t.Run("should return error when 1Password integration is disabled", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Op: &entities.OpConfig{Enabled: false},
+				},
+			},
+		}
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "1Password integration is disabled")
+	})
+
+	t.Run("should return error when Op block is missing", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{},
+			},
+		}
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "1Password integration is disabled")
+	})
+
+	t.Run("should return error when GetIdentity fails", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/dest-key.txt",
+					Op:       &entities.OpConfig{Enabled: true, Vault: "Personal"},
+				},
+			},
+		}
+		opRepo := &doubles.MockOpSecretRepository{GetIdentityErr: assert.AnError}
+		cmd := commands.NewKeyCommand(configRepo, &doubles.MockEncryptionService{}, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to fetch age identity from 1Password")
+	})
+
+	t.Run("should return error when ImportKeyContent fails", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/dest-key.txt",
+					Op:       &entities.OpConfig{Enabled: true, Vault: "Personal"},
+				},
+			},
+		}
+		encryptionService := &doubles.MockEncryptionService{ImportContentErr: assert.AnError}
+		opRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-1X"}
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to write age identity")
+	})
+
+	t.Run("should return error when ExportPublicKey fails after import", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/dest-key.txt",
+					Op:       &entities.OpConfig{Enabled: true, Vault: "Personal"},
+				},
+			},
+		}
+		encryptionService := &doubles.MockEncryptionService{ExportErr: assert.AnError}
+		opRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-1X"}
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to export public key after import")
+	})
+
+	t.Run("should return error when config save fails", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "/tmp/dest-key.txt",
+					Op:       &entities.OpConfig{Enabled: true, Vault: "Personal"},
+				},
+			},
+			SaveErr: assert.AnError,
+		}
+		encryptionService := &doubles.MockEncryptionService{ExportedPublicKey: "age1k"}
+		opRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-1X"}
+		cmd := commands.NewKeyCommand(configRepo, encryptionService, opRepo)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to save config")
+	})
+
+	t.Run("should return error when config load fails", func(t *testing.T) {
+		// given
+		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
+		cmd := commands.NewKeyCommand(configRepo, nil, nil)
+
+		// when
+		err := cmd.ImportFromOp("/tmp/config.yaml")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load config")
 	})
 }

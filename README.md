@@ -107,7 +107,22 @@ aisync key generate          # Create age key pair
 aisync key export            # Print public key
 aisync key add-recipient <pubkey>  # Multi-device decryption
 aisync key import <path>     # Import existing key
+aisync key import-from-op    # Import existing key from a 1Password item via the op CLI
 ```
+
+To use `import-from-op`, add an `encryption.op` block to `config.yaml`:
+
+```yaml
+encryption:
+  identity: '~/.config/aisync/key.txt'
+  recipients: [...]
+  op:
+    enabled: true
+    vault: 'Personal'
+    item: 'aisync.age'   # optional; defaults to "aisync.age"
+```
+
+The 1Password item must expose the `AGE-SECRET-KEY-1...` value in a field labelled `private key`. Authentication (biometric, SSH agent, or service-account token) is delegated entirely to `op` — aisync never sees the master password.
 
 ### Diagnostics
 

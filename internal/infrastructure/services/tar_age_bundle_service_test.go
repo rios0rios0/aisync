@@ -26,9 +26,10 @@ import (
 // pulling a real X25519 key into the test fixtures.
 type passthroughEncryption struct{}
 
-func (passthroughEncryption) GenerateKey(string) (string, error)         { return "", nil }
-func (passthroughEncryption) ImportKey(string, string) error             { return nil }
-func (passthroughEncryption) ExportPublicKey(string) (string, error)     { return "", nil }
+func (passthroughEncryption) GenerateKey(string) (string, error)           { return "", nil }
+func (passthroughEncryption) ImportKey(string, string) error               { return nil }
+func (passthroughEncryption) ImportKeyContent([]byte, string) error        { return nil }
+func (passthroughEncryption) ExportPublicKey(string) (string, error)       { return "", nil }
 func (passthroughEncryption) Encrypt(b []byte, _ []string) ([]byte, error) { return b, nil }
 func (passthroughEncryption) Decrypt(b []byte, _ string) ([]byte, error)   { return b, nil }
 

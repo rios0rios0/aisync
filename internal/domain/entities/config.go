@@ -79,8 +79,31 @@ type SyncConfig struct {
 
 // EncryptionConfig holds age encryption settings.
 type EncryptionConfig struct {
-	Identity   string   `yaml:"identity"`
-	Recipients []string `yaml:"recipients"`
+	Identity   string    `yaml:"identity"`
+	Recipients []string  `yaml:"recipients"`
+	Op         *OpConfig `yaml:"op,omitempty"`
+}
+
+// OpConfig holds the 1Password CLI lookup settings used by
+// `aisync key import-from-op` to fetch the age identity from a
+// 1Password item without requiring a manual file copy.
+//
+// The item is expected to expose the AGE-SECRET-KEY-1... value in a
+// field labelled "private key". Item lookup is by name within the
+// configured vault; when Item is empty it defaults to "aisync.age".
+type OpConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Vault   string `yaml:"vault,omitempty"`
+	Item    string `yaml:"item,omitempty"`
+}
+
+// ItemOrDefault returns the configured item name, falling back to the
+// canonical default ("aisync.age") when the user omits Op.Item.
+func (o OpConfig) ItemOrDefault() string {
+	if o.Item == "" {
+		return "aisync.age"
+	}
+	return o.Item
 }
 
 // WatchConfig holds file-watching settings.
