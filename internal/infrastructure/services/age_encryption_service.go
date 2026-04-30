@@ -52,12 +52,33 @@ func (s *AgeEncryptionService) ImportKey(sourcePath, destPath string) error {
 		return fmt.Errorf("failed to read source identity file: %w", err)
 	}
 
+	if err = s.writeIdentity(data, destPath, sourcePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ImportKeyContent writes raw age identity content to destPath after
+// validating it parses. Mirrors ImportKey but skips the source-file
+// read so callers that obtain the key from a non-file source (e.g.
+// the 1Password CLI) don't need to stage it on disk first.
+func (s *AgeEncryptionService) ImportKeyContent(content []byte, destPath string) error {
+	return s.writeIdentity(content, destPath, "in-memory content")
+}
+
+// writeIdentity validates that data parses as a non-empty age identity
+// list and writes it to destPath with 0600 perms, creating the
+// containing directory if needed. The source argument identifies the
+// origin of data (e.g. a file path or "in-memory content") so error
+// messages stay accurate regardless of which call site invoked it.
+func (s *AgeEncryptionService) writeIdentity(data []byte, destPath, source string) error {
 	identities, err := age.ParseIdentities(bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to parse age identity from source file: %w", err)
+		return fmt.Errorf("failed to parse age identity from %s: %w", source, err)
 	}
 	if len(identities) == 0 {
-		return fmt.Errorf("no valid age identities found in %s", sourcePath)
+		return fmt.Errorf("no valid age identities found in %s", source)
 	}
 
 	if err = os.MkdirAll(filepath.Dir(destPath), 0700); err != nil {

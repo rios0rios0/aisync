@@ -10,6 +10,12 @@ type EncryptionService interface {
 	// validating that it contains a valid age identity.
 	ImportKey(sourcePath, destPath string) error
 
+	// ImportKeyContent writes raw age identity content to destPath after
+	// validating that it parses as a valid age identity. Used by import
+	// flows that obtain the key from a non-file source (e.g. 1Password)
+	// so the secret never lives in a temporary file on disk.
+	ImportKeyContent(content []byte, destPath string) error
+
 	// ExportPublicKey reads an age identity file and returns the corresponding
 	// public key (recipient) string.
 	ExportPublicKey(identityPath string) (string, error)

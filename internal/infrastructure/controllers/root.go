@@ -126,7 +126,8 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
 	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter, diffViewer)
-	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc)
+	opSecretRepo := infraRepos.NewOpCLISecretRepository()
+	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc, opSecretRepo)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
 	migrateCmd := commands.NewMigrateCommand(configRepo, manifestRepo, sourceRepo)
@@ -544,6 +545,12 @@ func newKeySubcmd(keyCmd *commands.KeyCommand) *cobra.Command {
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return keyCmd.AddRecipient(resolveConfigPath(cmd), args[0])
 			}},
+		&cobra.Command{
+			Use:   "import-from-op",
+			Short: "Import an age identity from a 1Password item via the op CLI",
+			Args:  cobra.NoArgs,
+			RunE:  func(cmd *cobra.Command, _ []string) error { return keyCmd.ImportFromOp(resolveConfigPath(cmd)) },
+		},
 	)
 	return parent
 }
