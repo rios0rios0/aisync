@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -109,8 +108,9 @@ func (c *KeyCommand) ImportFromOp(configPath string) error {
 	}
 
 	if config.Encryption.Op == nil || !config.Encryption.Op.Enabled {
-		return errors.New(
-			"1Password integration is disabled: set encryption.op.enabled: true in config.yaml",
+		return fmt.Errorf(
+			"1Password integration is disabled: set encryption.op.enabled: true in %s",
+			configPath,
 		)
 	}
 

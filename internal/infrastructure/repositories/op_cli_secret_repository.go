@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -17,18 +18,18 @@ import (
 // path the same on every device.
 const opPrivateKeyField = "private key"
 
-// OpCLISecretRepository implements [repositories.OpSecretRepository] by
-// shelling out to the official `op` binary. The session/auth model is
-// delegated entirely to `op` itself — biometric prompt, SSH-agent, or
+// OpCLISecretRepository implements [OpSecretRepository] by shelling out
+// to the official `op` binary. The session/auth model is delegated
+// entirely to `op` itself — biometric prompt, SSH-agent, or
 // service-account token are all handled by the CLI and aisync never
 // touches the master password.
 type OpCLISecretRepository struct {
 	binary string
 }
 
-// NewOpCLISecretRepository creates a new adapter using the `op` binary
-// resolved from PATH. The binary path is captured at construction time
-// so a misconfigured PATH surfaces immediately rather than on first use.
+// NewOpCLISecretRepository creates a new adapter that invokes `op` by
+// name. PATH lookup is deferred until command execution time by
+// [exec.Command], so a misconfigured PATH surfaces on first use.
 func NewOpCLISecretRepository() *OpCLISecretRepository {
 	return &OpCLISecretRepository{binary: "op"}
 }
@@ -54,7 +55,11 @@ func (r *OpCLISecretRepository) GetIdentity(vault, item string) (string, error) 
 	logger.Debugf("running %s %s", r.binary, strings.Join(args, " "))
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(r.binary, args...) //nolint:gosec // args built from validated config; binary is the official op CLI
+	cmd := exec.CommandContext( //nolint:gosec // args built from validated config; binary is the official op CLI
+		context.Background(),
+		r.binary,
+		args...,
+	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
