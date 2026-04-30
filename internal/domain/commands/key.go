@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -14,16 +15,19 @@ import (
 type KeyCommand struct {
 	configRepo        repositories.ConfigRepository
 	encryptionService repositories.EncryptionService
+	opSecretRepo      repositories.OpSecretRepository
 }
 
 // NewKeyCommand creates a new KeyCommand.
 func NewKeyCommand(
 	configRepo repositories.ConfigRepository,
 	encryptionService repositories.EncryptionService,
+	opSecretRepo repositories.OpSecretRepository,
 ) *KeyCommand {
 	return &KeyCommand{
 		configRepo:        configRepo,
 		encryptionService: encryptionService,
+		opSecretRepo:      opSecretRepo,
 	}
 }
 
@@ -83,6 +87,59 @@ func (c *KeyCommand) Import(configPath, keyPath string) error {
 	}
 
 	logger.Infof("age key imported successfully")
+	fmt.Fprintf(os.Stdout, "Public key: %s\n", publicKey)
+	fmt.Fprintf(os.Stdout, "Identity:   %s\n", identityPath)
+
+	return nil
+}
+
+// ImportFromOp fetches the age identity from a 1Password item via the
+// `op` CLI and writes it to the path aisync uses for every other key
+// operation (resolveIdentityPath: config.Encryption.Identity →
+// AISYNC_KEY_FILE → ~/.config/aisync/key.txt). The pubkey derived from
+// the imported identity is appended to the recipients list so future
+// pushes encrypt to this device too.
+//
+// Errors out when encryption.op is absent or encryption.op.enabled is
+// false to keep the 1Password integration strictly opt-in.
+func (c *KeyCommand) ImportFromOp(configPath string) error {
+	config, err := c.configRepo.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if config.Encryption.Op == nil || !config.Encryption.Op.Enabled {
+		return errors.New(
+			"1Password integration is disabled: set encryption.op.enabled: true in config.yaml",
+		)
+	}
+
+	vault := config.Encryption.Op.Vault
+	item := config.Encryption.Op.ItemOrDefault()
+	identityPath := c.resolveIdentityPath(config.Encryption.Identity)
+
+	logger.Infof("fetching age identity from 1Password item %q in vault %q", item, vault)
+	content, err := c.opSecretRepo.GetIdentity(vault, item)
+	if err != nil {
+		return fmt.Errorf("failed to fetch age identity from 1Password: %w", err)
+	}
+
+	if err = c.encryptionService.ImportKeyContent([]byte(content), identityPath); err != nil {
+		return fmt.Errorf("failed to write age identity to %s: %w", identityPath, err)
+	}
+
+	publicKey, err := c.encryptionService.ExportPublicKey(identityPath)
+	if err != nil {
+		return fmt.Errorf("failed to export public key after import: %w", err)
+	}
+
+	config.Encryption.Recipients = appendUniqueRecipient(config.Encryption.Recipients, publicKey)
+
+	if err = c.configRepo.Save(configPath, config); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	logger.Infof("age key imported from 1Password successfully")
 	fmt.Fprintf(os.Stdout, "Public key: %s\n", publicKey)
 	fmt.Fprintf(os.Stdout, "Identity:   %s\n", identityPath)
 
