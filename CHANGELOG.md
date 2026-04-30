@@ -16,6 +16,8 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-30
+
 ### Added
 
 - added `aisync key import-from-op` to import an age identity from a 1Password item via the official `op` CLI. Activated by adding an `encryption.op` block to `config.yaml` (`enabled`, `vault`, optional `item` defaulting to `aisync.age`); the command reads the `private key` field of the named item and writes it to the same identity path every other key operation uses (`encryption.identity` → `AISYNC_KEY_FILE` → `~/.config/aisync/key.txt`), then appends the derived public key to `recipients`, which let new devices restore the existing aifiles age identity without copying the private key file between machines manually
