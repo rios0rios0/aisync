@@ -28,6 +28,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Fixed
 - fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
 - fixed `aisync init` clone so 1Password auto-import skips when an age identity already exists at the configured path, preventing accidental key overwrites
+- fixed SSH alias retry so the partial `.git/` skeleton left by a failed `go-git` clone is removed between attempts, preventing the alias fallback from always failing with `destination path already exists`
 
 ## [1.3.1] - 2026-05-01
 

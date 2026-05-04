@@ -281,6 +281,14 @@ func (c *InitCommand) cloneWithSSHFallback(cloneURL, repoPath string) error {
 		if aliasURL == "" {
 			continue
 		}
+		// go-git's PlainClone leaves a partial .git/ skeleton behind on
+		// failure. Without removing repoPath the retry would fail with
+		// "repository already exists" before the alias auth was ever
+		// tested, defeating the whole fallback. Best-effort: ignore
+		// RemoveAll errors so a failure here still produces a meaningful
+		// "could not clone" error rather than masking it with cleanup
+		// noise.
+		_ = os.RemoveAll(repoPath)
 		logger.Infof("direct clone failed — retrying with SSH alias %q", alias)
 		if cloneErr := c.gitRepo.Clone(aliasURL, repoPath, "main"); cloneErr == nil {
 			return nil
