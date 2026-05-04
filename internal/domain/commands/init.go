@@ -146,6 +146,8 @@ type InitCommand struct {
 	toolDetector      repositories.ToolDetector
 	gitRepo           repositories.GitRepository
 	encryptionService repositories.EncryptionService
+	opSecretRepo      repositories.OpSecretRepository
+	sshAliasRepo      repositories.SSHAliasRepository
 }
 
 // NewInitCommand creates a new InitCommand.
@@ -155,6 +157,8 @@ func NewInitCommand(
 	toolDetector repositories.ToolDetector,
 	gitRepo repositories.GitRepository,
 	encryptionService repositories.EncryptionService,
+	opSecretRepo repositories.OpSecretRepository,
+	sshAliasRepo repositories.SSHAliasRepository,
 ) *InitCommand {
 	return &InitCommand{
 		configRepo:        configRepo,
@@ -162,6 +166,8 @@ func NewInitCommand(
 		toolDetector:      toolDetector,
 		gitRepo:           gitRepo,
 		encryptionService: encryptionService,
+		opSecretRepo:      opSecretRepo,
+		sshAliasRepo:      sshAliasRepo,
 	}
 }
 
@@ -194,7 +200,9 @@ func (c *InitCommand) resolveCloneURL(githubUser, remoteURL string) string {
 // executeClone clones an existing aifiles repository and ensures the local state
 // is initialised for this device. If keyPath is provided, the age identity is
 // imported from that path into the configured identity location. Falls back to
-// the AISYNC_KEY_FILE environment variable when keyPath is empty.
+// the AISYNC_KEY_FILE environment variable when keyPath is empty. When neither
+// source is available and the cloned config has encryption.op.enabled = true,
+// the age identity is imported automatically from 1Password.
 func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 	keyPath = c.resolveKeyPath(keyPath)
 
@@ -204,13 +212,17 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
-	if err := c.gitRepo.Clone(cloneURL, repoPath, "main"); err != nil {
-		return fmt.Errorf("failed to clone repository: %w", err)
+	if err := c.cloneWithSSHFallback(cloneURL, repoPath); err != nil {
+		return err
 	}
 
 	if keyPath != "" {
 		if err := c.importAgeKey(repoPath, keyPath); err != nil {
 			return err
+		}
+	} else {
+		if importErr := c.importFromOpIfConfigured(repoPath); importErr != nil {
+			logger.Warnf("1Password key import failed: %v — run `aisync key import-from-op` manually", importErr)
 		}
 	}
 
@@ -238,6 +250,167 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 	fmt.Fprintln(os.Stdout)
 
 	return nil
+}
+
+// cloneWithSSHFallback tries to clone cloneURL directly. If the clone fails
+// and the URL is SSH-format, it reads ~/.ssh/config via sshAliasRepo and
+// retries with each matching Host alias (e.g. "github.com-mine"). Failures
+// to read ~/.ssh/config are logged but do not propagate, so the original
+// clone error remains the user-visible failure.
+func (c *InitCommand) cloneWithSSHFallback(cloneURL, repoPath string) error {
+	err := c.gitRepo.Clone(cloneURL, repoPath, "main")
+	if err == nil {
+		return nil
+	}
+
+	if c.sshAliasRepo == nil {
+		return fmt.Errorf("failed to clone repository: %w", err)
+	}
+
+	hostname := extractSSHHostname(cloneURL)
+	if hostname == "" {
+		return fmt.Errorf("failed to clone repository: %w", err)
+	}
+
+	aliases, aliasErr := c.sshAliasRepo.ResolveAliases(hostname)
+	if aliasErr != nil {
+		logger.Warnf("could not read SSH config for alias fallback: %v", aliasErr)
+	}
+	for _, alias := range aliases {
+		aliasURL := rewriteSSHHost(cloneURL, alias)
+		if aliasURL == "" {
+			continue
+		}
+		// go-git's PlainClone leaves a partial .git/ skeleton behind on
+		// failure. Without removing repoPath the retry would fail with
+		// "repository already exists" before the alias auth was ever
+		// tested, defeating the whole fallback. Best-effort: ignore
+		// RemoveAll errors so a failure here still produces a meaningful
+		// "could not clone" error rather than masking it with cleanup
+		// noise.
+		_ = os.RemoveAll(repoPath)
+		logger.Infof("direct clone failed — retrying with SSH alias %q", alias)
+		if cloneErr := c.gitRepo.Clone(aliasURL, repoPath, "main"); cloneErr == nil {
+			return nil
+		}
+	}
+
+	if len(aliases) > 0 {
+		return fmt.Errorf(
+			"failed to clone repository from %s (also tried %d SSH aliases): %w",
+			cloneURL,
+			len(aliases),
+			err,
+		)
+	}
+	return fmt.Errorf("failed to clone repository: %w", err)
+}
+
+// importFromOpIfConfigured checks whether the cloned config has
+// encryption.op.enabled = true and, if so, imports the age identity from
+// 1Password using opSecretRepo. No-ops silently when op is not configured,
+// opSecretRepo is nil, or an identity file already exists at the configured
+// path — re-running `aisync init` against an existing setup must not
+// clobber a working key.
+func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
+	if c.opSecretRepo == nil {
+		return nil
+	}
+
+	configPath := filepath.Join(repoPath, "config.yaml")
+	config, loadErr := c.configRepo.Load(configPath)
+	if loadErr != nil {
+		return nil
+	}
+
+	if config.Encryption.Op == nil || !config.Encryption.Op.Enabled {
+		return nil
+	}
+
+	identityPath := ExpandHome(config.Encryption.Identity)
+	if _, statErr := os.Stat(identityPath); statErr == nil {
+		logger.Infof("age identity already present at %s — skipping 1Password import", identityPath)
+		return nil
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat identity file %s: %w", identityPath, statErr)
+	}
+
+	vault := config.Encryption.Op.Vault
+	item := config.Encryption.Op.ItemOrDefault()
+
+	content, err := c.opSecretRepo.GetIdentity(vault, item)
+	if err != nil {
+		return fmt.Errorf("1Password lookup failed for item %q: %w", item, err)
+	}
+
+	if mkErr := os.MkdirAll(filepath.Dir(identityPath), 0700); mkErr != nil {
+		return fmt.Errorf("failed to create identity directory: %w", mkErr)
+	}
+	if importErr := c.encryptionService.ImportKeyContent([]byte(content), identityPath); importErr != nil {
+		return fmt.Errorf("failed to import age identity from 1Password: %w", importErr)
+	}
+
+	logger.Infof("imported age identity from 1Password to %s", identityPath)
+	fmt.Fprintln(os.Stdout, "Age identity imported from 1Password.")
+	return nil
+}
+
+// extractSSHHostname returns the hostname portion of an SSH git URL.
+// Handles scp-style "<user>@<host>:<path>" (any user, not just "git") and
+// "ssh://<user>@<host>/<path>" formats. Returns empty string for non-SSH
+// URLs (e.g. HTTPS).
+func extractSSHHostname(cloneURL string) string {
+	if strings.HasPrefix(cloneURL, "ssh://") {
+		rest := cloneURL[len("ssh://"):]
+		if i := strings.Index(rest, "@"); i >= 0 {
+			rest = rest[i+1:]
+		}
+		if before, _, ok := strings.Cut(rest, "/"); ok {
+			return before
+		}
+		return rest
+	}
+	if user, host, ok := splitSCPStyle(cloneURL); ok && user != "" {
+		return host
+	}
+	return ""
+}
+
+// rewriteSSHHost replaces the hostname in an SSH git URL with alias.
+// Preserves the original user portion for scp-style URLs so the rewrite
+// works for any "<user>@<host>:<path>" form, not only "git@...".
+// Returns empty string when the URL format is not recognised.
+func rewriteSSHHost(cloneURL, alias string) string {
+	if strings.HasPrefix(cloneURL, "ssh://") {
+		rest := cloneURL[len("ssh://"):]
+		userAt := ""
+		if i := strings.Index(rest, "@"); i >= 0 {
+			userAt = rest[:i+1]
+			rest = rest[i+1:]
+		}
+		if i := strings.Index(rest, "/"); i >= 0 {
+			return "ssh://" + userAt + alias + rest[i:]
+		}
+		return "ssh://" + userAt + alias
+	}
+	if user, _, ok := splitSCPStyle(cloneURL); ok && user != "" {
+		colon := strings.Index(cloneURL, ":")
+		return user + "@" + alias + cloneURL[colon:]
+	}
+	return ""
+}
+
+// splitSCPStyle parses a scp-style git URL of the form "<user>@<host>:<path>"
+// (e.g. "git@github.com:owner/repo.git"). The "@" must precede the ":" — URLs
+// with a colon before the "@" are treated as not scp-style. Returns ok=false
+// for any other input (HTTPS URLs, plain paths, etc.).
+func splitSCPStyle(raw string) (string, string, bool) {
+	at := strings.Index(raw, "@")
+	colon := strings.Index(raw, ":")
+	if at <= 0 || colon <= at+1 {
+		return "", "", false
+	}
+	return raw[:at], raw[at+1 : colon], true
 }
 
 // resolveKeyPath falls back to the AISYNC_KEY_FILE env var when no explicit key
