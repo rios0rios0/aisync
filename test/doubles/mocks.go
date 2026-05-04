@@ -153,6 +153,8 @@ type MockGitRepository struct {
 	CloneDir       string
 	CloneBranch    string
 	CloneErr       error
+	CloneErrByURL  map[string]error // per-URL errors; falls back to CloneErr
+	CloneAttempts  []string         // all URLs passed to Clone in order
 	InitDir        string
 	InitErr        error
 	OpenDir        string
@@ -182,9 +184,15 @@ type MockGitRepository struct {
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
 	m.CloneCalls++
+	m.CloneAttempts = append(m.CloneAttempts, url)
 	m.CloneURL = url
 	m.CloneDir = dir
 	m.CloneBranch = branch
+	if m.CloneErrByURL != nil {
+		if err, ok := m.CloneErrByURL[url]; ok {
+			return err
+		}
+	}
 	return m.CloneErr
 }
 
@@ -748,4 +756,17 @@ func (m *MockOpSecretRepository) GetIdentity(vault, item string) (string, error)
 		return "", m.GetIdentityErr
 	}
 	return m.Identity, nil
+}
+
+// MockSSHAliasRepository is a manual stub for repositories.SSHAliasRepository.
+type MockSSHAliasRepository struct {
+	Aliases              []string
+	ResolvedHostname     string
+	ResolveAliasesCalls  int
+}
+
+func (m *MockSSHAliasRepository) ResolveAliases(hostname string) []string {
+	m.ResolveAliasesCalls++
+	m.ResolvedHostname = hostname
+	return m.Aliases
 }
