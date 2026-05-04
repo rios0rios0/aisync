@@ -607,4 +607,229 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Contains(t, err.Error(), "no aifiles repo found",
 			"refreshing a non-existent repo must fail loudly so the user does not accidentally drop default templates into an unrelated directory")
 	})
+
+	t.Run("should retry clone with each SSH alias when the bare hostname fails", func(t *testing.T) {
+		// given — direct SSH clone fails; first alias also fails; second alias
+		// succeeds. The retry order must follow ~/.ssh/config order, and the
+		// command must stop attempting further aliases once one succeeds.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		bareURL := "git@github.com:user/aifiles.git"
+		alias1URL := "git@github.com-personal:user/aifiles.git"
+		alias2URL := "git@github.com-work:user/aifiles.git"
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		toolDetector := &doubles.MockToolDetector{}
+		gitRepo := &doubles.MockGitRepository{
+			CloneErrByURL: map[string]error{
+				bareURL:   assert.AnError,
+				alias1URL: assert.AnError,
+			},
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		sshAliasRepo := &doubles.MockSSHAliasRepository{
+			Aliases: []string{"github.com-personal", "github.com-work"},
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, sshAliasRepo)
+
+		// when
+		err := cmd.Execute(repoPath, "", bareURL, "")
+
+		// then
+		require.NoError(t, err)
+		require.Equal(t, []string{bareURL, alias1URL, alias2URL}, gitRepo.CloneAttempts,
+			"clone must be tried in order: bare, then each alias, stopping at the first success")
+		assert.Equal(t, 1, sshAliasRepo.ResolveAliasesCalls)
+		assert.Equal(t, "github.com", sshAliasRepo.ResolvedHostname)
+	})
+
+	t.Run("should return clone error when no SSH aliases match the failing hostname", func(t *testing.T) {
+		// given
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		configRepo := &doubles.MockConfigRepository{}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{CloneErr: assert.AnError}
+		encryptionService := &doubles.MockEncryptionService{}
+		sshAliasRepo := &doubles.MockSSHAliasRepository{Aliases: nil}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+
+		// when
+		err := cmd.Execute(repoPath, "", "git@github.com:user/aifiles.git", "")
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to clone repository")
+		assert.Equal(t, 1, gitRepo.CloneCalls, "with no aliases the bare URL is the only attempt")
+	})
+
+	t.Run("should still attempt SSH alias retry when ResolveAliases reports a read error", func(t *testing.T) {
+		// given — the SSH config repository returns aliases AND a non-nil error
+		// (e.g. a partial scanner failure). The init command must log the error
+		// but still try the aliases it managed to read so the fallback remains
+		// useful, and the original clone error must surface when none succeed.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		bareURL := "git@github.com:user/aifiles.git"
+		aliasURL := "git@github.com-mine:user/aifiles.git"
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{
+			CloneErrByURL: map[string]error{bareURL: assert.AnError},
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		sshAliasRepo := &doubles.MockSSHAliasRepository{
+			Aliases:           []string{"github.com-mine"},
+			ResolveAliasesErr: assert.AnError,
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+
+		// when
+		err := cmd.Execute(repoPath, "", bareURL, "")
+
+		// then
+		require.NoError(t, err, "the alias retry must still fire even when ResolveAliases reports a read error")
+		assert.Equal(t, []string{bareURL, aliasURL}, gitRepo.CloneAttempts)
+	})
+
+	t.Run("should auto-import age identity from 1Password when op is enabled and no explicit key is provided", func(t *testing.T) {
+		// given — config has encryption.op.enabled = true and the cloned repo
+		// has no identity file yet, so init must transparently fetch the key
+		// from 1Password instead of leaving the device unable to decrypt.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		identityPath := filepath.Join(tmpDir, ".config", "aisync", "key.txt")
+		t.Setenv("HOME", tmpDir)
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "~/.config/aisync/key.txt",
+					Op: &entities.OpConfig{
+						Enabled: true,
+						Vault:   "Personal",
+						Item:    "aisync.age",
+					},
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		opSecretRepo := &doubles.MockOpSecretRepository{
+			Identity: "AGE-SECRET-KEY-FROM-1PASSWORD",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+
+		// when
+		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, opSecretRepo.GetIdentityCalls)
+		assert.Equal(t, "Personal", opSecretRepo.RequestedVault)
+		assert.Equal(t, "aisync.age", opSecretRepo.RequestedItem)
+		assert.Equal(t, 1, encryptionService.ImportContentCalls)
+		assert.Equal(t, identityPath, encryptionService.ImportContentDest)
+		assert.Equal(t, 0, encryptionService.ImportCalls,
+			"ImportKey is only used for the explicit --key path; the 1Password flow must use ImportKeyContent")
+	})
+
+	t.Run("should skip 1Password import when an identity file already exists", func(t *testing.T) {
+		// given — re-running `aisync init` against an existing setup must
+		// never clobber a working age key. The 1Password lookup should not
+		// even be invoked when the identity file is already on disk.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		t.Setenv("HOME", tmpDir)
+
+		identityDir := filepath.Join(tmpDir, ".config", "aisync")
+		require.NoError(t, os.MkdirAll(identityDir, 0700))
+		identityPath := filepath.Join(identityDir, "key.txt")
+		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY-PRE-EXISTING"), 0600))
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "~/.config/aisync/key.txt",
+					Op: &entities.OpConfig{
+						Enabled: true,
+						Vault:   "Personal",
+					},
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		opSecretRepo := &doubles.MockOpSecretRepository{
+			Identity: "AGE-SECRET-KEY-FROM-1PASSWORD",
+		}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+
+		// when
+		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 0, opSecretRepo.GetIdentityCalls,
+			"1Password lookup must be skipped when the identity already exists")
+		assert.Equal(t, 0, encryptionService.ImportContentCalls,
+			"existing identity must not be overwritten by 1Password content")
+
+		preserved, readErr := os.ReadFile(identityPath)
+		require.NoError(t, readErr)
+		assert.Equal(t, "AGE-SECRET-KEY-PRE-EXISTING", string(preserved))
+	})
+
+	t.Run("should not invoke 1Password when an explicit --key path is provided", func(t *testing.T) {
+		// given — when the user supplies --key, that takes priority over the
+		// configured 1Password fallback so the explicit choice always wins.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+		t.Setenv("HOME", tmpDir)
+
+		sourceKeyPath := filepath.Join(tmpDir, "explicit-key.txt")
+		require.NoError(t, os.WriteFile(sourceKeyPath, []byte("AGE-SECRET-KEY-EXPLICIT"), 0600))
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{
+					Identity: "~/.config/aisync/key.txt",
+					Op: &entities.OpConfig{
+						Enabled: true,
+						Vault:   "Personal",
+					},
+				},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{}
+		encryptionService := &doubles.MockEncryptionService{}
+		opSecretRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-FROM-1PASSWORD"}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+
+		// when
+		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", sourceKeyPath)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, encryptionService.ImportCalls,
+			"explicit --key must use ImportKey path, not the 1Password ImportKeyContent path")
+		assert.Equal(t, 0, opSecretRepo.GetIdentityCalls,
+			"1Password lookup must not run when --key is provided")
+	})
 }

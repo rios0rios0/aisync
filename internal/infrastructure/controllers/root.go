@@ -110,7 +110,15 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	// Domain commands
 	opSecretRepo := infraRepos.NewOpCLISecretRepository()
 	sshAliasRepo := infraRepos.NewSSHConfigAliasRepository()
-	initCmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitProxy, encryptionSvc, opSecretRepo, sshAliasRepo)
+	initCmd := commands.NewInitCommand(
+		configRepo,
+		stateRepo,
+		toolDetector,
+		gitProxy,
+		encryptionSvc,
+		opSecretRepo,
+		sshAliasRepo,
+	)
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
 	promptSvc := ui.NewHuhPromptService()
 	pullCmd := commands.NewPullCommand(
