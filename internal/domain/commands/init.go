@@ -254,7 +254,9 @@ func (c *InitCommand) executeClone(repoPath, cloneURL, keyPath string) error {
 
 // cloneWithSSHFallback tries to clone cloneURL directly. If the clone fails
 // and the URL is SSH-format, it reads ~/.ssh/config via sshAliasRepo and
-// retries with each matching Host alias (e.g. "github.com-mine").
+// retries with each matching Host alias (e.g. "github.com-mine"). Failures
+// to read ~/.ssh/config are logged but do not propagate, so the original
+// clone error remains the user-visible failure.
 func (c *InitCommand) cloneWithSSHFallback(cloneURL, repoPath string) error {
 	err := c.gitRepo.Clone(cloneURL, repoPath, "main")
 	if err == nil {
@@ -270,7 +272,10 @@ func (c *InitCommand) cloneWithSSHFallback(cloneURL, repoPath string) error {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	aliases := c.sshAliasRepo.ResolveAliases(hostname)
+	aliases, aliasErr := c.sshAliasRepo.ResolveAliases(hostname)
+	if aliasErr != nil {
+		logger.Warnf("could not read SSH config for alias fallback: %v", aliasErr)
+	}
 	for _, alias := range aliases {
 		aliasURL := rewriteSSHHost(cloneURL, alias)
 		if aliasURL == "" {
@@ -283,15 +288,22 @@ func (c *InitCommand) cloneWithSSHFallback(cloneURL, repoPath string) error {
 	}
 
 	if len(aliases) > 0 {
-		return fmt.Errorf("failed to clone repository from %s (also tried %d SSH aliases): %w", cloneURL, len(aliases), err)
+		return fmt.Errorf(
+			"failed to clone repository from %s (also tried %d SSH aliases): %w",
+			cloneURL,
+			len(aliases),
+			err,
+		)
 	}
 	return fmt.Errorf("failed to clone repository: %w", err)
 }
 
 // importFromOpIfConfigured checks whether the cloned config has
 // encryption.op.enabled = true and, if so, imports the age identity from
-// 1Password using opSecretRepo. No-ops silently when op is not configured or
-// opSecretRepo is nil.
+// 1Password using opSecretRepo. No-ops silently when op is not configured,
+// opSecretRepo is nil, or an identity file already exists at the configured
+// path — re-running `aisync init` against an existing setup must not
+// clobber a working key.
 func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
 	if c.opSecretRepo == nil {
 		return nil
@@ -307,6 +319,14 @@ func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
 		return nil
 	}
 
+	identityPath := ExpandHome(config.Encryption.Identity)
+	if _, statErr := os.Stat(identityPath); statErr == nil {
+		logger.Infof("age identity already present at %s — skipping 1Password import", identityPath)
+		return nil
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("failed to stat identity file %s: %w", identityPath, statErr)
+	}
+
 	vault := config.Encryption.Op.Vault
 	item := config.Encryption.Op.ItemOrDefault()
 
@@ -315,7 +335,6 @@ func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
 		return fmt.Errorf("1Password lookup failed for item %q: %w", item, err)
 	}
 
-	identityPath := ExpandHome(config.Encryption.Identity)
 	if mkErr := os.MkdirAll(filepath.Dir(identityPath), 0700); mkErr != nil {
 		return fmt.Errorf("failed to create identity directory: %w", mkErr)
 	}
@@ -329,37 +348,31 @@ func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
 }
 
 // extractSSHHostname returns the hostname portion of an SSH git URL.
-// Handles git@<host>:<path> and ssh://<user>@<host>/<path> formats.
-// Returns empty string for non-SSH URLs (e.g. HTTPS).
+// Handles scp-style "<user>@<host>:<path>" (any user, not just "git") and
+// "ssh://<user>@<host>/<path>" formats. Returns empty string for non-SSH
+// URLs (e.g. HTTPS).
 func extractSSHHostname(cloneURL string) string {
-	if strings.HasPrefix(cloneURL, "git@") {
-		rest := cloneURL[len("git@"):]
-		if i := strings.Index(rest, ":"); i >= 0 {
-			return rest[:i]
-		}
-	}
 	if strings.HasPrefix(cloneURL, "ssh://") {
 		rest := cloneURL[len("ssh://"):]
 		if i := strings.Index(rest, "@"); i >= 0 {
 			rest = rest[i+1:]
 		}
-		if i := strings.Index(rest, "/"); i >= 0 {
-			return rest[:i]
+		if before, _, ok := strings.Cut(rest, "/"); ok {
+			return before
 		}
 		return rest
+	}
+	if user, host, ok := splitSCPStyle(cloneURL); ok && user != "" {
+		return host
 	}
 	return ""
 }
 
 // rewriteSSHHost replaces the hostname in an SSH git URL with alias.
+// Preserves the original user portion for scp-style URLs so the rewrite
+// works for any "<user>@<host>:<path>" form, not only "git@...".
 // Returns empty string when the URL format is not recognised.
 func rewriteSSHHost(cloneURL, alias string) string {
-	if strings.HasPrefix(cloneURL, "git@") {
-		rest := cloneURL[len("git@"):]
-		if i := strings.Index(rest, ":"); i >= 0 {
-			return "git@" + alias + rest[i:]
-		}
-	}
 	if strings.HasPrefix(cloneURL, "ssh://") {
 		rest := cloneURL[len("ssh://"):]
 		userAt := ""
@@ -372,7 +385,24 @@ func rewriteSSHHost(cloneURL, alias string) string {
 		}
 		return "ssh://" + userAt + alias
 	}
+	if user, _, ok := splitSCPStyle(cloneURL); ok && user != "" {
+		colon := strings.Index(cloneURL, ":")
+		return user + "@" + alias + cloneURL[colon:]
+	}
 	return ""
+}
+
+// splitSCPStyle parses a scp-style git URL of the form "<user>@<host>:<path>"
+// (e.g. "git@github.com:owner/repo.git"). The "@" must precede the ":" — URLs
+// with a colon before the "@" are treated as not scp-style. Returns ok=false
+// for any other input (HTTPS URLs, plain paths, etc.).
+func splitSCPStyle(raw string) (string, string, bool) {
+	at := strings.Index(raw, "@")
+	colon := strings.Index(raw, ":")
+	if at <= 0 || colon <= at+1 {
+		return "", "", false
+	}
+	return raw[:at], raw[at+1 : colon], true
 }
 
 // resolveKeyPath falls back to the AISYNC_KEY_FILE env var when no explicit key

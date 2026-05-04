@@ -119,7 +119,10 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	sourceFileMap := make(map[string]map[string][]byte)
 
 	if len(config.Sources) == 0 {
-		fmt.Fprintln(os.Stdout, "No external sources configured — applying personal files only. Add sources with: aisync source add")
+		fmt.Fprintln(
+			os.Stdout,
+			"No external sources configured — applying personal files only. Add sources with: aisync source add",
+		)
 	} else {
 		// Step 4: Fetch files from all configured sources in config order.
 		// Snapshot old ETags before fetching so we can detect force-push scenarios.

@@ -760,13 +760,14 @@ func (m *MockOpSecretRepository) GetIdentity(vault, item string) (string, error)
 
 // MockSSHAliasRepository is a manual stub for repositories.SSHAliasRepository.
 type MockSSHAliasRepository struct {
-	Aliases              []string
-	ResolvedHostname     string
-	ResolveAliasesCalls  int
+	Aliases             []string
+	ResolveAliasesErr   error
+	ResolvedHostname    string
+	ResolveAliasesCalls int
 }
 
-func (m *MockSSHAliasRepository) ResolveAliases(hostname string) []string {
+func (m *MockSSHAliasRepository) ResolveAliases(hostname string) ([]string, error) {
 	m.ResolveAliasesCalls++
 	m.ResolvedHostname = hostname
-	return m.Aliases
+	return m.Aliases, m.ResolveAliasesErr
 }
