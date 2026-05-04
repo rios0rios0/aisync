@@ -3,6 +3,9 @@
 package doubles
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
@@ -153,8 +156,22 @@ type MockGitRepository struct {
 	CloneDir       string
 	CloneBranch    string
 	CloneErr       error
-	InitDir        string
-	InitErr        error
+	CloneErrByURL  map[string]error // per-URL errors; falls back to CloneErr
+	CloneAttempts  []string         // all URLs passed to Clone in order
+	// SimulatePartialClone, when true, makes Clone create a `.git/HEAD`
+	// stub at dir on every invocation. This mirrors go-git's PlainClone,
+	// which leaves a partial .git/ skeleton behind on failure and breaks
+	// any naive retry that does not first wipe the destination.
+	SimulatePartialClone bool
+	// RefuseIfNotEmpty, when true, makes Clone return an error if dir is
+	// non-empty before the call (mirrors go-git's
+	// `ErrRepositoryAlreadyExists` and system git's "destination path
+	// already exists" failure). Combined with SimulatePartialClone, this
+	// reproduces the real-world breakage that the SSH alias retry must
+	// guard against.
+	RefuseIfNotEmpty bool
+	InitDir          string
+	InitErr          error
 	OpenDir        string
 	OpenErr        error
 	PullErr        error
@@ -182,9 +199,24 @@ type MockGitRepository struct {
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
 	m.CloneCalls++
+	m.CloneAttempts = append(m.CloneAttempts, url)
 	m.CloneURL = url
 	m.CloneDir = dir
 	m.CloneBranch = branch
+	if m.RefuseIfNotEmpty {
+		if entries, _ := os.ReadDir(dir); len(entries) > 0 {
+			return errors.New("destination path already exists and is not an empty directory")
+		}
+	}
+	if m.SimulatePartialClone {
+		_ = os.MkdirAll(filepath.Join(dir, ".git"), 0700)
+		_ = os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0600)
+	}
+	if m.CloneErrByURL != nil {
+		if err, ok := m.CloneErrByURL[url]; ok {
+			return err
+		}
+	}
 	return m.CloneErr
 }
 
@@ -748,4 +780,18 @@ func (m *MockOpSecretRepository) GetIdentity(vault, item string) (string, error)
 		return "", m.GetIdentityErr
 	}
 	return m.Identity, nil
+}
+
+// MockSSHAliasRepository is a manual stub for repositories.SSHAliasRepository.
+type MockSSHAliasRepository struct {
+	Aliases             []string
+	ResolveAliasesErr   error
+	ResolvedHostname    string
+	ResolveAliasesCalls int
+}
+
+func (m *MockSSHAliasRepository) ResolveAliases(hostname string) ([]string, error) {
+	m.ResolveAliasesCalls++
+	m.ResolvedHostname = hostname
+	return m.Aliases, m.ResolveAliasesErr
 }

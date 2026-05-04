@@ -108,7 +108,17 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	formatter := ui.NewLipglossFormatter()
 
 	// Domain commands
-	initCmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitProxy, encryptionSvc)
+	opSecretRepo := infraRepos.NewOpCLISecretRepository()
+	sshAliasRepo := infraRepos.NewSSHConfigAliasRepository()
+	initCmd := commands.NewInitCommand(
+		configRepo,
+		stateRepo,
+		toolDetector,
+		gitProxy,
+		encryptionSvc,
+		opSecretRepo,
+		sshAliasRepo,
+	)
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
 	promptSvc := ui.NewHuhPromptService()
 	pullCmd := commands.NewPullCommand(
@@ -126,7 +136,6 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
 	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter, diffViewer)
-	opSecretRepo := infraRepos.NewOpCLISecretRepository()
 	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc, opSecretRepo)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
