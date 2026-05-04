@@ -16,6 +16,14 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Added
+- added automatic 1Password age identity import during `aisync init` clone when `encryption.op.enabled = true` in the cloned `config.yaml`
+- added SSH alias fallback in `aisync init` clone: tries the bare hostname first, then retries with each matching `Host` alias from `~/.ssh/config` (e.g. `github.com-mine`)
+- added `SSHAliasRepository` domain interface and `SSHConfigAliasRepository` infrastructure implementation for parsing `~/.ssh/config`
+
+### Fixed
+- fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
+
 ## [1.3.1] - 2026-05-01
 
 ### Changed

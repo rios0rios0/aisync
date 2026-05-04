@@ -49,7 +49,7 @@ func TestInitCommand_Execute(t *testing.T) {
 			// command re-registers the existing identity as a recipient.
 			ExportedPublicKey: "age1derivedfromexistingkey",
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -103,7 +103,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "")
@@ -132,7 +132,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
@@ -155,7 +155,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -177,7 +177,7 @@ func TestInitCommand_Execute(t *testing.T) {
 			CloneErr: assert.AnError,
 		}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "")
@@ -203,7 +203,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// Create a source key file to import from
 		sourceKeyPath := filepath.Join(tmpDir, "source-key.txt")
@@ -240,7 +240,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1generatedkey123",
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -272,7 +272,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ImportErr: assert.AnError,
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "/tmp/key.txt")
@@ -300,7 +300,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GenerateErr: assert.AnError,
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -332,7 +332,7 @@ func TestInitCommand_Execute(t *testing.T) {
 			InitErr: assert.AnError,
 		}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -359,7 +359,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1testkey",
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -419,7 +419,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "")
@@ -455,7 +455,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "")
@@ -496,7 +496,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			GeneratedPublicKey: "age1freshkey",
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "", "", "")
@@ -526,7 +526,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		stateRepo := &doubles.MockStateRepository{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "https://custom.git/repo.git", "")
@@ -556,7 +556,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		toolDetector := &doubles.MockToolDetector{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.RefreshScaffolding(repoPath)
@@ -597,7 +597,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		stateRepo := &doubles.MockStateRepository{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService)
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
 
 		// when
 		err := cmd.RefreshScaffolding(repoPath)

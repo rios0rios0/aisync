@@ -102,11 +102,6 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 		}
 	}
 
-	if len(config.Sources) == 0 {
-		fmt.Fprintln(os.Stdout, "No external sources configured. Add one with: aisync source add")
-		return nil
-	}
-
 	// Step 1: Pull personal changes from the sync repo (other devices).
 	if pullErr := c.pullGitRepo(repoPath); pullErr != nil {
 		logger.Warnf("git pull skipped: %v", pullErr)
@@ -120,36 +115,42 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	// Step 3: Load state for ETag caching.
 	state := c.loadOrCreateState(repoPath)
 
-	// Step 4: Fetch files from all configured sources in config order.
-	// Snapshot old ETags before fetching so we can detect force-push scenarios.
-	oldETags := make(map[string]string)
-	for _, source := range config.Sources {
-		if etag := state.GetETag(source.Name); etag != "" {
-			oldETags[source.Name] = etag
+	allFiles := make(map[string]fileEntry)
+	sourceFileMap := make(map[string]map[string][]byte)
+
+	if len(config.Sources) == 0 {
+		fmt.Fprintln(os.Stdout, "No external sources configured — applying personal files only. Add sources with: aisync source add")
+	} else {
+		// Step 4: Fetch files from all configured sources in config order.
+		// Snapshot old ETags before fetching so we can detect force-push scenarios.
+		oldETags := make(map[string]string)
+		for _, source := range config.Sources {
+			if etag := state.GetETag(source.Name); etag != "" {
+				oldETags[source.Name] = etag
+			}
+		}
+
+		allFiles, sourceFileMap = c.fetchSources(config, state, opts.SourceFilter)
+
+		// Step 5: Save updated ETags back to state.
+		if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
+			logger.Warnf("failed to save state after fetching sources: %v", saveErr)
+		}
+
+		if len(allFiles) == 0 {
+			fmt.Fprintln(os.Stdout, "All sources are up to date.")
+		} else {
+			// Step 5b: Per-file checksum verification against previous sync repo contents.
+			// Warn when a file's content changed but the source ETag did not, which may
+			// indicate a force-push or silent upstream modification.
+			if err = c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
+				return err
+			}
+
+			// Step 6: Write fetched files to the sync repo shared/ directory.
+			c.writeToSyncRepo(repoPath, allFiles)
 		}
 	}
-
-	allFiles, sourceFileMap := c.fetchSources(config, state, opts.SourceFilter)
-
-	// Step 5: Save updated ETags back to state.
-	if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
-		logger.Warnf("failed to save state after fetching sources: %v", saveErr)
-	}
-
-	if len(allFiles) == 0 {
-		fmt.Fprintln(os.Stdout, "All sources are up to date.")
-		return nil
-	}
-
-	// Step 5b: Per-file checksum verification against previous sync repo contents.
-	// Warn when a file's content changed but the source ETag did not, which may
-	// indicate a force-push or silent upstream modification.
-	if err = c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
-		return err
-	}
-
-	// Step 6: Write fetched files to the sync repo shared/ directory.
-	c.writeToSyncRepo(repoPath, allFiles)
 
 	// Step 7: Load encrypt patterns for personal file decryption.
 	encryptPatterns := c.loadEncryptPatterns(repoPath)
