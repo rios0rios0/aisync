@@ -16,18 +16,23 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-04
+
 ### Added
+
+- added `SSHAliasRepository` domain interface and `SSHConfigAliasRepository` infrastructure implementation for parsing `~/.ssh/config`
 - added automatic 1Password age identity import during `aisync init` clone when `encryption.op.enabled = true` in the cloned `config.yaml`
 - added SSH alias fallback in `aisync init` clone: tries the bare hostname first, then retries with each matching `Host` alias from `~/.ssh/config` (e.g. `github.com-mine`)
-- added `SSHAliasRepository` domain interface and `SSHConfigAliasRepository` infrastructure implementation for parsing `~/.ssh/config`
 
 ### Changed
-- changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
+
 - changed `extractSSHHostname` and `rewriteSSHHost` to handle any `<user>@<host>:<path>` scp-style URL, not only the `git@` prefix
+- changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
 
 ### Fixed
-- fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
+
 - fixed `aisync init` clone so 1Password auto-import skips when an age identity already exists at the configured path, preventing accidental key overwrites
+- fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
 - fixed SSH alias retry so the partial `.git/` skeleton left by a failed `go-git` clone is removed between attempts, preventing the alias fallback from always failing with `destination path already exists`
 
 ## [1.3.1] - 2026-05-01
