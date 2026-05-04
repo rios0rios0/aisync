@@ -3,6 +3,9 @@
 package doubles
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
@@ -155,8 +158,20 @@ type MockGitRepository struct {
 	CloneErr       error
 	CloneErrByURL  map[string]error // per-URL errors; falls back to CloneErr
 	CloneAttempts  []string         // all URLs passed to Clone in order
-	InitDir        string
-	InitErr        error
+	// SimulatePartialClone, when true, makes Clone create a `.git/HEAD`
+	// stub at dir on every invocation. This mirrors go-git's PlainClone,
+	// which leaves a partial .git/ skeleton behind on failure and breaks
+	// any naive retry that does not first wipe the destination.
+	SimulatePartialClone bool
+	// RefuseIfNotEmpty, when true, makes Clone return an error if dir is
+	// non-empty before the call (mirrors go-git's
+	// `ErrRepositoryAlreadyExists` and system git's "destination path
+	// already exists" failure). Combined with SimulatePartialClone, this
+	// reproduces the real-world breakage that the SSH alias retry must
+	// guard against.
+	RefuseIfNotEmpty bool
+	InitDir          string
+	InitErr          error
 	OpenDir        string
 	OpenErr        error
 	PullErr        error
@@ -188,6 +203,15 @@ func (m *MockGitRepository) Clone(url, dir, branch string) error {
 	m.CloneURL = url
 	m.CloneDir = dir
 	m.CloneBranch = branch
+	if m.RefuseIfNotEmpty {
+		if entries, _ := os.ReadDir(dir); len(entries) > 0 {
+			return errors.New("destination path already exists and is not an empty directory")
+		}
+	}
+	if m.SimulatePartialClone {
+		_ = os.MkdirAll(filepath.Join(dir, ".git"), 0700)
+		_ = os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0600)
+	}
 	if m.CloneErrByURL != nil {
 		if err, ok := m.CloneErrByURL[url]; ok {
 			return err

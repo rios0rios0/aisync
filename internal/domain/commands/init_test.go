@@ -649,6 +649,44 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Equal(t, "github.com", sshAliasRepo.ResolvedHostname)
 	})
 
+	t.Run("should remove the partial .git skeleton between SSH alias retry attempts", func(t *testing.T) {
+		// given — go-git's PlainClone leaves a partial .git/ directory
+		// behind when it fails. The mock here mirrors that: every Clone
+		// call writes a .git/HEAD stub at dir and refuses to clone into
+		// a non-empty directory. Without an explicit cleanup between
+		// retries, the alias attempt would fail with "destination path
+		// already exists" before the alias auth was ever tested,
+		// defeating the whole fallback.
+		tmpDir := t.TempDir()
+		repoPath := filepath.Join(tmpDir, "aifiles")
+
+		bareURL := "git@github.com:user/aifiles.git"
+		aliasURL := "git@github.com-mine:user/aifiles.git"
+
+		configRepo := &doubles.MockConfigRepository{
+			Config: &entities.Config{
+				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+			},
+		}
+		stateRepo := &doubles.MockStateRepository{}
+		gitRepo := &doubles.MockGitRepository{
+			CloneErrByURL:        map[string]error{bareURL: assert.AnError},
+			SimulatePartialClone: true,
+			RefuseIfNotEmpty:     true,
+		}
+		encryptionService := &doubles.MockEncryptionService{}
+		sshAliasRepo := &doubles.MockSSHAliasRepository{Aliases: []string{"github.com-mine"}}
+		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+
+		// when
+		err := cmd.Execute(repoPath, "", bareURL, "")
+
+		// then
+		require.NoError(t, err,
+			"alias retry must succeed when init clears the partial clone state between attempts")
+		assert.Equal(t, []string{bareURL, aliasURL}, gitRepo.CloneAttempts)
+	})
+
 	t.Run("should return clone error when no SSH aliases match the failing hostname", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
