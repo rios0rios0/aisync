@@ -12,7 +12,10 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
-const namespaceShared = "shared"
+const (
+	namespaceShared   = "shared"
+	namespacePersonal = "personal"
+)
 
 // knownSharedEntry records the source metadata for a file whose checksum matches
 // content fetched from an external source.
@@ -180,8 +183,8 @@ func (c *MigrateCommand) migrateFile(
 	}
 
 	checksum := checksumBytes(content)
-	namespace := "personal"
-	sourceName := "personal"
+	namespace := namespacePersonal
+	sourceName := namespacePersonal
 	if entry, ok := knownShared[checksum]; ok {
 		namespace = namespaceShared
 		sourceName = entry.sourceName

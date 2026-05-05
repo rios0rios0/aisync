@@ -24,11 +24,16 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 - changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
 - changed `extractSSHHostname` and `rewriteSSHHost` to handle any `<user>@<host>:<path>` scp-style URL, not only the `git@` prefix
+- changed the Go module dependencies to their latest versions
+- refactored `PullCommand.Execute` into smaller helpers (`applyHooksExclude`, `fetchAndVerifySources`, `applyToolDirectories`, `finalizeState`) so cognitive complexity stays under the linter threshold
+- extracted repeated string literals (`"shared"`, `"personal"`, allowlist patterns, forge hostnames, `cmdUseList`) into named constants to satisfy `goconst`
 
 ### Fixed
 - fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
 - fixed `aisync init` clone so 1Password auto-import skips when an age identity already exists at the configured path, preventing accidental key overwrites
 - fixed SSH alias retry so the partial `.git/` skeleton left by a failed `go-git` clone is removed between attempts, preventing the alias fallback from always failing with `destination path already exists`
+- fixed `importFromOpIfConfigured` swallowing real config-load failures: it now propagates errors other than `os.ErrNotExist` instead of silently no-oping
+- fixed unused `//nolint:gosec` directives in `internal/infrastructure/ui/diff_viewer.go` and `internal/infrastructure/ui/prompt.go`
 
 ## [1.3.1] - 2026-05-01
 
