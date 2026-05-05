@@ -114,7 +114,7 @@ func (s *HuhPromptService) PromptFileAction(path, direction string) string {
 
 // isInteractive returns true if stdin is a terminal.
 func isInteractive() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) //nolint:gosec // fd conversion is safe on all supported platforms
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // Fallback prompts for non-interactive environments.

@@ -302,7 +302,7 @@ func (c *StatusCommand) isFilePending(
 	}
 
 	if manifest != nil {
-		if entry, exists := manifest.Files[relPath]; exists && entry.Namespace == "shared" {
+		if entry, exists := manifest.Files[relPath]; exists && entry.Namespace == namespaceShared {
 			return false
 		}
 	}

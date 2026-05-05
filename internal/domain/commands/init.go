@@ -320,7 +320,10 @@ func (c *InitCommand) importFromOpIfConfigured(repoPath string) error {
 	configPath := filepath.Join(repoPath, "config.yaml")
 	config, loadErr := c.configRepo.Load(configPath)
 	if loadErr != nil {
-		return nil
+		if errors.Is(loadErr, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("failed to load config %s: %w", configPath, loadErr)
 	}
 
 	if config.Encryption.Op == nil || !config.Encryption.Op.Enabled {
@@ -641,8 +644,8 @@ func (c *InitCommand) RefreshScaffolding(repoPath string) error {
 // directories for AI tools the user does not use.
 func (c *InitCommand) scaffoldDirectories(repoPath string) error {
 	dirs := []string{
-		"personal",
-		"shared",
+		namespacePersonal,
+		namespaceShared,
 		".aisync",
 	}
 

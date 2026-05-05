@@ -560,7 +560,7 @@ func (c *PushCommand) isSharedFile(relPath string, manifest *entities.Manifest) 
 		return false
 	}
 
-	return entry.Namespace == "shared"
+	return entry.Namespace == namespaceShared
 }
 
 // loadManifest loads the manifest for a tool directory, returning nil if it does not exist.

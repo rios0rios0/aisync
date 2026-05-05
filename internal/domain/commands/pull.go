@@ -95,12 +95,7 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Set hooks exclude rules from config on the hooks merger.
-	if len(config.HooksExclude) > 0 {
-		if ea, ok := c.hooksMerger.(repositories.ExcludeAware); ok {
-			ea.SetExcludes(config.HooksExclude)
-		}
-	}
+	c.applyHooksExclude(config)
 
 	// Step 1: Pull personal changes from the sync repo (other devices).
 	if pullErr := c.pullGitRepo(repoPath); pullErr != nil {
@@ -115,6 +110,50 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	// Step 3: Load state for ETag caching.
 	state := c.loadOrCreateState(repoPath)
 
+	// Step 4-6: Fetch sources, verify checksums, and write to the sync repo.
+	allFiles, sourceFileMap, fetchErr := c.fetchAndVerifySources(config, state, repoPath, opts)
+	if fetchErr != nil {
+		return fetchErr
+	}
+
+	// Step 7: Load encrypt patterns for personal file decryption.
+	encryptPatterns := c.loadEncryptPatterns(repoPath)
+
+	// Step 8: Apply files to each enabled AI tool directory.
+	c.applyToolDirectories(config, repoPath, allFiles, sourceFileMap, encryptPatterns, opts)
+
+	// Step 8b: Apply project bundles (post-file-apply so individual files
+	// always land first; bundle merging only runs after the rest of the
+	// pull has finished writing).
+	c.applyBundles(config, repoPath)
+
+	// Step 9: Update state timestamps after successful pull.
+	c.finalizeState(state, repoPath)
+
+	fmt.Fprintln(os.Stdout, "Pull complete.")
+	return nil
+}
+
+// applyHooksExclude wires hooks_exclude rules from the config into the hooks
+// merger when the merger implements the ExcludeAware extension.
+func (c *PullCommand) applyHooksExclude(config *entities.Config) {
+	if len(config.HooksExclude) == 0 {
+		return
+	}
+	if ea, ok := c.hooksMerger.(repositories.ExcludeAware); ok {
+		ea.SetExcludes(config.HooksExclude)
+	}
+}
+
+// fetchAndVerifySources fetches every configured source in order, persists
+// updated ETag/Last-Modified headers, runs force-push detection against the
+// existing sync repo, and writes the new content into shared/.
+func (c *PullCommand) fetchAndVerifySources(
+	config *entities.Config,
+	state *entities.State,
+	repoPath string,
+	opts PullOptions,
+) (map[string]fileEntry, map[string]map[string][]byte, error) {
 	allFiles := make(map[string]fileEntry)
 	sourceFileMap := make(map[string]map[string][]byte)
 
@@ -123,42 +162,49 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 			os.Stdout,
 			"No external sources configured — applying personal files only. Add sources with: aisync source add",
 		)
-	} else {
-		// Step 4: Fetch files from all configured sources in config order.
-		// Snapshot old ETags before fetching so we can detect force-push scenarios.
-		oldETags := make(map[string]string)
-		for _, source := range config.Sources {
-			if etag := state.GetETag(source.Name); etag != "" {
-				oldETags[source.Name] = etag
-			}
-		}
+		return allFiles, sourceFileMap, nil
+	}
 
-		allFiles, sourceFileMap = c.fetchSources(config, state, opts.SourceFilter)
-
-		// Step 5: Save updated ETags back to state.
-		if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
-			logger.Warnf("failed to save state after fetching sources: %v", saveErr)
-		}
-
-		if len(allFiles) == 0 {
-			fmt.Fprintln(os.Stdout, "All sources are up to date.")
-		} else {
-			// Step 5b: Per-file checksum verification against previous sync repo contents.
-			// Warn when a file's content changed but the source ETag did not, which may
-			// indicate a force-push or silent upstream modification.
-			if err = c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
-				return err
-			}
-
-			// Step 6: Write fetched files to the sync repo shared/ directory.
-			c.writeToSyncRepo(repoPath, allFiles)
+	// Snapshot old ETags before fetching so we can detect force-push scenarios.
+	oldETags := make(map[string]string)
+	for _, source := range config.Sources {
+		if etag := state.GetETag(source.Name); etag != "" {
+			oldETags[source.Name] = etag
 		}
 	}
 
-	// Step 7: Load encrypt patterns for personal file decryption.
-	encryptPatterns := c.loadEncryptPatterns(repoPath)
+	allFiles, sourceFileMap = c.fetchSources(config, state, opts.SourceFilter)
 
-	// Step 8: Apply files to each enabled AI tool directory.
+	if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
+		logger.Warnf("failed to save state after fetching sources: %v", saveErr)
+	}
+
+	if len(allFiles) == 0 {
+		fmt.Fprintln(os.Stdout, "All sources are up to date.")
+		return allFiles, sourceFileMap, nil
+	}
+
+	// Per-file checksum verification against previous sync repo contents.
+	// Warn when a file's content changed but the source ETag did not, which may
+	// indicate a force-push or silent upstream modification.
+	if err := c.verifyFileChecksums(repoPath, allFiles, oldETags, state, opts.Force); err != nil {
+		return nil, nil, err
+	}
+
+	c.writeToSyncRepo(repoPath, allFiles)
+	return allFiles, sourceFileMap, nil
+}
+
+// applyToolDirectories iterates over enabled tools and applies the merged
+// content to each tool's home directory.
+func (c *PullCommand) applyToolDirectories(
+	config *entities.Config,
+	repoPath string,
+	allFiles map[string]fileEntry,
+	sourceFileMap map[string]map[string][]byte,
+	encryptPatterns *entities.EncryptPatterns,
+	opts PullOptions,
+) {
 	for toolName, tool := range config.Tools {
 		if !tool.Enabled {
 			continue
@@ -171,13 +217,11 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 			logger.Warnf("failed to apply to tool %s: %v", toolName, applyErr)
 		}
 	}
+}
 
-	// Step 8b: Apply project bundles (post-file-apply so individual files
-	// always land first; bundle merging only runs after the rest of the
-	// pull has finished writing).
-	c.applyBundles(config, repoPath)
-
-	// Step 9: Update state timestamps after successful pull.
+// finalizeState refreshes the LastPull timestamp and the current device's
+// LastSync timestamp, then persists the state to the sync repo.
+func (c *PullCommand) finalizeState(state *entities.State, repoPath string) {
 	state.LastPull = time.Now()
 	hostname, _ := os.Hostname()
 	if device := state.FindDevice(hostname); device != nil {
@@ -186,9 +230,6 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	if saveErr := c.stateRepo.Save(repoPath, state); saveErr != nil {
 		logger.Warnf("failed to update state after pull: %v", saveErr)
 	}
-
-	fmt.Fprintln(os.Stdout, "Pull complete.")
-	return nil
 }
 
 // pullGitRepo opens the sync repo and pulls the latest changes from remote.

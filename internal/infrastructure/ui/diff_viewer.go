@@ -28,7 +28,7 @@ func NewBubbleteaDiffViewer() *BubbleteaDiffViewer {
 // Show renders the diff result in an interactive bubbletea viewport.
 // Returns immediately if stdout is not a TTY.
 func (v *BubbleteaDiffViewer) Show(result *entities.DiffResult, f entities.Formatter) error {
-	if !term.IsTerminal(int(os.Stdout.Fd())) { //nolint:gosec // fd conversion is safe on all supported platforms
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		return nil
 	}
 

@@ -2,6 +2,15 @@ package entities
 
 import "strings"
 
+const (
+	allowRules         = "rules/**"
+	allowSkills        = "skills/**"
+	allowMemories      = "memories/**"
+	allowInstructions  = "instructions/**"
+	allowSettings      = "settings.json"
+	allowSettingsLocal = "settings.local.json"
+)
+
 // ToolAllowlists defines, per AI tool, the tool-relative glob patterns that
 // aisync is willing to sync. Anything not matching one of a tool's patterns
 // is NOT synced — period. This is the single source of truth that replaces
@@ -29,29 +38,29 @@ import "strings"
 var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-in per-tool allowlist; extend here when adding Tier-1 tool coverage
 	// Claude Code (~/.claude/)
 	"claude": {
-		"rules/**",
+		allowRules,
 		"agents/**",
 		"commands/**",
 		"hooks/**",
 		"hooks.json",
-		"skills/**",
-		"memories/**",
+		allowSkills,
+		allowMemories,
 		"output-styles/**",
 		"scripts/**",
-		"settings.json",
-		"settings.local.json",
+		allowSettings,
+		allowSettingsLocal,
 		"CLAUDE.md",
 		"AGENTS.md",
 	},
 	// Cursor (~/.cursor/)
 	"cursor": {
-		"rules/**",
-		"skills/**",
+		allowRules,
+		allowSkills,
 		"skills-cursor/**",
-		"memories/**",
+		allowMemories,
 		"mcp.json",
-		"settings.json",
-		"settings.local.json",
+		allowSettings,
+		allowSettingsLocal,
 		".gitignore",
 		".cursorignore",
 		".cursorindexingignore",
@@ -59,14 +68,14 @@ var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-
 	// GitHub Copilot (~/.github/)
 	"copilot": {
 		"copilot-instructions.md",
-		"instructions/**",
+		allowInstructions,
 		"prompts/**",
 	},
 	// OpenAI Codex CLI (~/.codex/)
 	"codex": {
-		"rules/**",
-		"instructions/**",
-		"memories/**",
+		allowRules,
+		allowInstructions,
+		allowMemories,
 		"default.rules",
 	},
 }
@@ -77,14 +86,14 @@ var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-
 // follow the standard layout work out of the box, while still denying
 // runtime/cache/transcript content by omission.
 var DefaultAllowlist = []string{ //nolint:gochecknoglobals // compiled-in fallback for unknown tools
-	"rules/**",
+	allowRules,
 	"agents/**",
 	"commands/**",
-	"skills/**",
-	"instructions/**",
-	"memories/**",
-	"settings.json",
-	"settings.local.json",
+	allowSkills,
+	allowInstructions,
+	allowMemories,
+	allowSettings,
+	allowSettingsLocal,
 }
 
 // IsSyncable reports whether a file under a tool's home directory is allowed
