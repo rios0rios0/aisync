@@ -14,6 +14,9 @@ import (
 const (
 	diffPathParts    = 3
 	diffMinPathParts = 2
+
+	namespaceShared   = "shared"
+	namespacePersonal = "personal"
 )
 
 // FSDiffService computes diffs by comparing files on the local filesystem
@@ -63,7 +66,7 @@ func (s *FSDiffService) ComputeSharedDiff(
 					Path:            localRel,
 					Direction:       entities.ChangeAdded,
 					Source:          sourceFromIncoming(relPath, incomingFiles),
-					Namespace:       "shared",
+					Namespace:       namespaceShared,
 					RemoteSize:      int64(len(remoteContent)),
 					RemoteContent:   remoteContent,
 					RemoteTimestamp: time.Now(),
@@ -86,7 +89,7 @@ func (s *FSDiffService) ComputeSharedDiff(
 				Path:            localRel,
 				Direction:       entities.ChangeModified,
 				Source:          sourceFromIncoming(relPath, incomingFiles),
-				Namespace:       "shared",
+				Namespace:       namespaceShared,
 				LocalTimestamp:  localMod,
 				RemoteTimestamp: time.Now(),
 				LocalSize:       int64(len(localContent)),
@@ -177,8 +180,8 @@ func (s *FSDiffService) compareLocalFile(
 		return &entities.FileChange{
 			Path:           filepath.Join(toolName, relPath),
 			Direction:      entities.ChangeAdded,
-			Source:         "personal",
-			Namespace:      "personal",
+			Source:         namespacePersonal,
+			Namespace:      namespacePersonal,
 			LocalTimestamp: mod,
 			LocalSize:      int64(len(localContent)),
 			LocalContent:   localContent,
@@ -203,8 +206,8 @@ func (s *FSDiffService) compareLocalFile(
 	return &entities.FileChange{
 		Path:            filepath.Join(toolName, relPath),
 		Direction:       entities.ChangeModified,
-		Source:          "personal",
-		Namespace:       "personal",
+		Source:          namespacePersonal,
+		Namespace:       namespacePersonal,
 		LocalTimestamp:  localMod,
 		RemoteTimestamp: repoMod,
 		LocalSize:       int64(len(localContent)),
@@ -298,8 +301,8 @@ func (s *FSDiffService) comparePersonalFile(
 		return &entities.FileChange{
 			Path:            filepath.Join(toolName, relPath),
 			Direction:       entities.ChangeAdded,
-			Source:          "personal",
-			Namespace:       "personal",
+			Source:          namespacePersonal,
+			Namespace:       namespacePersonal,
 			RemoteTimestamp: repoMod,
 			RemoteSize:      int64(len(repoContent)),
 			RemoteContent:   repoContent,
@@ -323,8 +326,8 @@ func (s *FSDiffService) comparePersonalFile(
 	return &entities.FileChange{
 		Path:            filepath.Join(toolName, relPath),
 		Direction:       entities.ChangeModified,
-		Source:          "personal",
-		Namespace:       "personal",
+		Source:          namespacePersonal,
+		Namespace:       namespacePersonal,
 		LocalTimestamp:  localMod,
 		RemoteTimestamp: repoMod,
 		LocalSize:       int64(len(localContent)),
