@@ -18,6 +18,13 @@ import (
 // stripped from an SSH git URL: `<host>:<path>`.
 const sshRemoteParts = 2
 
+const (
+	forgeGitHub      = "github.com"
+	forgeGitLab      = "gitlab.com"
+	forgeBitbucket   = "bitbucket.org"
+	forgeAzureDevOps = "dev.azure.com"
+)
+
 // publicFreeMailDomains holds the email domains we deliberately DO NOT
 // treat as employer-domain leaks. Anything outside this set is considered
 // a potential NDA candidate when it appears in `git config --global
@@ -45,9 +52,9 @@ var publicFreeMailDomains = map[string]struct{}{ //nolint:gochecknoglobals // st
 // when reporting the origin of a derived term (so `git@github.com:...`
 // and `https://github.com/...` both yield origin `github.com`).
 var knownPublicForges = map[string]string{ //nolint:gochecknoglobals // static registry of public forge hosts
-	"github.com":    "github.com",
-	"gitlab.com":    "gitlab.com",
-	"bitbucket.org": "bitbucket.org",
+	forgeGitHub:    forgeGitHub,
+	forgeGitLab:    forgeGitLab,
+	forgeBitbucket: forgeBitbucket,
 }
 
 // ExecGitInspector implements [repositories.GitInspector] by shelling out
@@ -148,7 +155,7 @@ func (g *ExecGitInspector) LocalRemotes(devRoots []string, maxDepth int) ([]repo
 // all sources.
 func (g *ExecGitInspector) DirectoryLayout(devRoots []string) ([]repositories.DerivedTerm, error) {
 	var out []repositories.DerivedTerm
-	forges := []string{"dev.azure.com", "github.com", "gitlab.com", "bitbucket.org"}
+	forges := []string{forgeAzureDevOps, forgeGitHub, forgeGitLab, forgeBitbucket}
 	for _, root := range devRoots {
 		expanded := expandHome(root)
 		for _, forge := range forges {
@@ -182,7 +189,7 @@ func scanForgeDir(expandedRoot, displayRoot, forge string) []repositories.Derive
 			continue
 		}
 		out = append(out, repositories.DerivedTerm{Value: entry.Name(), Origin: origin})
-		if forge != "dev.azure.com" {
+		if forge != forgeAzureDevOps {
 			continue
 		}
 		out = append(out, scanADOProjects(forgeRoot, displayRoot, forge, entry.Name())...)
@@ -357,14 +364,14 @@ func parseRemotePath(host, path string) []repositories.DerivedTerm {
 	}
 
 	switch host {
-	case "github.com", "gitlab.com", "bitbucket.org":
+	case forgeGitHub, forgeGitLab, forgeBitbucket:
 		if segments[0] == "" {
 			return nil
 		}
 		return []repositories.DerivedTerm{
 			{Value: segments[0], Origin: "git-remote:" + host},
 		}
-	case "ssh.dev.azure.com", "dev.azure.com":
+	case "ssh.dev.azure.com", forgeAzureDevOps:
 		// Expect v3/<org>/<project>/<repo>
 		if len(segments) >= 3 && segments[0] == "v3" {
 			return []repositories.DerivedTerm{

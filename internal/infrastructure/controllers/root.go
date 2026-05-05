@@ -32,6 +32,8 @@ const (
 	RepoName = "aisync"
 	// BinaryName is the release asset binary name for the aisync CLI.
 	BinaryName = "aisync"
+
+	cmdUseList = "list"
 )
 
 // DefaultRepoPath returns the default aifiles repo location.
@@ -353,7 +355,7 @@ func newSourceSubcmd(sourceCmd *commands.SourceCommand) *cobra.Command {
 
 	//nolint:exhaustruct // cobra command does not require all fields
 	listCmd := &cobra.Command{
-		Use:   "list",
+		Use:   cmdUseList,
 		Short: "List configured external sources",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -645,7 +647,7 @@ func newNDASubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
 func newNDAListSubcmd(ndaCmd *commands.NDACommand) *cobra.Command {
 	//nolint:exhaustruct // cobra command does not require all fields
 	return &cobra.Command{
-		Use:   "list",
+		Use:   cmdUseList,
 		Short: "Show the current forbidden-terms summary",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -693,7 +695,7 @@ func newDeviceSubcmd(deviceCmd *commands.DeviceCommand) *cobra.Command {
 
 	//nolint:exhaustruct // cobra command does not require all fields
 	parent.AddCommand(
-		&cobra.Command{Use: "list", Short: "List registered devices", Args: cobra.NoArgs,
+		&cobra.Command{Use: cmdUseList, Short: "List registered devices", Args: cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error { return deviceCmd.List(resolveRepoPath(cmd)) }},
 		&cobra.Command{Use: "rename <old> <new>", Short: "Rename a device", Args: cobra.ExactArgs(deviceRenameArgs),
 			RunE: func(cmd *cobra.Command, args []string) error {
