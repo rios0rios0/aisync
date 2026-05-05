@@ -24,6 +24,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 - changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
 - changed `extractSSHHostname` and `rewriteSSHHost` to handle any `<user>@<host>:<path>` scp-style URL, not only the `git@` prefix
+- changed the Go module dependencies to their latest versions
 
 ### Fixed
 - fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
