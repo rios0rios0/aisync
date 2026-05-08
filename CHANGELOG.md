@@ -24,7 +24,6 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 - changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
 - changed `extractSSHHostname` and `rewriteSSHHost` to handle any `<user>@<host>:<path>` scp-style URL, not only the `git@` prefix
-- changed the Go module dependencies to their latest versions
 - refactored `PullCommand.Execute` into smaller helpers (`applyHooksExclude`, `fetchAndVerifySources`, `applyToolDirectories`, `finalizeState`) so cognitive complexity stays under the linter threshold
 - extracted repeated string literals (`"shared"`, `"personal"`, allowlist patterns, forge hostnames, `cmdUseList`) into named constants to satisfy `goconst`
 - changed the Go version to `1.26.3` and updated all module dependencies
