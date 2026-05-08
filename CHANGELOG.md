@@ -16,23 +16,28 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-08
+
 ### Added
+
+- added `SSHAliasRepository` domain interface and `SSHConfigAliasRepository` infrastructure implementation for parsing `~/.ssh/config`
 - added automatic 1Password age identity import during `aisync init` clone when `encryption.op.enabled = true` in the cloned `config.yaml`
 - added SSH alias fallback in `aisync init` clone: tries the bare hostname first, then retries with each matching `Host` alias from `~/.ssh/config` (e.g. `github.com-mine`)
-- added `SSHAliasRepository` domain interface and `SSHConfigAliasRepository` infrastructure implementation for parsing `~/.ssh/config`
 
 ### Changed
-- changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
+
 - changed `extractSSHHostname` and `rewriteSSHHost` to handle any `<user>@<host>:<path>` scp-style URL, not only the `git@` prefix
-- refactored `PullCommand.Execute` into smaller helpers (`applyHooksExclude`, `fetchAndVerifySources`, `applyToolDirectories`, `finalizeState`) so cognitive complexity stays under the linter threshold
-- extracted repeated string literals (`"shared"`, `"personal"`, allowlist patterns, forge hostnames, `cmdUseList`) into named constants to satisfy `goconst`
+- changed `SSHAliasRepository.ResolveAliases` to return `([]string, error)` so I/O and scan failures surface as warnings instead of being silently swallowed
 - changed the Go version to `1.26.3` and updated all module dependencies
+- extracted repeated string literals (`"shared"`, `"personal"`, allowlist patterns, forge hostnames, `cmdUseList`) into named constants to satisfy `goconst`
+- refactored `PullCommand.Execute` into smaller helpers (`applyHooksExclude`, `fetchAndVerifySources`, `applyToolDirectories`, `finalizeState`) so cognitive complexity stays under the linter threshold
 
 ### Fixed
-- fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
+
 - fixed `aisync init` clone so 1Password auto-import skips when an age identity already exists at the configured path, preventing accidental key overwrites
-- fixed SSH alias retry so the partial `.git/` skeleton left by a failed `go-git` clone is removed between attempts, preventing the alias fallback from always failing with `destination path already exists`
+- fixed `aisync pull` returning early when `sources` is empty, which prevented personal files from ever being applied to AI tool directories
 - fixed `importFromOpIfConfigured` swallowing real config-load failures: it now propagates errors other than `os.ErrNotExist` instead of silently no-oping
+- fixed SSH alias retry so the partial `.git/` skeleton left by a failed `go-git` clone is removed between attempts, preventing the alias fallback from always failing with `destination path already exists`
 - fixed unused `//nolint:gosec` directives in `internal/infrastructure/ui/diff_viewer.go` and `internal/infrastructure/ui/prompt.go`
 
 ## [1.3.1] - 2026-05-01
