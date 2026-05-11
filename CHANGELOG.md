@@ -19,6 +19,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 
 - changed the Go module dependencies to their latest versions
+- refreshed `.github/copilot-instructions.md` to fix the bundle filename derivation (was `sha256`, now `hmac_sha256`) and correct the `atomic_apply_service.go` file path in the lookup table
 
 ## [1.4.0] - 2026-05-08
 

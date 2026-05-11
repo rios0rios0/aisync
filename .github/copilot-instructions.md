@@ -95,8 +95,9 @@ domain layer framework-free.
 Per-tool project bundles (`tools.<name>.bundles[]` in `config.yaml`) sync opaque
 directory trees as age-encrypted tarballs so directory names never appear in the
 git tree. Two modes: `subdirs` (default, one tarball per immediate subdirectory,
-filename is `sha256(name)[:16].age`) and `whole` (entire source directory as one
-tarball). Two merge strategies on pull: `mtime` (default, newer-wins with
+filename is `hmac_sha256(per_repo_key, name)[:16].age` where the per-repo key is
+HKDF-derived from the device's age identity) and `whole` (entire source directory
+as one tarball). Two merge strategies on pull: `mtime` (default, newer-wins with
 local-only preservation) and `replace` (overwrite unconditionally). Cross-device
 deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
 removing. See `CLAUDE.md` § Bundle Sync for full details.
@@ -287,7 +288,7 @@ When asked to change something, read these files before suggesting edits:
 | Encrypted forbidden-terms repo                 | `internal/infrastructure/repositories/age_forbidden_terms_repository.go`  |
 | `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
 | File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
-| Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply.go`                        |
+| Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply_service.go`                |
 | Bundle sync (tar+age packaging)                | `internal/infrastructure/services/tar_age_bundle_service.go`              |
 | Bundle push / pull integration                 | `internal/domain/commands/{push,pull}_bundles.go`                         |
 | Bundle prune (`aisync bundles prune`)          | `internal/domain/commands/bundles_prune.go`                               |
