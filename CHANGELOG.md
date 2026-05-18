@@ -19,6 +19,7 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 ### Changed
 
 - changed the Go module dependencies to their latest versions
+- refreshed `.github/copilot-instructions.md` to correct the bundle filename derivation from `sha256` to `hmac_sha256` (changed in 1.2.0)
 
 ## [1.4.0] - 2026-05-08
 
