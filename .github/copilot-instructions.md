@@ -95,7 +95,8 @@ domain layer framework-free.
 Per-tool project bundles (`tools.<name>.bundles[]` in `config.yaml`) sync opaque
 directory trees as age-encrypted tarballs so directory names never appear in the
 git tree. Two modes: `subdirs` (default, one tarball per immediate subdirectory,
-filename is `sha256(name)[:16].age`) and `whole` (entire source directory as one
+filename is `hmac_sha256(per_repo_key, name)[:16].age` where the key is
+HKDF-derived from the device's age identity) and `whole` (entire source directory as one
 tarball). Two merge strategies on pull: `mtime` (default, newer-wins with
 local-only preservation) and `replace` (overwrite unconditionally). Cross-device
 deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
