@@ -288,7 +288,7 @@ When asked to change something, read these files before suggesting edits:
 | Encrypted forbidden-terms repo                 | `internal/infrastructure/repositories/age_forbidden_terms_repository.go`  |
 | `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
 | File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
-| Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply.go`                        |
+| Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply_service.go`                |
 | Bundle sync (tar+age packaging)                | `internal/infrastructure/services/tar_age_bundle_service.go`              |
 | Bundle push / pull integration                 | `internal/domain/commands/{push,pull}_bundles.go`                         |
 | Bundle prune (`aisync bundles prune`)          | `internal/domain/commands/bundles_prune.go`                               |
