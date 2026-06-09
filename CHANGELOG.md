@@ -16,10 +16,12 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.4.6] - 2026-06-09
+
 ### Changed
 
-- refreshed `.github/copilot-instructions.md` to correct the atomic apply file reference from `atomic_apply.go` to `atomic_apply_service.go`
 - changed the Go module dependencies to their latest versions
+- refreshed `.github/copilot-instructions.md` to correct the atomic apply file reference from `atomic_apply.go` to `atomic_apply_service.go`
 
 ## [1.4.5] - 2026-06-03
 
