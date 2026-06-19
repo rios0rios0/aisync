@@ -16,6 +16,10 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+### Fixed
+
+- fixed `aisync self-update --dry-run` failing with "unknown flag: --dry-run": the `self-update` command read the `--dry-run` flag but never registered it, so the flag was rejected
+
 ## [1.4.7] - 2026-06-18
 
 ### Changed
