@@ -765,7 +765,7 @@ func newBundlesSubcmd(pruneCmd *commands.PruneBundlesCommand) *cobra.Command {
 func newSelfUpdateSubcmd(version string) *cobra.Command {
 	updateCmd := selfupdate.NewCommand(RepoOwner, RepoName, BinaryName, version)
 	//nolint:exhaustruct // cobra command does not require all fields
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use: "self-update", Short: "Update aisync to the latest version", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			force, _ := cmd.Flags().GetBool("force")
@@ -773,6 +773,10 @@ func newSelfUpdateSubcmd(version string) *cobra.Command {
 			return updateCmd.Execute(dryRun, force)
 		},
 	}
+	// `--force` is inherited from the root persistent flags; register `--dry-run` here
+	// so `self-update --dry-run` is accepted instead of failing with "unknown flag".
+	cmd.Flags().Bool("dry-run", false, "Show what would be updated without performing it")
+	return cmd
 }
 
 func newVersionSubcmd(version string) *cobra.Command {
