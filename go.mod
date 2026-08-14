@@ -1,6 +1,6 @@
 module github.com/rios0rios0/aisync
 
-go 1.26.5
+go 1.26.6
 
 require (
 	filippo.io/age v1.3.1
@@ -11,7 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/rios0rios0/cliforge v0.3.14
-	github.com/sirupsen/logrus v1.9.4
+	github.com/sirupsen/logrus v1.10.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.55.0
