@@ -64,8 +64,7 @@ func (r *OpCLISecretRepository) GetIdentity(vault, item string) (string, error) 
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		var execErr *exec.Error
-		if errors.As(err, &execErr) {
+		if _, ok := errors.AsType[*exec.Error](err); ok {
 			return "", fmt.Errorf(
 				"1Password CLI not available (install `op` and run `op signin`): %w", err,
 			)

@@ -16,3 +16,8 @@ Thumbs.db
 
 # Test
 coverage.out
+coverage.txt
+coverage.xml
+cobertura.xml
+junit.xml
+reports/
