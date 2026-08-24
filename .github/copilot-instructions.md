@@ -102,6 +102,20 @@ local-only preservation) and `replace` (overwrite unconditionally). Cross-device
 deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
 removing. See `CLAUDE.md` § Bundle Sync for full details.
 
+### Age Identity Provisioning
+
+The `aisync key` group (`internal/domain/commands/key.go`) manages the age
+identity — `generate`, `import`, `export`, `add-recipient`, and
+`import-from-op`. `import-from-op` shells out to the official 1Password `op`
+CLI to pull the `AGE-SECRET-KEY-1...` value from an item (field `private
+key`) into `encryption.identity` and appends the public key to
+`encryption.recipients`. Keep it strictly opt-in: it must error unless
+`encryption.op.enabled: true`. `op` owns the auth model — never prompt for or
+handle the 1Password master password in aisync code. The `op` invocation
+lives behind the `OpSecretRepository` port
+(`repositories/op_cli_secret_repository.go`); the domain layer never shells
+out directly.
+
 ## Go Conventions
 
 - **File names:** `snake_case` (`list_users_command.go`, not `ListUsers.go`).
@@ -287,6 +301,8 @@ When asked to change something, read these files before suggesting edits:
 | NDA forbidden-terms entity (canonical match)   | `internal/domain/entities/forbidden_terms.go`                             |
 | Encrypted forbidden-terms repo                 | `internal/infrastructure/repositories/age_forbidden_terms_repository.go`  |
 | `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
+| `aisync key` command (generate/import/export/import-from-op) | `internal/domain/commands/key.go`                            |
+| 1Password age-identity lookup (`op` CLI)       | `internal/infrastructure/repositories/op_cli_secret_repository.go`        |
 | File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
 | Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply_service.go`                |
 | Bundle sync (tar+age packaging)                | `internal/infrastructure/services/tar_age_bundle_service.go`              |
