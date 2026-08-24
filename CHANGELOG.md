@@ -16,12 +16,13 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.4.26] - 2026-08-24
+
 ### Changed
 
-- changed the Go module dependencies to their latest versions
+- changed struct literals and `errors.As` calls to the Go 1.27 forms required by the `modernize` linter
 - changed the Go module dependencies to their latest versions
 - changed the Go version to `1.27.0` and updated all module dependencies
-- changed struct literals and `errors.As` calls to the Go 1.27 forms required by the `modernize` linter
 - refreshed `CLAUDE.md` and `.github/copilot-instructions.md` to document age identity provisioning via the `aisync key import-from-op` command and the `encryption.op` 1Password config
 
 ### Fixed
