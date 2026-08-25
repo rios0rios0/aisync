@@ -7,7 +7,7 @@ development practices, refer to the **[Development Guide](https://github.com/rio
 
 ## Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - [Make](https://www.gnu.org/software/make/)
 - [chlog](https://github.com/luizjhonata/chlog) (`go install github.com/luizjhonata/chlog@latest`)
 
