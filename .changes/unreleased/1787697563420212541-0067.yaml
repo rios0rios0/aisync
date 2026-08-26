@@ -1,3 +1,0 @@
-kind: 'Fixed'
-body: 'fixed the Go prerequisite in `CONTRIBUTING.md`, which asked for 1.26+ while `go.mod` requires 1.27.0'
-time: '2026-08-25T22:39:23.420154306Z'
