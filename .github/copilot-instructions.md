@@ -225,17 +225,18 @@ Test description patterns by layer:
 
 Every code change ships with documentation in the same commit/PR:
 
-- **`CHANGELOG.md`** — always. Add an entry under `[Unreleased]` using one
-  of the Keep-a-Changelog categories (`Added`, `Changed`, `Deprecated`,
-  `Removed`, `Fixed`, `Security`). Simple past tense, lowercase first verb,
-  no trailing period.
+- **A changelog fragment** — always. `CHANGELOG.md` is generated from the
+  fragments and is never edited by hand; run
+  `chlog new --kind <Kind> --body "..."` with one of the Keep-a-Changelog
+  kinds (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
+  Simple past tense, lowercase first verb, no trailing period.
 - **`README.md`** — when usage, CLI flags, or setup changes.
 - **`CLAUDE.md`** — when architecture, build commands, or development
   workflow changes.
 - **This file (`.github/copilot-instructions.md`)** — when the workflow
   that Copilot should reinforce changes.
 
-Do not let a PR land with behavior changes and no changelog entry.
+Do not let a PR land with behavior changes and no changelog fragment.
 
 ## Commit and Branch Conventions
 
@@ -245,7 +246,8 @@ Do not let a PR land with behavior changes and no changelog entry.
   first word, no trailing period. Example:
   `fix(push): gated secret scan on recipients`.
 - **Flag breaking changes** in three places: the commit footer
-  (`**BREAKING CHANGE:** ...`), `CHANGELOG.md`, and the PR description.
+  (`**BREAKING CHANGE:** ...`), the changelog fragment
+  (`chlog new --breaking`), and the PR description.
 - **Synchronize branches with rebase, not merge.** Rewriting history keeps
   `main` linear.
 
@@ -283,7 +285,7 @@ Copilot should actively steer away from these:
   inside the sync repo at `<repo>/.aisync-forbidden.age`. Plaintext on
   disk would defeat the whole point of the scanner.
 - Hard-coding secrets of any kind.
-- Landing a code change without updating `CHANGELOG.md`.
+- Landing a code change without a changelog fragment (`chlog new`).
 
 ## Where to Look First
 
@@ -310,3 +312,28 @@ When asked to change something, read these files before suggesting edits:
 | Bundle prune (`aisync bundles prune`)          | `internal/domain/commands/bundles_prune.go`                               |
 | Bundle entities + config (BundleSpec, modes)   | `internal/domain/entities/{bundle_manifest,bundle_state,tool}.go`         |
 | Test stubs                                     | `test/doubles/mocks.go`                                                   |
+
+<!-- chlog:start -->
+## Changelog (chlog) — MANDATORY
+
+If the repository you are working in uses chlog (a `.chlog.yaml` or `.chlog.yml`
+config file, or a `.changes/` directory, exists at the project root), the
+following is binding and ALWAYS applies: whenever you make ANY change, you MUST
+create a changelog fragment as part of the same change — automatically, without
+being asked, before committing.
+
+- Do NOT edit CHANGELOG.md directly; it is generated from fragments.
+- Create the fragment with:
+  `chlog new --kind <Kind> --body "<imperative description>"`
+- Valid kinds: Added, Changed, Deprecated, Removed, Fixed, Security
+- Choose the kind that best matches the change (e.g., new feature → Added,
+  bug fix → Fixed, behavior change → Changed, removal → Removed, security fix → Security).
+- If the change is backward-INCOMPATIBLE with the public API (a breaking
+  change), you MUST add the `--breaking` flag:
+  `chlog new --kind <Kind> --breaking --body "<description>"`.
+  This is the ONLY thing that triggers a major version bump — the kind alone
+  never does (per SemVer, major = incompatible change). When unsure whether a
+  change breaks compatibility, ask the user instead of guessing.
+- Fragments are YAML files in `.changes/unreleased/`; stage them with your commit.
+- `chlog check` fails the build when a fragment is missing — never skip it.
+<!-- chlog:end -->
