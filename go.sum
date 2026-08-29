@@ -128,8 +128,8 @@ github.com/pjbgf/sha1cd v0.6.0/go.mod h1:lhpGlyHLpQZoxMv8HcgXvZEhcGs0PG/vsZnEJ7H
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/rios0rios0/cliforge v0.4.0 h1:GKWOECYBSfoAdnmD19cR5c3E1G3bOd86eFCT3OiJTb8=
-github.com/rios0rios0/cliforge v0.4.0/go.mod h1:DIp+ebLDpHF5axCeJUdSE3490X3IoMUpGKU/CtwSuHA=
+github.com/rios0rios0/cliforge v0.4.1 h1:BOh+yhziRvpIPEukmX5bv6eKXEZbouPkv01dVyxizv8=
+github.com/rios0rios0/cliforge v0.4.1/go.mod h1:ydQ7blNA/Mp0qPGm2AxwpzLU1bRlW85WgBVxPy4iUfg=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
