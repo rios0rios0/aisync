@@ -3,14 +3,14 @@ module github.com/rios0rios0/aisync
 go 1.27.0
 
 require (
-	filippo.io/age v1.3.1
+	filippo.io/age v1.3.2
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.2
-	github.com/rios0rios0/cliforge v0.4.1
+	github.com/rios0rios0/cliforge v0.4.2
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
