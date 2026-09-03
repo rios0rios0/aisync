@@ -10,11 +10,11 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.2
-	github.com/rios0rios0/cliforge v0.4.2
+	github.com/rios0rios0/cliforge v0.4.3
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/term v0.45.0
 	golang.org/x/text v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
