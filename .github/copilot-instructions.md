@@ -227,7 +227,7 @@ Every code change ships with documentation in the same commit/PR:
 
 - **A changelog fragment** — always. `CHANGELOG.md` is generated from the
   fragments and is never edited by hand; run
-  `chlog new --kind <Kind> --body "..."` with one of the Keep-a-Changelog
+  `chlog new --kind <Kind> --body '...'` with one of the Keep-a-Changelog
   kinds (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
   Simple past tense, lowercase first verb, no trailing period.
 - **`README.md`** — when usage, CLI flags, or setup changes.
@@ -324,13 +324,14 @@ being asked, before committing.
 
 - Do NOT edit CHANGELOG.md directly; it is generated from fragments.
 - Create the fragment with:
-  `chlog new --kind <Kind> --body "<imperative description>"`
+  `chlog new --kind <Kind> --body '<past-tense description>'`
+- Write an apostrophe inside the single-quoted body as `'\''`.
 - Valid kinds: Added, Changed, Deprecated, Removed, Fixed, Security
 - Choose the kind that best matches the change (e.g., new feature → Added,
   bug fix → Fixed, behavior change → Changed, removal → Removed, security fix → Security).
 - If the change is backward-INCOMPATIBLE with the public API (a breaking
   change), you MUST add the `--breaking` flag:
-  `chlog new --kind <Kind> --breaking --body "<description>"`.
+  `chlog new --kind <Kind> --breaking --body '<past-tense description>'`.
   This is the ONLY thing that triggers a major version bump — the kind alone
   never does (per SemVer, major = incompatible change). When unsure whether a
   change breaks compatibility, ask the user instead of guessing.
