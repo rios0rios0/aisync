@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands
 
 import "github.com/rios0rios0/aisync/internal/domain/entities"

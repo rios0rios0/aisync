@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -51,6 +49,8 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should produce deterministic 16-hex-character hash for the same input and identity", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		identity := writeFakeIdentity(t, "DETERMINISTICKEYAAAA")
@@ -68,6 +68,8 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 	})
 
 	t.Run("should produce different hashes for different inputs", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		identity := writeFakeIdentity(t, "DETERMINISTICKEYBBBB")
@@ -83,6 +85,8 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 	})
 
 	t.Run("should produce different hashes for the same input under different identities", func(t *testing.T) {
+		t.Parallel()
+
 		// given — two devices with different age identities must NOT
 		// collide on bundle filenames; otherwise an attacker who knows
 		// one device's identity could derive another device's hashes.
@@ -103,6 +107,8 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 	})
 
 	t.Run("should differ from the plain sha256 oracle for this fixture", func(t *testing.T) {
+		t.Parallel()
+
 		// given — exercises the migration property for one concrete
 		// fixture: with truncation to 16 hex chars (64 bits) a collision
 		// between the HMAC value and the legacy `sha256(name)[:16]` is
@@ -123,11 +129,17 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 		require.NoError(t, err)
 		legacy := sha256.Sum256([]byte(name))
 		legacyHex := hex.EncodeToString(legacy[:])[:16]
-		assert.NotEqual(t, legacyHex, hmacHash,
-			"HMAC value should differ from the legacy sha256 oracle for this fixture (collision is theoretically possible at ~1 in 2^64 but would indicate a key-derivation bug)")
+		assert.NotEqual(
+			t,
+			legacyHex,
+			hmacHash,
+			"HMAC value should differ from the legacy sha256 oracle for this fixture (collision is theoretically possible at ~1 in 2^64 but would indicate a key-derivation bug)",
+		)
 	})
 
 	t.Run("should fail when identityPath is empty", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 
@@ -140,6 +152,8 @@ func TestTarAgeBundleService_HashName(t *testing.T) {
 	})
 
 	t.Run("should fail when identity file has no AGE-SECRET-KEY line", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		path := filepath.Join(t.TempDir(), "broken.txt")
@@ -190,6 +204,8 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should pad small bundles up to the smallest 16 KiB bucket", func(t *testing.T) {
+		t.Parallel()
+
 		// given — a tiny bundle (one short file). The gzipped tarball
 		// is well under 16 KiB, so the padded ciphertext must land
 		// exactly at the 16 KiB bucket. (passthroughEncryption returns
@@ -203,35 +219,49 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		assert.Equal(t, 16<<10, len(ciphertext),
+		assert.Len(t, ciphertext, 16<<10,
 			"a tiny bundle must be padded up to the 16 KiB bucket, not left at its natural compressed size")
 	})
 
-	t.Run("should produce identical ciphertext sizes for two same-bucket bundles with different content", func(t *testing.T) {
-		// given — two bundles with completely different short content.
-		// Both should fit in the 16 KiB bucket and therefore both
-		// ciphertexts must end up exactly 16 KiB long. This is the
-		// privacy property: an attacker reading the public-clone view
-		// cannot distinguish the two bundles by file size.
-		service := services.NewTarAgeBundleService(passthroughEncryption{})
+	t.Run(
+		"should produce identical ciphertext sizes for two same-bucket bundles with different content",
+		func(t *testing.T) {
+			t.Parallel()
 
-		srcA := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(srcA, "a.md"), []byte("project alpha notes"), 0o600))
-		cipherA, _, errA := service.Bundle(srcA, "alpha", []string{"age1xyz"})
-		require.NoError(t, errA)
+			// given — two bundles with completely different short content.
+			// Both should fit in the 16 KiB bucket and therefore both
+			// ciphertexts must end up exactly 16 KiB long. This is the
+			// privacy property: an attacker reading the public-clone view
+			// cannot distinguish the two bundles by file size.
+			service := services.NewTarAgeBundleService(passthroughEncryption{})
 
-		srcB := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(srcB, "b.md"), []byte("a totally different second project"), 0o600))
-		cipherB, _, errB := service.Bundle(srcB, "bravo", []string{"age1xyz"})
-		require.NoError(t, errB)
+			srcA := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(srcA, "a.md"), []byte("project alpha notes"), 0o600))
+			cipherA, _, errA := service.Bundle(srcA, "alpha", []string{"age1xyz"})
+			require.NoError(t, errA)
 
-		// then
-		assert.Equal(t, len(cipherA), len(cipherB),
-			"two bundles in the same size bucket must produce equal-length ciphertext (this is the privacy property the padding protects)")
-		assert.Equal(t, 16<<10, len(cipherA))
-	})
+			srcB := t.TempDir()
+			require.NoError(
+				t,
+				os.WriteFile(filepath.Join(srcB, "b.md"), []byte("a totally different second project"), 0o600),
+			)
+			cipherB, _, errB := service.Bundle(srcB, "bravo", []string{"age1xyz"})
+			require.NoError(t, errB)
+
+			// then
+			assert.Len(
+				t,
+				cipherB,
+				len(cipherA),
+				"two bundles in the same size bucket must produce equal-length ciphertext (this is the privacy property the padding protects)",
+			)
+			assert.Len(t, cipherA, 16<<10)
+		},
+	)
 
 	t.Run("should round-trip cleanly after padding", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		src := t.TempDir()
@@ -242,7 +272,7 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 		// when
 		ciphertext, _, bundleErr := service.Bundle(src, "round-trip-pad", []string{"age1xyz"})
 		require.NoError(t, bundleErr)
-		assert.Equal(t, 16<<10, len(ciphertext), "should land at the 16 KiB bucket")
+		assert.Len(t, ciphertext, 16<<10, "should land at the 16 KiB bucket")
 
 		gotManifest, files, extractErr := service.Extract(ciphertext, "")
 
@@ -260,6 +290,8 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 	})
 
 	t.Run("should produce different ciphertext bytes on repeated runs (random padding)", func(t *testing.T) {
+		t.Parallel()
+
 		// given — same input bundled twice. With random padding, the
 		// two ciphertexts should DIFFER even though file contents are
 		// identical. This protects against equality-comparison oracles
@@ -276,12 +308,14 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 		require.NoError(t, errSecond)
 
 		// then — sizes match (same bucket) but the bytes differ
-		assert.Equal(t, len(first), len(second), "same content should land in the same bucket")
+		assert.Len(t, second, len(first), "same content should land in the same bucket")
 		assert.NotEqual(t, first, second,
 			"random padding should make two bundles of identical content produce different ciphertext bytes")
 	})
 
 	t.Run("should accept an injected random source via NewTarAgeBundleServiceWithRand", func(t *testing.T) {
+		t.Parallel()
+
 		// given — the injection point for the random source is exposed
 		// via [services.NewTarAgeBundleServiceWithRand] so future
 		// benchmarks, fuzz tests, and stress tests can drive padding
@@ -301,11 +335,13 @@ func TestTarAgeBundleService_Bundle_PadsToSizeBucket(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 16<<10, len(ciphertext),
+		assert.Len(t, ciphertext, 16<<10,
 			"injected random source must still produce a bucket-aligned ciphertext")
 	})
 
 	t.Run("should round up to a larger bucket for medium-sized bundles", func(t *testing.T) {
+		t.Parallel()
+
 		// given — a bundle whose payload (~20 KiB of incompressible
 		// random bytes plus some Lorem ipsum) compresses to more than
 		// 16 KiB. The exact compressed size depends on gzip's deflate
@@ -359,6 +395,8 @@ func TestTarAgeBundleService_MergeIntoLocal(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should add files that are missing locally", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		target := t.TempDir()
@@ -379,6 +417,8 @@ func TestTarAgeBundleService_MergeIntoLocal(t *testing.T) {
 	})
 
 	t.Run("should overwrite local file when bundle copy is newer", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		target := t.TempDir()
@@ -403,6 +443,8 @@ func TestTarAgeBundleService_MergeIntoLocal(t *testing.T) {
 	})
 
 	t.Run("should preserve local file when local is newer", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		target := t.TempDir()
@@ -427,6 +469,8 @@ func TestTarAgeBundleService_MergeIntoLocal(t *testing.T) {
 	})
 
 	t.Run("should overwrite unconditionally with replace strategy", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		target := t.TempDir()
@@ -449,6 +493,8 @@ func TestTarAgeBundleService_MergeIntoLocal(t *testing.T) {
 	})
 
 	t.Run("should refuse path-traversal entries", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		service := services.NewTarAgeBundleService(passthroughEncryption{})
 		target := t.TempDir()

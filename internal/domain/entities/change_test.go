@@ -1,11 +1,10 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
-	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"time"
+
+	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -71,27 +70,27 @@ func TestFileChange_IsRemoteNewer(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		localTimestamp   time.Time
-		remoteTimestamp  time.Time
+		localTimestamp  time.Time
+		remoteTimestamp time.Time
 		expected        bool
 	}{
 		{
-			name:           "should return true when remote is newer",
+			name:            "should return true when remote is newer",
 			localTimestamp:  now.Add(-time.Hour),
 			remoteTimestamp: now,
-			expected:       true,
+			expected:        true,
 		},
 		{
-			name:           "should return false when local is newer",
+			name:            "should return false when local is newer",
 			localTimestamp:  now,
 			remoteTimestamp: now.Add(-time.Hour),
-			expected:       false,
+			expected:        false,
 		},
 		{
-			name:           "should return false when timestamps are equal",
+			name:            "should return false when timestamps are equal",
 			localTimestamp:  now,
 			remoteTimestamp: now,
-			expected:       false,
+			expected:        false,
 		},
 	}
 
@@ -116,17 +115,17 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name           string
-		change entities.FileChange
-		expected       bool
+		name     string
+		change   entities.FileChange
+		expected bool
 	}{
 		{
 			name: "should return true when timestamps within 1s but checksums differ",
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(500 * time.Millisecond),
-				LocalChecksum:  "aaa",
-				RemoteChecksum: "bbb",
+				LocalChecksum:   "aaa",
+				RemoteChecksum:  "bbb",
 			},
 			expected: true,
 		},
@@ -135,8 +134,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(2 * time.Second),
-				LocalChecksum:  "aaa",
-				RemoteChecksum: "bbb",
+				LocalChecksum:   "aaa",
+				RemoteChecksum:  "bbb",
 			},
 			expected: false,
 		},
@@ -145,8 +144,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(500 * time.Millisecond),
-				LocalChecksum:  "same",
-				RemoteChecksum: "same",
+				LocalChecksum:   "same",
+				RemoteChecksum:  "same",
 			},
 			expected: false,
 		},
@@ -155,8 +154,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(500 * time.Millisecond),
-				LocalChecksum:  "",
-				RemoteChecksum: "bbb",
+				LocalChecksum:   "",
+				RemoteChecksum:  "bbb",
 			},
 			expected: false,
 		},
@@ -165,8 +164,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(500 * time.Millisecond),
-				LocalChecksum:  "aaa",
-				RemoteChecksum: "",
+				LocalChecksum:   "aaa",
+				RemoteChecksum:  "",
 			},
 			expected: false,
 		},
@@ -175,8 +174,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 			change: entities.FileChange{
 				LocalTimestamp:  now,
 				RemoteTimestamp: now.Add(-800 * time.Millisecond),
-				LocalChecksum:  "aaa",
-				RemoteChecksum: "bbb",
+				LocalChecksum:   "aaa",
+				RemoteChecksum:  "bbb",
 			},
 			expected: true,
 		},
@@ -199,7 +198,7 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 func TestDiffResult_HasChanges(t *testing.T) {
 	tests := []struct {
 		name     string
-		diff entities.DiffResult
+		diff     entities.DiffResult
 		expected bool
 	}{
 		{
@@ -256,7 +255,7 @@ func TestDiffResult_HasChanges(t *testing.T) {
 func TestDiffResult_TotalCount(t *testing.T) {
 	tests := []struct {
 		name     string
-		diff entities.DiffResult
+		diff     entities.DiffResult
 		expected int
 	}{
 		{
@@ -298,7 +297,7 @@ func TestDiffResult_TotalCount(t *testing.T) {
 
 func TestChangeDirection_Constants(t *testing.T) {
 	// given / when / then
-	assert.Equal(t, entities.ChangeDirection("+"), entities.ChangeAdded)
-	assert.Equal(t, entities.ChangeDirection("~"), entities.ChangeModified)
-	assert.Equal(t, entities.ChangeDirection("-"), entities.ChangeRemoved)
+	assert.Equal(t, entities.ChangeAdded, entities.ChangeDirection("+"))
+	assert.Equal(t, entities.ChangeModified, entities.ChangeDirection("~"))
+	assert.Equal(t, entities.ChangeRemoved, entities.ChangeDirection("-"))
 }

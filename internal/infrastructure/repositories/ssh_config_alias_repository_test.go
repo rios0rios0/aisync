@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -136,23 +134,26 @@ Host github.com-mine
 		assert.Nil(t, aliases)
 	})
 
-	t.Run("should propagate scan failure when ~/.ssh/config has a line longer than the scanner buffer", func(t *testing.T) {
-		// given — bufio.Scanner's default buffer is 64 KiB; pad past it.
-		longValue := make([]byte, 70_000)
-		for i := range longValue {
-			longValue[i] = 'x'
-		}
-		home := writeSSHConfig(t, "Host github.com-mine\n  HostName "+string(longValue)+"\n")
-		t.Setenv("HOME", home)
-		repo := repositories.NewSSHConfigAliasRepository()
+	t.Run(
+		"should propagate scan failure when ~/.ssh/config has a line longer than the scanner buffer",
+		func(t *testing.T) {
+			// given — bufio.Scanner's default buffer is 64 KiB; pad past it.
+			longValue := make([]byte, 70_000)
+			for i := range longValue {
+				longValue[i] = 'x'
+			}
+			home := writeSSHConfig(t, "Host github.com-mine\n  HostName "+string(longValue)+"\n")
+			t.Setenv("HOME", home)
+			repo := repositories.NewSSHConfigAliasRepository()
 
-		// when
-		aliases, err := repo.ResolveAliases("github.com")
+			// when
+			aliases, err := repo.ResolveAliases("github.com")
 
-		// then
-		require.Error(t, err, "very long lines must surface a scan error so callers can log it")
-		assert.Nil(t, aliases)
-	})
+			// then
+			require.Error(t, err, "very long lines must surface a scan error so callers can log it")
+			assert.Nil(t, aliases)
+		},
+	)
 }
 
 // writeSSHConfig writes content to <tempDir>/.ssh/config and returns the temp

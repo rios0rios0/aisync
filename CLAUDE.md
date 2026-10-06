@@ -20,10 +20,10 @@ make sast           # Security analysis (CodeQL, Semgrep, Trivy, Hadolint, Gitle
 
 Run a single test during development:
 ```bash
-go test -tags unit -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
+go test -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
 ```
 
-All unit test files require the `//go:build unit` build tag. Build and test suite each run in ~2 seconds.
+Unit test files carry no build tag, so plain `go test ./...` runs them. Build and test suite each run in ~2 seconds.
 
 ## Architecture
 
@@ -143,7 +143,7 @@ The `aisync key` command group (`commands/key.go`) manages the age identity: `ge
 
 ## Testing Conventions
 
-- `//go:build unit` tag on all unit test files — run with `go test -tags unit`
+- No build tag on unit test files, so `go test ./...`, the IDE and the linter all see them; reserve `//go:build integration` for a test that needs real infrastructure
 - BDD structure: `// given`, `// when`, `// then` comment blocks in every test
 - Test names: `TestTypeName_MethodName_DescriptiveBehavior` (e.g., `TestHooksMerger_Merge_ConcatenatesArrays`)
 - External test packages (e.g., `package commands_test`) — tests only access exported API

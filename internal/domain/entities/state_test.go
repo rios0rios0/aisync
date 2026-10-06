@@ -1,11 +1,10 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"regexp"
 	"runtime"
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -192,7 +191,7 @@ func TestState_GetETag_ReturnsEmptyForMissing(t *testing.T) {
 	result := state.GetETag("nonexistent")
 
 	// then
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestState_GetETag_ReturnsEmptyForNilMap(t *testing.T) {
@@ -203,5 +202,5 @@ func TestState_GetETag_ReturnsEmptyForNilMap(t *testing.T) {
 	result := state.GetETag("source")
 
 	// then
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }

@@ -1,9 +1,8 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -20,7 +19,7 @@ func TestNewJournal_CreatesWithCorrectFields(t *testing.T) {
 	assert.Equal(t, stagingDir, j.StagingDir)
 	assert.False(t, j.Timestamp.IsZero(), "Timestamp should be set")
 	assert.NotNil(t, j.Operations)
-	assert.Len(t, j.Operations, 0)
+	assert.Empty(t, j.Operations)
 }
 
 func TestNewJournal_OperationsStartEmpty(t *testing.T) {
@@ -72,7 +71,7 @@ func TestJournal_AddOperation_EmptyOldChecksum(t *testing.T) {
 	j.AddOperation("/tmp/new-file", "/target/new-file", "", "newchecksum")
 
 	// then
-	assert.Equal(t, "", j.Operations[0].OldChecksum)
+	assert.Empty(t, j.Operations[0].OldChecksum)
 	assert.Equal(t, "newchecksum", j.Operations[0].NewChecksum)
 }
 

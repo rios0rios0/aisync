@@ -1,5 +1,3 @@
-//go:build unit
-
 package entities_test
 
 import (
@@ -127,7 +125,9 @@ func TestForbiddenTerms_Match_ReportsLineNumbers(t *testing.T) {
 	terms := &entities.ForbiddenTerms{Terms: []entities.ForbiddenTerm{term}}
 
 	// given
-	content := []byte("line 1\nline 2 mentions ContosoSecurity directly\nline 3\nline 4 talks about Contoso Security too")
+	content := []byte(
+		"line 1\nline 2 mentions ContosoSecurity directly\nline 3\nline 4 talks about Contoso Security too",
+	)
 
 	// when
 	findings := terms.Match("doc.md", content)

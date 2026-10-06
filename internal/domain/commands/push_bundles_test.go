@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -53,6 +51,8 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should produce one bundle for the whole flat-file source dir", func(t *testing.T) {
+		t.Parallel()
+
 		// given — ~/.claude/plans/ contains 3 flat .md files (no subdirs).
 		// In whole mode the producer should call Bundle() exactly once
 		// with the source root as the path and source label as the name.
@@ -108,6 +108,8 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 	})
 
 	t.Run("should produce one bundle per subdir in subdirs mode", func(t *testing.T) {
+		t.Parallel()
+
 		// given — three subdirs under projects/, each with one file.
 		// Confirms the existing subdirs-mode behaviour is preserved.
 		toolPath := t.TempDir()
@@ -156,57 +158,68 @@ func TestPushCommand_ProduceBundles_WholeMode(t *testing.T) {
 			"subdirs mode produces one bundle per immediate subdir")
 	})
 
-	t.Run("should fail fast with a direct error when bundles are configured but the age identity is missing", func(t *testing.T) {
-		// given — bundles + recipients are set up, but the configured
-		// identity path points to a nonexistent file. Without the
-		// up-front check, the user would see a wrapped "hash bundle
-		// name for X: open identity file ...: no such file or
-		// directory" mid-loop after some bundles already processed;
-		// the up-front check produces one direct, actionable error
-		// before any bundle work starts.
-		toolPath := t.TempDir()
-		repoPath := t.TempDir()
-		plansDir := filepath.Join(toolPath, "plans")
-		require.NoError(t, os.MkdirAll(plansDir, 0o700))
-		require.NoError(t, os.WriteFile(filepath.Join(plansDir, "alpha.md"), []byte("a"), 0o600))
+	t.Run(
+		"should fail fast with a direct error when bundles are configured but the age identity is missing",
+		func(t *testing.T) {
+			t.Parallel()
 
-		bundleSvc := &doubles.MockBundleService{
-			BundleCipher:   []byte("ciphertext"),
-			BundleManifest: &entities.BundleManifest{FileCount: 1},
-		}
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Encryption: entities.EncryptionConfig{
-					Identity:   filepath.Join(t.TempDir(), "does-not-exist.txt"),
-					Recipients: []string{"age1xyz"},
-				},
-				Tools: map[string]entities.Tool{
-					"claude": {
-						Path:    toolPath,
-						Enabled: true,
-						Bundles: []entities.BundleSpec{{
-							Source: "plans",
-							Target: "plans",
-							Mode:   entities.BundleModeWhole,
-						}},
+			// given — bundles + recipients are set up, but the configured
+			// identity path points to a nonexistent file. Without the
+			// up-front check, the user would see a wrapped "hash bundle
+			// name for X: open identity file ...: no such file or
+			// directory" mid-loop after some bundles already processed;
+			// the up-front check produces one direct, actionable error
+			// before any bundle work starts.
+			toolPath := t.TempDir()
+			repoPath := t.TempDir()
+			plansDir := filepath.Join(toolPath, "plans")
+			require.NoError(t, os.MkdirAll(plansDir, 0o700))
+			require.NoError(t, os.WriteFile(filepath.Join(plansDir, "alpha.md"), []byte("a"), 0o600))
+
+			bundleSvc := &doubles.MockBundleService{
+				BundleCipher:   []byte("ciphertext"),
+				BundleManifest: &entities.BundleManifest{FileCount: 1},
+			}
+			configRepo := &doubles.MockConfigRepository{
+				Config: &entities.Config{
+					Encryption: entities.EncryptionConfig{
+						Identity:   filepath.Join(t.TempDir(), "does-not-exist.txt"),
+						Recipients: []string{"age1xyz"},
+					},
+					Tools: map[string]entities.Tool{
+						"claude": {
+							Path:    toolPath,
+							Enabled: true,
+							Bundles: []entities.BundleSpec{{
+								Source: "plans",
+								Target: "plans",
+								Mode:   entities.BundleModeWhole,
+							}},
+						},
 					},
 				},
-			},
-		}
-		cmd := newPushCommandWithBundles(configRepo, bundleSvc)
+			}
+			cmd := newPushCommandWithBundles(configRepo, bundleSvc)
 
-		// when
-		err := cmd.Execute("/tmp/cfg.yaml", repoPath, "", commands.PushOptions{DryRun: true})
+			// when
+			err := cmd.Execute("/tmp/cfg.yaml", repoPath, "", commands.PushOptions{DryRun: true})
 
-		// then
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "bundles require a readable age identity",
-			"the failure message must point the user at the actual problem (missing identity), not a derived hashing error")
-		assert.Equal(t, 0, bundleSvc.BundleCalls,
-			"no bundle work must run when the up-front identity check fails")
-	})
+			// then
+			require.Error(t, err)
+			assert.Contains(
+				t,
+				err.Error(),
+				"bundles require a readable age identity",
+				"the failure message must point the user at the actual problem (missing identity), not a derived hashing error",
+			)
+			assert.Equal(t, 0, bundleSvc.BundleCalls,
+				"no bundle work must run when the up-front identity check fails")
+		},
+	)
 
 	t.Run("should fail fast when bundles are configured but encryption.identity is empty", func(t *testing.T) {
+		t.Parallel()
+
 		// given — recipients are set (so encryption is requested) but
 		// no identity path is configured at all. The validator should
 		// recommend `aisync key generate`.

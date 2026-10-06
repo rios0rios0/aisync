@@ -93,7 +93,7 @@ test/doubles/               hand-written struct stubs for every domain interface
 - **A new command touches exactly four places**: `internal/domain/commands/<name>.go`, the `new<Name>Subcmd()` helper plus `root.AddCommand(...)` in `root.go`, a stub in `test/doubles/mocks.go` for any new domain interface, and `internal/domain/commands/<name>_test.go`. A change that skips the stub or the test is incomplete.
 - **Encryption and destructive writes deserve the closest reading.** `aisync` overwrites files in the user's home directory and handles age-encrypted material. Check that a failed decrypt, a partial download, or an interrupted apply cannot leave a half-written config, and that plaintext never reaches disk outside the intended target.
 - **Encrypted material stays encrypted in git.** A `.age` file that turns into plaintext, or a new path that bypasses `.aisyncignore` / the forbidden list, is a Critical finding.
-- Every unit test file carries `//go:build unit` in this repository — that is the local convention and it is consistent across the tree. Flag a new test file that omits it, and flag `//go:build integration` used for a test that needs no real infrastructure.
+- Unit test files carry no build tag, so plain `go test ./...`, the IDE and the linter all see them. Flag a `//go:build unit` constraint on a test file, and flag `//go:build integration` used for a test that needs no real infrastructure.
 - Entities in `internal/domain/entities/` carry no `json:"…"` or other struct tags; tags belong on the DTOs in the infrastructure layer.
 
 ### Commands a reviewer should be able to quote
@@ -103,7 +103,7 @@ make build          # compile to bin/aisync (stripped)
 make lint           # golangci-lint with the pipelines configuration
 make test           # unit suite (~2 s)
 make sast           # CodeQL, Semgrep, Trivy, Hadolint, Gitleaks
-go test -tags unit -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
+go test -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
 ```
 
 ### Local quality gates

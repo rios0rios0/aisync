@@ -1,9 +1,8 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -135,11 +134,11 @@ func TestPlainFormatter_EmptyStringInputs(t *testing.T) {
 	f := &entities.PlainFormatter{}
 
 	// when / then
-	assert.Equal(t, "", f.Bold(""))
-	assert.Equal(t, "", f.Subtle(""))
-	assert.Equal(t, "", f.FilePath(""))
-	assert.Equal(t, "", f.Success(""))
-	assert.Equal(t, "", f.Warning(""))
-	assert.Equal(t, "", f.Error(""))
-	assert.Equal(t, "", f.DiffSymbol(""))
+	assert.Empty(t, f.Bold(""))
+	assert.Empty(t, f.Subtle(""))
+	assert.Empty(t, f.FilePath(""))
+	assert.Empty(t, f.Success(""))
+	assert.Empty(t, f.Warning(""))
+	assert.Empty(t, f.Error(""))
+	assert.Empty(t, f.DiffSymbol(""))
 }

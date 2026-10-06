@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -7,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
 )
@@ -21,7 +20,7 @@ func TestSectionMerger_Merge_ShouldConcatenateSharedAndPersonalWithSeparator(t *
 	result, err := merger.Merge([][]byte{shared}, personal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	assert.Contains(t, output, "# Shared Rules")
 	assert.Contains(t, output, services.DefaultSeparator)
@@ -46,7 +45,7 @@ func TestSectionMerger_Merge_ShouldReplaceOnlySharedSectionOnResync(t *testing.T
 	result, err := merger.Merge([][]byte{newShared}, personalWithSep)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	assert.Contains(t, output, "# New Shared Content")
 	assert.NotContains(t, output, "# Old Shared Content")
@@ -65,7 +64,7 @@ func TestSectionMerger_Merge_ShouldReturnOnlySharedWhenNoPersonal(t *testing.T) 
 	result, err := merger.Merge([][]byte{shared}, nil)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	assert.Contains(t, output, "# Shared Only")
 	assert.NotContains(t, output, services.DefaultSeparator)
@@ -80,7 +79,7 @@ func TestSectionMerger_Merge_ShouldReturnPersonalBelowSeparatorWhenNoShared(t *t
 	result, err := merger.Merge(nil, personal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 
 	// With no shared sources, shared buffer is empty; personal is still appended
@@ -98,7 +97,7 @@ func TestSectionMerger_Merge_ShouldPreserveSeparatorExactly(t *testing.T) {
 	result, err := merger.Merge([][]byte{shared}, personal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	assert.Equal(t, 1, strings.Count(output, services.DefaultSeparator))
 }
@@ -113,7 +112,7 @@ func TestSectionMerger_Merge_ShouldConcatenateMultipleSharedSources(t *testing.T
 	result, err := merger.Merge([][]byte{source1, source2}, nil)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	assert.Contains(t, output, "# Source 1")
 	assert.Contains(t, output, "# Source 2")
@@ -127,7 +126,7 @@ func TestSectionMerger_Merge_ShouldReturnEmptyWhenBothInputsAreEmpty(t *testing.
 	result, err := merger.Merge(nil, nil)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, result)
 }
 
@@ -154,7 +153,7 @@ func TestSectionMerger_Merge_ShouldDiscardPersonalWhenOnlySeparatorAndWhitespace
 	result, err := merger.Merge([][]byte{newShared}, personal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	output := string(result)
 	// When personal section after separator is only whitespace, extractPersonalContent returns nil
 	// so the output should only be the shared content without separator

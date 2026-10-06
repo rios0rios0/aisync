@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -9,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	repositories "github.com/rios0rios0/aisync/internal/infrastructure/repositories"
@@ -40,11 +39,11 @@ func TestJSONManifestRepository_SaveThenLoad(t *testing.T) {
 
 	// when
 	err := repo.Save(toolDir, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(toolDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, original.ManagedBy, loaded.ManagedBy)
 	assert.Equal(t, original.Version, loaded.Version)
 	assert.True(t, original.LastSync.Equal(loaded.LastSync))
@@ -68,7 +67,7 @@ func TestJSONManifestRepository_ManifestFileName(t *testing.T) {
 	err := repo.Save(toolDir, manifest)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	expectedPath := filepath.Join(toolDir, ".aisync-manifest.json")
 	assert.FileExists(t, expectedPath)
 }
@@ -82,7 +81,7 @@ func TestJSONManifestRepository_Load_MissingFile(t *testing.T) {
 	manifest, err := repo.Load(toolDir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, manifest)
 	assert.Contains(t, err.Error(), "failed to read manifest")
 }
@@ -99,7 +98,7 @@ func TestJSONManifestRepository_Exists_WithFile(t *testing.T) {
 		Files:     make(map[string]entities.ManifestFile),
 	}
 	err := repo.Save(toolDir, manifest)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	exists := repo.Exists(toolDir)
@@ -141,16 +140,16 @@ func TestJSONManifestRepository_PreservesAllFields(t *testing.T) {
 
 	// when
 	err := repo.Save(toolDir, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(toolDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "aisync", loaded.ManagedBy)
 	assert.Equal(t, "1.2.3", loaded.Version)
 	assert.True(t, syncTime.Equal(loaded.LastSync))
 	assert.Equal(t, "laptop-linux", loaded.Device)
-	assert.Equal(t, 1, len(loaded.Files))
+	assert.Len(t, loaded.Files, 1)
 	file, ok := loaded.Files["rules/git-flow.md"]
 	assert.True(t, ok)
 	assert.Equal(t, "engineering-guide", file.Source)
@@ -174,7 +173,7 @@ func TestJSONManifestRepository_Save_ShouldCreateToolDirectoryIfMissing(t *testi
 	err := repo.Save(toolDir, manifest)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, repo.Exists(toolDir))
 }
 
@@ -183,13 +182,13 @@ func TestJSONManifestRepository_Load_InvalidJSON(t *testing.T) {
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
 	manifestPath := filepath.Join(toolDir, ".aisync-manifest.json")
-	assert.NoError(t, os.WriteFile(manifestPath, []byte("{invalid json}"), 0600))
+	require.NoError(t, os.WriteFile(manifestPath, []byte("{invalid json}"), 0600))
 
 	// when
 	manifest, err := repo.Load(toolDir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, manifest)
 	assert.Contains(t, err.Error(), "failed to parse manifest")
 }
@@ -208,10 +207,10 @@ func TestJSONManifestRepository_Save_EmptyFilesMap(t *testing.T) {
 
 	// when
 	err := repo.Save(toolDir, manifest)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(toolDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, loaded.Files, 0)
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Files)
 }

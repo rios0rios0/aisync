@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -29,8 +27,8 @@ func initTempRepo(t *testing.T) (*repositories.ExecGitRepository, string) {
 	dir := t.TempDir()
 	require.NoError(t, repo.Init(dir))
 	// Configure git user for commits
-	_ = exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run()  //nolint:gosec
-	_ = exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()             //nolint:gosec
+	_ = exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run()
+	_ = exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()
 	return repo, dir
 }
 
@@ -84,7 +82,7 @@ func TestExecGitRepository_Open_ShouldFailForNonGitDir(t *testing.T) {
 	err := repo.Open(dir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a git repository")
 }
 
@@ -165,7 +163,7 @@ func TestExecGitRepository_SetConfig_ShouldSetValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify with git config
-	out, _ := exec.Command("git", "-C", dir, "config", "user.name").Output() //nolint:gosec
+	out, _ := exec.Command("git", "-C", dir, "config", "user.name").Output()
 	assert.Equal(t, "TestUser\n", string(out))
 }
 
@@ -176,8 +174,8 @@ func TestExecGitRepository_Clone_ShouldCloneFromLocalRepo(t *testing.T) {
 	// Create a source repo with a commit
 	srcDir := t.TempDir()
 	require.NoError(t, repo.Init(srcDir))
-	_ = exec.Command("git", "-C", srcDir, "config", "user.email", "test@test.com").Run() //nolint:gosec
-	_ = exec.Command("git", "-C", srcDir, "config", "user.name", "Test").Run()           //nolint:gosec
+	_ = exec.Command("git", "-C", srcDir, "config", "user.email", "test@test.com").Run()
+	_ = exec.Command("git", "-C", srcDir, "config", "user.name", "Test").Run()
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("# Test"), 0600))
 	require.NoError(t, repo.CommitAll("initial commit"))
 

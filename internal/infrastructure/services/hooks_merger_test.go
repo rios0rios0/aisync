@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -7,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
@@ -36,11 +35,11 @@ func TestHooksMerger_Merge_ShouldConcatenateArraysWhenTwoSourcesShareSameEventKe
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 2)
 }
 
@@ -63,11 +62,11 @@ func TestHooksMerger_Merge_ShouldDeduplicateWhenSameHookAppearsInTwoSources(t *t
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 1)
 }
 
@@ -95,15 +94,15 @@ func TestHooksMerger_Merge_ShouldPlacePersonalHooksLast(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 2)
 
-	first := preToolUse[0].(map[string]interface{})
-	second := preToolUse[1].(map[string]interface{})
+	first := preToolUse[0].(map[string]any)
+	second := preToolUse[1].(map[string]any)
 	assert.Equal(t, "shared", first["matcher"])
 	assert.Equal(t, "personal", second["matcher"])
 }
@@ -129,14 +128,14 @@ func TestHooksMerger_Merge_ShouldRemoveExcludedHook(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 1)
 
-	remaining := preToolUse[0].(map[string]interface{})
+	remaining := preToolUse[0].(map[string]any)
 	assert.Equal(t, "*.py", remaining["matcher"])
 }
 
@@ -150,11 +149,11 @@ func TestHooksMerger_Merge_ShouldReturnEmptyHooksWhenInputsAreEmpty(t *testing.T
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	assert.Len(t, hooks, 0)
+	hooks := parsed["hooks"].(map[string]any)
+	assert.Empty(t, hooks)
 }
 
 func TestHooksMerger_Merge_ShouldReturnErrorWhenJSONIsMalformed(t *testing.T) {
@@ -166,7 +165,7 @@ func TestHooksMerger_Merge_ShouldReturnErrorWhenJSONIsMalformed(t *testing.T) {
 	_, err := merger.Merge([][]byte{malformed}, nil)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse shared source 0")
 }
 
@@ -180,7 +179,7 @@ func TestHooksMerger_Merge_ShouldReturnErrorWhenPersonalJSONIsMalformed(t *testi
 	_, err := merger.Merge([][]byte{valid}, malformed)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse personal hooks")
 }
 
@@ -201,14 +200,14 @@ func TestHooksMerger_Merge_ShouldMergePersonalOnlyWhenNoSharedSources(t *testing
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	postToolUse := hooks["PostToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	postToolUse := hooks["PostToolUse"].([]any)
 	assert.Len(t, postToolUse, 1)
 
-	entry := postToolUse[0].(map[string]interface{})
+	entry := postToolUse[0].(map[string]any)
 	assert.Equal(t, "*.md", entry["matcher"])
 }
 
@@ -235,19 +234,19 @@ func TestHooksMerger_Merge_ShouldHandleMultipleEventKeysInOneSource(t *testing.T
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
+	hooks := parsed["hooks"].(map[string]any)
 	assert.Len(t, hooks, 3)
 
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 1)
 
-	postToolUse := hooks["PostToolUse"].([]interface{})
+	postToolUse := hooks["PostToolUse"].([]any)
 	assert.Len(t, postToolUse, 1)
 
-	notification := hooks["Notification"].([]interface{})
+	notification := hooks["Notification"].([]any)
 	assert.Len(t, notification, 1)
 }
 
@@ -266,12 +265,12 @@ func TestHooksMerger_Merge_ShouldSkipNonArrayHookEntries(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
+	hooks := parsed["hooks"].(map[string]any)
 	// The non-array entry should be skipped by collectHooks
-	assert.Len(t, hooks, 0)
+	assert.Empty(t, hooks)
 }
 
 func TestHooksMerger_Merge_ShouldHandleSourceWithoutHooksKey(t *testing.T) {
@@ -285,11 +284,11 @@ func TestHooksMerger_Merge_ShouldHandleSourceWithoutHooksKey(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	assert.Len(t, hooks, 0)
+	hooks := parsed["hooks"].(map[string]any)
+	assert.Empty(t, hooks)
 }
 
 func TestHooksMerger_Merge_ShouldExcludeByEventOnly(t *testing.T) {
@@ -316,15 +315,15 @@ func TestHooksMerger_Merge_ShouldExcludeByEventOnly(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	hooks := parsed["hooks"].(map[string]interface{})
-	preToolUse := hooks["PreToolUse"].([]interface{})
+	hooks := parsed["hooks"].(map[string]any)
+	preToolUse := hooks["PreToolUse"].([]any)
 	assert.Len(t, preToolUse, 1, "PreToolUse should not be affected")
 
-	postToolUse := hooks["PostToolUse"].([]interface{})
-	assert.Len(t, postToolUse, 0, "PostToolUse should be excluded entirely")
+	postToolUse := hooks["PostToolUse"].([]any)
+	assert.Empty(t, postToolUse, "PostToolUse should be excluded entirely")
 }
 
 func TestHooksMerger_SetExcludes_ShouldUpdateExcludeRules(t *testing.T) {
@@ -343,10 +342,10 @@ func TestHooksMerger_SetExcludes_ShouldUpdateExcludeRules(t *testing.T) {
 	result1, err := merger.Merge([][]byte{source}, nil)
 	assert.NoError(t, err)
 
-	var parsed1 map[string]interface{}
+	var parsed1 map[string]any
 	assert.NoError(t, json.Unmarshal(result1, &parsed1))
-	hooks1 := parsed1["hooks"].(map[string]interface{})
-	preToolUse1 := hooks1["PreToolUse"].([]interface{})
+	hooks1 := parsed1["hooks"].(map[string]any)
+	preToolUse1 := hooks1["PreToolUse"].([]any)
 	assert.Len(t, preToolUse1, 2)
 
 	// when
@@ -358,12 +357,12 @@ func TestHooksMerger_SetExcludes_ShouldUpdateExcludeRules(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed2 map[string]interface{}
+	var parsed2 map[string]any
 	assert.NoError(t, json.Unmarshal(result2, &parsed2))
-	hooks2 := parsed2["hooks"].(map[string]interface{})
-	preToolUse2 := hooks2["PreToolUse"].([]interface{})
+	hooks2 := parsed2["hooks"].(map[string]any)
+	preToolUse2 := hooks2["PreToolUse"].([]any)
 	assert.Len(t, preToolUse2, 1)
 
-	remaining := preToolUse2[0].(map[string]interface{})
+	remaining := preToolUse2[0].(map[string]any)
 	assert.Equal(t, "*.py", remaining["matcher"])
 }

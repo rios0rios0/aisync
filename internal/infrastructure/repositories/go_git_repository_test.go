@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -23,7 +21,7 @@ func TestGoGitRepository_Init_CreatesGitDir(t *testing.T) {
 	err := repo.Init(dir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	gitDir := filepath.Join(dir, ".git")
 	assert.FileExists(t, filepath.Join(gitDir, "HEAD"))
 }
@@ -33,7 +31,7 @@ func TestGoGitRepository_Open_AfterInit(t *testing.T) {
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
 	err := initRepo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	openRepo := repositories.NewGoGitRepository()
 
@@ -53,7 +51,7 @@ func TestGoGitRepository_Open_NonExistentDir(t *testing.T) {
 	err := repo.Open(dir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to open git repository")
 }
 
@@ -62,13 +60,13 @@ func TestGoGitRepository_IsClean_FreshRepo(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	clean, err := repo.IsClean()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 }
 
@@ -77,16 +75,16 @@ func TestGoGitRepository_IsClean_WithUnstagedChanges(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	clean, err := repo.IsClean()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, clean)
 }
 
@@ -95,20 +93,20 @@ func TestGoGitRepository_CommitAll(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "readme.md"), []byte("# Test"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	err = repo.CommitAll("chore: added initial file")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// verify repo is clean after commit
 	clean, err := repo.IsClean()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 }
 
@@ -117,25 +115,25 @@ func TestGoGitRepository_CommitAll_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.MkdirAll(filepath.Join(dir, "rules"), 0700)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(dir, "rules", "arch.md"), []byte("architecture"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(dir, "rules", "git.md"), []byte("git flow"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("sync: true"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	err = repo.CommitAll("feat: added multiple files")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	clean, err := repo.IsClean()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 }
 
@@ -144,7 +142,7 @@ func TestGoGitRepository_HasRemote_LocalOnly(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	hasRemote := repo.HasRemote()
@@ -158,10 +156,10 @@ func TestGoGitRepository_HasRemote_AfterAddRemote(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = repo.AddRemote("origin", "https://github.com/test/repo.git")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	hasRemote := repo.HasRemote()
@@ -189,7 +187,7 @@ func TestGoGitRepository_IsClean_NotOpened(t *testing.T) {
 	_, err := repo.IsClean()
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
@@ -201,7 +199,7 @@ func TestGoGitRepository_CommitAll_NotOpened(t *testing.T) {
 	err := repo.CommitAll("test")
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
@@ -210,13 +208,13 @@ func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Create an initial commit so the branch exists
 	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
@@ -225,11 +223,11 @@ func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
 	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify the cloned repo has the file
 	data, readErr := os.ReadFile(filepath.Join(cloneDir, "init.txt"))
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, []byte("initial"), data)
 }
 
@@ -241,7 +239,7 @@ func TestGoGitRepository_Pull_NotOpened(t *testing.T) {
 	err := repo.Pull()
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
@@ -272,7 +270,7 @@ func TestGoGitRepository_AddRemote_NotOpened(t *testing.T) {
 	err := repo.AddRemote("origin", "https://github.com/test/repo.git")
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
@@ -284,7 +282,7 @@ func TestGoGitRepository_Push_NotOpened(t *testing.T) {
 	err := repo.Push()
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repository not opened")
 }
 
@@ -293,16 +291,16 @@ func TestGoGitRepository_Pull_AlreadyUpToDate(t *testing.T) {
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
 	err = cloneRepo.Clone(bareDir, cloneDir, "main")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- pull when already up to date
 	err = cloneRepo.Pull()
@@ -316,16 +314,16 @@ func TestGoGitRepository_AddRemote_DuplicateName(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = repo.AddRemote("origin", "https://github.com/test/repo.git")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	err = repo.AddRemote("origin", "https://github.com/test/other.git")
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to add remote")
 }
 
@@ -334,12 +332,12 @@ func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = repo.CommitAll("chore: test commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- push without any remote configured
 	err = repo.Push()
@@ -353,32 +351,32 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
 	err = cloneRepo.Clone(bareDir, cloneDir, "main")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Add a new commit to the bare/origin repo
 	err = os.WriteFile(filepath.Join(bareDir, "second.txt"), []byte("second"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("feat: added second file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- pull from origin (local bare repo)
 	err = cloneRepo.Pull()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify the new file was pulled
 	data, readErr := os.ReadFile(filepath.Join(cloneDir, "second.txt"))
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, []byte("second"), data)
 }
 
@@ -388,23 +386,23 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Clone it
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
 	err = cloneRepo.Clone(bareDir, cloneDir, "main")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Add a new file and commit
 	err = os.WriteFile(filepath.Join(cloneDir, "new.txt"), []byte("new content"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = cloneRepo.CommitAll("feat: added new file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- push to the local remote
 	err = cloneRepo.Push()
@@ -419,37 +417,37 @@ func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
 	err := initRepo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = initRepo.CommitAll("chore: initial file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	openRepo := repositories.NewGoGitRepository()
 	err = openRepo.Open(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	clean, err := openRepo.IsClean()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 
 	// when -- add a new file and commit through the opened repo
 	err = os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	clean, err = openRepo.IsClean()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, clean)
 
 	err = openRepo.CommitAll("feat: added new file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	clean, err = openRepo.IsClean()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 }
 
@@ -458,16 +456,16 @@ func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
 	err := bareRepo.Init(bareDir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.MkdirAll(filepath.Join(bareDir, "rules"), 0700)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(bareDir, "rules", "arch.md"), []byte("architecture"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(bareDir, "readme.md"), []byte("readme"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = bareRepo.CommitAll("chore: initial with multiple files")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cloneDir := filepath.Join(t.TempDir(), "cloned")
 	cloneRepo := repositories.NewGoGitRepository()
@@ -476,16 +474,16 @@ func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
 	err = cloneRepo.Clone(bareDir, cloneDir, "main")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify all files were cloned
 	data, readErr := os.ReadFile(filepath.Join(cloneDir, "rules", "arch.md"))
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, []byte("architecture"), data)
 
 	// Should be clean after clone
 	clean, err := cloneRepo.IsClean()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, clean)
 
 	// Should have remote
@@ -497,14 +495,14 @@ func TestGoGitRepository_Init_ShouldFailWhenAlreadyInit(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- re-init on the same directory
 	repo2 := repositories.NewGoGitRepository()
 	err = repo2.Init(dir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to initialize git repository")
 }
 
@@ -513,14 +511,14 @@ func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = repo.AddRemote("origin", "https://localhost:1/nonexistent.git")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "f.txt"), []byte("data"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = repo.CommitAll("chore: commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- push to an unreachable remote
 	err = repo.Push()
@@ -538,7 +536,7 @@ func TestGoGitRepository_Clone_ShouldFailWithInvalidURL(t *testing.T) {
 	err := repo.Clone("/nonexistent/repo/path", dir, "main")
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to clone repository")
 }
 
@@ -547,7 +545,7 @@ func TestGoGitRepository_Open_BareRepoShouldFail(t *testing.T) {
 	dir := t.TempDir()
 	// Manually create a bare repo using go-git
 	_, err := git.PlainInit(dir, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	repo := repositories.NewGoGitRepository()
 
@@ -555,7 +553,7 @@ func TestGoGitRepository_Open_BareRepoShouldFail(t *testing.T) {
 	err = repo.Open(dir)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get worktree")
 }
 
@@ -564,19 +562,19 @@ func TestGoGitRepository_Open_ExistingWithRemote(t *testing.T) {
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
 	err := initRepo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = initRepo.AddRemote("origin", "https://github.com/test/repo.git")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(dir, "file.txt"), []byte("data"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = initRepo.CommitAll("chore: initial commit")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when -- open and pull (should get error since it's a fake remote)
 	openRepo := repositories.NewGoGitRepository()
 	err = openRepo.Open(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	pullErr := openRepo.Pull()
 
@@ -589,13 +587,13 @@ func TestGoGitRepository_Init_ThenAddRemoteThenHasRemote(t *testing.T) {
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
 	err := repo.Init(dir)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, repo.HasRemote())
 
 	// when
 	err = repo.AddRemote("origin", "https://github.com/test/repo.git")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, repo.HasRemote())
 }

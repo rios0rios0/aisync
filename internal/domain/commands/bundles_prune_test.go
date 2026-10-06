@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -19,6 +17,8 @@ func TestPruneBundlesCommand(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should remove orphan bundles after user confirms", func(t *testing.T) {
+		t.Parallel()
+
 		// given — local source has one project ("alive"); the sync repo
 		// has two bundles: one for "alive" (matches HashName) and one
 		// for an orphaned "deleted" (no source dir). The user confirms
@@ -63,6 +63,8 @@ func TestPruneBundlesCommand(t *testing.T) {
 	})
 
 	t.Run("should keep orphan bundle when user declines", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		toolPath := t.TempDir()
 		repoPath := t.TempDir()

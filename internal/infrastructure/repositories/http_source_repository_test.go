@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -11,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	domainRepos "github.com/rios0rios0/aisync/internal/domain/repositories"
@@ -33,15 +32,15 @@ func buildTarGz(t *testing.T, fileMap map[string]string) []byte {
 			Typeflag: tar.TypeReg,
 		}
 		err := tw.WriteHeader(header)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		_, err = tw.Write([]byte(content))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	err := tw.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = gw.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return buf.Bytes()
 }
@@ -55,7 +54,7 @@ func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
 		"repo-main/README.md":                    "# Repo README",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", "\"etag-test-123\"")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
@@ -85,7 +84,7 @@ func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
 	_ = originalFetch
 
 	// Use a custom server that responds to any request
-	serverAny := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	serverAny := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", "\"etag-test-123\"")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
@@ -103,10 +102,10 @@ func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "\"etag-test-123\"", result.ETag)
-	assert.Equal(t, 2, len(result.Files))
+	assert.Len(t, result.Files, 2)
 
 	archContent, ok := result.Files["rules/architecture.md"]
 	assert.True(t, ok)
@@ -150,13 +149,13 @@ func TestHTTPSourceRepository_Fetch_NotModified(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{ETag: "\"cached-etag\""})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, result)
 }
 
 func TestHTTPSourceRepository_Fetch_NonOKStatus(t *testing.T) {
 	// given
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -179,7 +178,7 @@ func TestHTTPSourceRepository_Fetch_NonOKStatus(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "unexpected status 500")
 }
@@ -190,7 +189,7 @@ func TestHTTPSourceRepository_Fetch_ETagCaptured(t *testing.T) {
 		"repo-main/docs/readme.md": "hello",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", "\"new-etag-value\"")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
@@ -215,7 +214,7 @@ func TestHTTPSourceRepository_Fetch_ETagCaptured(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "\"new-etag-value\"", result.ETag)
 }
@@ -228,7 +227,7 @@ func TestHTTPSourceRepository_Fetch_MultipleMappings(t *testing.T) {
 		"repo-main/cursor/skills/lint.md":   "linting",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("ETag", "\"multi-etag\"")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
@@ -254,9 +253,9 @@ func TestHTTPSourceRepository_Fetch_MultipleMappings(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, 2, len(result.Files))
+	assert.Len(t, result.Files, 2)
 
 	_, ok := result.Files["rules/arch.md"]
 	assert.True(t, ok)
@@ -301,7 +300,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSendIfNoneMatchHeader(t *testing.T) {
 
 func TestHTTPSourceRepository_Fetch_ShouldReturnErrorForInvalidGzip(t *testing.T) {
 	// given
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("this is not valid gzip content"))
 	}))
@@ -325,7 +324,7 @@ func TestHTTPSourceRepository_Fetch_ShouldReturnErrorForInvalidGzip(t *testing.T
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "failed to extract tarball")
 }
@@ -338,7 +337,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTarEntriesWithNoMatchingMapping(t 
 		"repo-main/claude/rules/matched.md": "matched content",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
 	}))
@@ -362,7 +361,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTarEntriesWithNoMatchingMapping(t 
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Len(t, result.Files, 1)
 
@@ -445,7 +444,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTopLevelOnlyEntries(t *testing.T) 
 		"toplevel-no-slash":              "should be skipped",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
 	}))
@@ -469,7 +468,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTopLevelOnlyEntries(t *testing.T) 
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	// Only the mapped file should be present
 	assert.Len(t, result.Files, 1)
@@ -487,7 +486,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
 		Typeflag: tar.TypeDir,
 		Mode:     0755,
 	}
-	assert.NoError(t, tw.WriteHeader(dirHeader))
+	require.NoError(t, tw.WriteHeader(dirHeader))
 
 	// Add a file entry
 	fileContent := "rule content"
@@ -497,14 +496,14 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
 		Size:     int64(len(fileContent)),
 		Typeflag: tar.TypeReg,
 	}
-	assert.NoError(t, tw.WriteHeader(fileHeader))
+	require.NoError(t, tw.WriteHeader(fileHeader))
 	_, err := tw.Write([]byte(fileContent))
 	assert.NoError(t, err)
 
 	assert.NoError(t, tw.Close())
 	assert.NoError(t, gw.Close())
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(buf.Bytes())
 	}))
@@ -528,7 +527,7 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Len(t, result.Files, 1)
 	assert.Equal(t, fileContent, string(result.Files["rules/arch.md"]))
@@ -538,7 +537,7 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleEmptyTarball(t *testing.T) {
 	// given
 	tarball := buildTarGz(t, map[string]string{})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
 	}))
@@ -562,19 +561,19 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleEmptyTarball(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Len(t, result.Files, 0)
+	assert.Empty(t, result.Files)
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldHandleExactFileMapping(t *testing.T) {
 	// given
 	tarball := buildTarGz(t, map[string]string{
-		"repo-main/CLAUDE.md":   "top level claude doc",
-		"repo-main/README.md":  "readme content",
+		"repo-main/CLAUDE.md": "top level claude doc",
+		"repo-main/README.md": "readme content",
 	})
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(tarball)
 	}))
@@ -598,7 +597,7 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleExactFileMapping(t *testing.T) {
 	result, err := repo.Fetch(source, domainRepos.CacheHints{})
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Len(t, result.Files, 1)
 

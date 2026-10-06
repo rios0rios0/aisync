@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -11,6 +9,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
@@ -162,12 +161,12 @@ func TestPollingWatchService_ScanDir_ShouldPopulateState(t *testing.T) {
 func TestPollingWatchService_PollDir_ShouldDetectNewFile(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
-	assert.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
 	svc := services.NewPollingWatchService(1 * time.Second)
 	services.PollingScanDir(svc, tmpDir) // empty state initially
 
 	// Create a new file — under rules/ so it matches the default allowlist.
-	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "rules", "new.md"), []byte("new"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "rules", "new.md"), []byte("new"), 0600))
 
 	var mu sync.Mutex
 	var events []repositories.FileEvent
@@ -190,22 +189,22 @@ func TestPollingWatchService_PollDir_ShouldDetectNewFile(t *testing.T) {
 func TestPollingWatchService_PollDir_ShouldDetectRemovedFile(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
-	assert.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
 	filePath := filepath.Join(tmpDir, "rules", "remove-me.md")
-	assert.NoError(t, os.WriteFile(filePath, []byte("data"), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte("data"), 0600))
 
 	svc := services.NewPollingWatchService(1 * time.Second)
 	services.PollingScanDir(svc, tmpDir)
 	assert.Len(t, services.PollingState(svc), 1)
 
 	// Remove the file
-	assert.NoError(t, os.Remove(filePath))
+	require.NoError(t, os.Remove(filePath))
 
 	var mu sync.Mutex
 	var events []repositories.FileEvent
 
 	// when
-	services.PollingPollDir(svc,tmpDir, func(event repositories.FileEvent) {
+	services.PollingPollDir(svc, tmpDir, func(event repositories.FileEvent) {
 		mu.Lock()
 		events = append(events, event)
 		mu.Unlock()
@@ -222,17 +221,17 @@ func TestPollingWatchService_PollDir_ShouldDetectRemovedFile(t *testing.T) {
 func TestPollingWatchService_PollDir_ShouldDetectModifiedFile(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
-	assert.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
 	filePath := filepath.Join(tmpDir, "rules", "modify-me.md")
-	assert.NoError(t, os.WriteFile(filePath, []byte("original"), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte("original"), 0600))
 
 	svc := services.NewPollingWatchService(1 * time.Second)
 	services.PollingScanDir(svc, tmpDir)
 
 	// Modify with a future mtime
-	assert.NoError(t, os.WriteFile(filePath, []byte("modified content"), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte("modified content"), 0600))
 	future := time.Now().Add(10 * time.Second)
-	assert.NoError(t, os.Chtimes(filePath, future, future))
+	require.NoError(t, os.Chtimes(filePath, future, future))
 
 	var mu sync.Mutex
 	var events []repositories.FileEvent
@@ -261,10 +260,13 @@ func TestPollingWatchService_Watch_ShouldStartAndStop(t *testing.T) {
 	svc := services.NewPollingWatchService(50 * time.Millisecond)
 
 	// when
-	err := svc.Watch([]repositories.WatchedTree{{ToolName: "claude", Dir: tmpDir}}, func(event repositories.FileEvent) {})
+	err := svc.Watch(
+		[]repositories.WatchedTree{{ToolName: "claude", Dir: tmpDir}},
+		func(_ repositories.FileEvent) {},
+	)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Let it run briefly
 	time.Sleep(100 * time.Millisecond)

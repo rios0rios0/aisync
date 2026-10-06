@@ -1,9 +1,8 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ func TestDefaultTools_ReturnsAtLeast31Tools(t *testing.T) {
 	tools := entities.DefaultTools()
 
 	// then
-	assert.True(t, len(tools) >= 31, "expected at least 31 tools, got %d", len(tools))
+	assert.GreaterOrEqual(t, len(tools), 31, "expected at least 31 tools, got %d", len(tools))
 }
 
 func TestDefaultTools_ClaudeIsEnabledByDefault(t *testing.T) {
