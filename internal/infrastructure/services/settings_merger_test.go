@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -7,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
 )
@@ -35,16 +34,16 @@ func TestSettingsMerger_Merge_ShouldDeepMergeNestedKeysFromTwoSources(t *testing
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	editor := parsed["editor"].(map[string]interface{})
-	assert.Equal(t, float64(4), editor["tabSize"])
+	editor := parsed["editor"].(map[string]any)
+	assert.InDelta(t, 4, editor["tabSize"], 0)
 	assert.Equal(t, true, editor["formatOnSave"])
 	assert.Equal(t, "on", editor["wordWrap"])
 
-	terminal := parsed["terminal"].(map[string]interface{})
-	assert.Equal(t, float64(14), terminal["fontSize"])
+	terminal := parsed["terminal"].(map[string]any)
+	assert.InDelta(t, 14, terminal["fontSize"], 0)
 }
 
 func TestSettingsMerger_Merge_ShouldLetPersonalWinOnCollision(t *testing.T) {
@@ -67,11 +66,11 @@ func TestSettingsMerger_Merge_ShouldLetPersonalWinOnCollision(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	editor := parsed["editor"].(map[string]interface{})
-	assert.Equal(t, float64(2), editor["tabSize"])
+	editor := parsed["editor"].(map[string]any)
+	assert.InDelta(t, 2, editor["tabSize"], 0)
 }
 
 func TestSettingsMerger_Merge_ShouldMergeArraysByUnionWithUniqueElementsOnly(t *testing.T) {
@@ -90,10 +89,10 @@ func TestSettingsMerger_Merge_ShouldMergeArraysByUnionWithUniqueElementsOnly(t *
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	plugins := parsed["plugins"].([]interface{})
+	plugins := parsed["plugins"].([]any)
 	assert.Len(t, plugins, 3)
 	assert.Contains(t, plugins, "pluginA")
 	assert.Contains(t, plugins, "pluginB")
@@ -110,9 +109,9 @@ func TestSettingsMerger_Merge_ShouldReturnEmptyObjectWhenInputsAreEmpty(t *testi
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
-	assert.Len(t, parsed, 0)
+	assert.Empty(t, parsed)
 }
 
 func TestSettingsMerger_Merge_ShouldMergeSingleSourceWithPersonal(t *testing.T) {
@@ -133,15 +132,15 @@ func TestSettingsMerger_Merge_ShouldMergeSingleSourceWithPersonal(t *testing.T) 
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
 	assert.Equal(t, "light", parsed["theme"])
 
-	editor := parsed["editor"].(map[string]interface{})
-	assert.Equal(t, float64(14), editor["fontSize"])
+	editor := parsed["editor"].(map[string]any)
+	assert.InDelta(t, 14, editor["fontSize"], 0)
 
-	keybindings := parsed["keybindings"].(map[string]interface{})
+	keybindings := parsed["keybindings"].(map[string]any)
 	assert.Equal(t, "ctrl+s", keybindings["save"])
 }
 
@@ -154,7 +153,7 @@ func TestSettingsMerger_Merge_ShouldReturnErrorWhenSharedSourceIsMalformed(t *te
 	_, err := merger.Merge([][]byte{malformed}, nil)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse shared source 0")
 }
 
@@ -168,7 +167,7 @@ func TestSettingsMerger_Merge_ShouldReturnErrorWhenPersonalIsMalformed(t *testin
 	_, err := merger.Merge([][]byte{valid}, malformed)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse personal settings")
 }
 
@@ -202,14 +201,14 @@ func TestSettingsMerger_Merge_ShouldDeepMergeThreeLevelsDeep(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	editor := parsed["editor"].(map[string]interface{})
-	formatting := editor["formatting"].(map[string]interface{})
-	indentation := formatting["indentation"].(map[string]interface{})
+	editor := parsed["editor"].(map[string]any)
+	formatting := editor["formatting"].(map[string]any)
+	indentation := formatting["indentation"].(map[string]any)
 
-	assert.Equal(t, float64(4), indentation["tabSize"])
+	assert.InDelta(t, 4, indentation["tabSize"], 0)
 	assert.Equal(t, true, indentation["useTabs"])
 	assert.Equal(t, false, indentation["insertSpaces"])
 	assert.Equal(t, true, formatting["trimWhitespace"])
@@ -233,14 +232,14 @@ func TestSettingsMerger_Merge_ShouldMergeEmptyArrays(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
-	plugins := parsed["plugins"].([]interface{})
+	plugins := parsed["plugins"].([]any)
 	assert.Len(t, plugins, 1)
 	assert.Equal(t, "pluginX", plugins[0])
 
-	rules := parsed["rules"].([]interface{})
+	rules := parsed["rules"].([]any)
 	assert.Len(t, rules, 1)
 	assert.Equal(t, "ruleA", rules[0])
 }
@@ -259,10 +258,10 @@ func TestSettingsMerger_Merge_ShouldHandleNilPersonal(t *testing.T) {
 	// then
 	assert.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal(result, &parsed))
 
 	assert.Equal(t, "dark", parsed["theme"])
-	editor := parsed["editor"].(map[string]interface{})
-	assert.Equal(t, float64(4), editor["tabSize"])
+	editor := parsed["editor"].(map[string]any)
+	assert.InDelta(t, 4, editor["tabSize"], 0)
 }

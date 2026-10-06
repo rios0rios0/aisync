@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -39,7 +37,7 @@ func newPullCmd(
 		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true, ConflictResolution: "remote"},
 		&doubles.MockBundleService{},
 		&doubles.MockBundleStateRepository{},
-)
+	)
 }
 
 func defaultPullDeps() (
@@ -122,7 +120,7 @@ func TestPullCommand_Execute(t *testing.T) {
 			&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
 			&doubles.MockBundleService{},
 			&doubles.MockBundleStateRepository{},
-)
+		)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.PullOptions{Force: true})
@@ -1383,8 +1381,8 @@ func TestPullCommand_Execute(t *testing.T) {
 		stateRepo.ExistsVal = true
 		sourceRepo.Result = &repositories.FetchResult{
 			Files: map[string][]byte{
-				"shared/claude/existing.md": []byte("modified content"),
-				"shared/claude/same.md":     []byte("unchanged"),
+				"shared/claude/existing.md":  []byte("modified content"),
+				"shared/claude/same.md":      []byte("unchanged"),
 				"shared/claude/brand-new.md": []byte("new file"),
 			},
 			ETag: "etag-1",

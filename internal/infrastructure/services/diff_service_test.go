@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -9,15 +7,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
 )
 
-func newTestConfig(toolName, toolPath string) *entities.Config {
+func newTestConfig(toolPath string) *entities.Config {
 	return &entities.Config{
 		Tools: map[string]entities.Tool{
-			toolName: {Path: toolPath, Enabled: true},
+			"claude": {Path: toolPath, Enabled: true},
 		},
 	}
 }
@@ -30,7 +29,7 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectNewFile(t *testing.T) {
 	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 	assert.NoError(t, os.MkdirAll(repoDir, 0700))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	incomingFiles := map[string][]byte{
@@ -41,7 +40,7 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectNewFile(t *testing.T) {
 	changes, err := svc.ComputeSharedDiff(config, repoDir, incomingFiles)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, changes, 1)
 	assert.Equal(t, entities.ChangeAdded, changes[0].Direction)
 	assert.Equal(t, "rules/new-rule.md", changes[0].Path)
@@ -57,9 +56,9 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectModifiedFile(t *testing.T) 
 	assert.NoError(t, os.MkdirAll(repoDir, 0700))
 
 	localContent := []byte("# Old Rule\nOld content.")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules", "existing.md"), localContent, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules", "existing.md"), localContent, 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	incomingFiles := map[string][]byte{
@@ -70,7 +69,7 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectModifiedFile(t *testing.T) 
 	changes, err := svc.ComputeSharedDiff(config, repoDir, incomingFiles)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, changes, 1)
 	assert.Equal(t, entities.ChangeModified, changes[0].Direction)
 	assert.Equal(t, "rules/existing.md", changes[0].Path)
@@ -85,9 +84,9 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipUnchangedFile(t *testing.T) {
 	assert.NoError(t, os.MkdirAll(repoDir, 0700))
 
 	content := []byte("# Unchanged Rule\nSame content.")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules", "same.md"), content, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules", "same.md"), content, 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	incomingFiles := map[string][]byte{
@@ -98,8 +97,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipUnchangedFile(t *testing.T) {
 	changes, err := svc.ComputeSharedDiff(config, repoDir, incomingFiles)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldSkipDisabledTools(t *testing.T) {
@@ -125,8 +124,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipDisabledTools(t *testing.T) {
 	changes, err := svc.ComputeSharedDiff(config, repoDir, incomingFiles)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputeLocalDiff_ShouldDetectNewLocalFile(t *testing.T) {
@@ -142,16 +141,16 @@ func TestFSDiffService_ComputeLocalDiff_ShouldDetectNewLocalFile(t *testing.T) {
 
 	// Create personal dir in repo without the file
 	personalDir := filepath.Join(repoDir, "personal", "claude")
-	assert.NoError(t, os.MkdirAll(personalDir, 0700))
+	require.NoError(t, os.MkdirAll(personalDir, 0700))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(changes), 1)
 
 	found := false
@@ -179,14 +178,14 @@ func TestFSDiffService_ComputeLocalDiff_ShouldDetectModifiedLocalFile(t *testing
 	assert.NoError(t, os.MkdirAll(personalDir, 0700))
 	assert.NoError(t, os.WriteFile(filepath.Join(personalDir, "settings.json"), []byte("repo version"), 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(changes), 1)
 
 	found := false
@@ -213,15 +212,15 @@ func TestFSDiffService_ComputeLocalDiff_ShouldSkipUnchangedLocalFile(t *testing.
 	assert.NoError(t, os.MkdirAll(personalDir, 0700))
 	assert.NoError(t, os.WriteFile(filepath.Join(personalDir, "same.md"), content, 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputePersonalDiff_ShouldDetectIncomingFileNotOnDisk(t *testing.T) {
@@ -230,21 +229,21 @@ func TestFSDiffService_ComputePersonalDiff_ShouldDetectIncomingFileNotOnDisk(t *
 	toolDir := filepath.Join(tmpDir, "claude")
 	repoDir := filepath.Join(tmpDir, "repo")
 
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	// Create file in repo that does NOT exist locally
 	personalDir := filepath.Join(repoDir, "personal", "claude")
 	assert.NoError(t, os.MkdirAll(personalDir, 0700))
 	assert.NoError(t, os.WriteFile(filepath.Join(personalDir, "from-other-device.md"), []byte("remote content"), 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, changes, 1)
 	assert.Equal(t, entities.ChangeAdded, changes[0].Direction)
 	assert.Equal(t, "personal", changes[0].Namespace)
@@ -257,21 +256,21 @@ func TestFSDiffService_ComputePersonalDiff_ShouldSkipAgeFiles(t *testing.T) {
 	toolDir := filepath.Join(tmpDir, "claude")
 	repoDir := filepath.Join(tmpDir, "repo")
 
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	personalDir := filepath.Join(repoDir, "personal", "claude")
 	assert.NoError(t, os.MkdirAll(personalDir, 0700))
 	assert.NoError(t, os.WriteFile(filepath.Join(personalDir, "secrets.json.age"), []byte("encrypted"), 0600))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputePersonalDiff_ShouldDetectModifiedFileWhenRepoIsNewer(t *testing.T) {
@@ -284,24 +283,24 @@ func TestFSDiffService_ComputePersonalDiff_ShouldDetectModifiedFileWhenRepoIsNew
 	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "old-file.md"), []byte("old local"), 0600))
 
 	personalDir := filepath.Join(repoDir, "personal", "claude")
-	assert.NoError(t, os.MkdirAll(personalDir, 0700))
+	require.NoError(t, os.MkdirAll(personalDir, 0700))
 
 	repoFilePath := filepath.Join(personalDir, "old-file.md")
-	assert.NoError(t, os.WriteFile(repoFilePath, []byte("updated from repo"), 0600))
+	require.NoError(t, os.WriteFile(repoFilePath, []byte("updated from repo"), 0600))
 
 	// Make the local file older by touching the repo file with a newer timestamp.
 	// We set local to an old mtime and repo to a newer mtime.
 	oldTime := mustParseTime("2020-01-01T00:00:00Z")
-	assert.NoError(t, os.Chtimes(filepath.Join(toolDir, "old-file.md"), oldTime, oldTime))
+	require.NoError(t, os.Chtimes(filepath.Join(toolDir, "old-file.md"), oldTime, oldTime))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, changes, 1)
 	assert.Equal(t, entities.ChangeModified, changes[0].Direction)
 }
@@ -316,24 +315,24 @@ func TestFSDiffService_ComputePersonalDiff_ShouldSkipWhenLocalIsNewer(t *testing
 	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "newer-local.md"), []byte("newer local"), 0600))
 
 	personalDir := filepath.Join(repoDir, "personal", "claude")
-	assert.NoError(t, os.MkdirAll(personalDir, 0700))
+	require.NoError(t, os.MkdirAll(personalDir, 0700))
 
 	repoFilePath := filepath.Join(personalDir, "newer-local.md")
-	assert.NoError(t, os.WriteFile(repoFilePath, []byte("older from repo"), 0600))
+	require.NoError(t, os.WriteFile(repoFilePath, []byte("older from repo"), 0600))
 
 	// Make the repo file older
 	oldTime := mustParseTime("2020-01-01T00:00:00Z")
-	assert.NoError(t, os.Chtimes(repoFilePath, oldTime, oldTime))
+	require.NoError(t, os.Chtimes(repoFilePath, oldTime, oldTime))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0, "should not report changes when local is newer")
+	require.NoError(t, err)
+	assert.Empty(t, changes, "should not report changes when local is newer")
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldReturnEmptyWhenNoIncomingFiles(t *testing.T) {
@@ -344,15 +343,15 @@ func TestFSDiffService_ComputeSharedDiff_ShouldReturnEmptyWhenNoIncomingFiles(t 
 	assert.NoError(t, os.MkdirAll(toolDir, 0700))
 	assert.NoError(t, os.MkdirAll(repoDir, 0700))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeSharedDiff(config, repoDir, map[string][]byte{})
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldSkipDeniedPaths(t *testing.T) {
@@ -369,7 +368,7 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipDeniedPaths(t *testing.T) {
 		[]byte("old"), 0600,
 	))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	incomingFiles := map[string][]byte{
@@ -380,8 +379,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipDeniedPaths(t *testing.T) {
 	changes, err := svc.ComputeSharedDiff(config, repoDir, incomingFiles)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0, "denied paths should be skipped")
+	require.NoError(t, err)
+	assert.Empty(t, changes, "denied paths should be skipped")
 }
 
 func TestFSDiffService_ComputeLocalDiff_ShouldSkipDeniedPaths(t *testing.T) {
@@ -397,16 +396,16 @@ func TestFSDiffService_ComputeLocalDiff_ShouldSkipDeniedPaths(t *testing.T) {
 
 	// Create personal dir in repo
 	personalDir := filepath.Join(repoDir, "personal", "claude")
-	assert.NoError(t, os.MkdirAll(personalDir, 0700))
+	require.NoError(t, os.MkdirAll(personalDir, 0700))
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for _, c := range changes {
 		assert.NotContains(t, c.Path, ".credentials.json", "denied paths should be skipped")
@@ -443,7 +442,7 @@ func TestFSDiffService_ComputePersonalDiff_ShouldHandleMultipleTools(t *testing.
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, changes, 2)
 
 	foundClaude := false
@@ -470,7 +469,7 @@ func TestFSDiffService_ComputeLocalDiff_ShouldSkipDisabledTools(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), []byte("content"), 0600))
 
 	personalDir := filepath.Join(repoDir, "personal", "claude")
-	assert.NoError(t, os.MkdirAll(personalDir, 0700))
+	require.NoError(t, os.MkdirAll(personalDir, 0700))
 
 	config := &entities.Config{
 		Tools: map[string]entities.Tool{
@@ -483,8 +482,8 @@ func TestFSDiffService_ComputeLocalDiff_ShouldSkipDisabledTools(t *testing.T) {
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0, "should skip disabled tools")
+	require.NoError(t, err)
+	assert.Empty(t, changes, "should skip disabled tools")
 }
 
 func TestExpandHomePath_ShouldExpandTildePrefix(t *testing.T) {
@@ -550,17 +549,17 @@ func TestFSDiffService_ComputeLocalDiff_ShouldSkipNonExistentToolDir(t *testing.
 	// given
 	tmpDir := t.TempDir()
 	repoDir := filepath.Join(tmpDir, "repo")
-	assert.NoError(t, os.MkdirAll(repoDir, 0700))
+	require.NoError(t, os.MkdirAll(repoDir, 0700))
 
-	config := newTestConfig("claude", filepath.Join(tmpDir, "nonexistent"))
+	config := newTestConfig(filepath.Join(tmpDir, "nonexistent"))
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputeLocalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func TestFSDiffService_ComputePersonalDiff_ShouldSkipNonExistentPersonalDir(t *testing.T) {
@@ -568,18 +567,18 @@ func TestFSDiffService_ComputePersonalDiff_ShouldSkipNonExistentPersonalDir(t *t
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
 	repoDir := filepath.Join(tmpDir, "repo")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 	// Do NOT create personal dir
 
-	config := newTestConfig("claude", toolDir)
+	config := newTestConfig(toolDir)
 	svc := services.NewFSDiffService()
 
 	// when
 	changes, err := svc.ComputePersonalDiff(config, repoDir)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, changes, 0)
+	require.NoError(t, err)
+	assert.Empty(t, changes)
 }
 
 func mustParseTime(value string) time.Time {

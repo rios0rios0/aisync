@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -54,7 +52,14 @@ func TestDoctorCommand_Execute(t *testing.T) {
 			},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, &doubles.MockGitRepository{}, formatter)
+		cmd := commands.NewDoctorCommand(
+			configRepo,
+			stateRepo,
+			encryptionService,
+			toolDetector,
+			&doubles.MockGitRepository{},
+			formatter,
+		)
 
 		configPath := filepath.Join(repoPath, "config.yaml")
 
@@ -89,7 +94,14 @@ func TestDoctorCommand_Execute(t *testing.T) {
 			DetectedTools: map[string]entities.Tool{},
 		}
 		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionService, toolDetector, &doubles.MockGitRepository{}, formatter)
+		cmd := commands.NewDoctorCommand(
+			configRepo,
+			stateRepo,
+			encryptionService,
+			toolDetector,
+			&doubles.MockGitRepository{},
+			formatter,
+		)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", repoPath)

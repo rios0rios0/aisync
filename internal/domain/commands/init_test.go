@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -40,9 +38,7 @@ func TestInitCommand_Execute(t *testing.T) {
 		require.NoError(t, os.WriteFile(identityPath, []byte("AGE-SECRET-KEY-FAKE"), 0600))
 
 		// Override HOME so ExpandHome("~/.config/aisync/key.txt") resolves to our temp dir
-		origHome := os.Getenv("HOME")
 		t.Setenv("HOME", tmpDir)
-		defer func() { _ = os.Setenv("HOME", origHome) }()
 
 		encryptionService := &doubles.MockEncryptionService{
 			// ExportedPublicKey is the value ExportPublicKey returns when the
@@ -272,7 +268,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		encryptionService := &doubles.MockEncryptionService{
 			ImportErr: assert.AnError,
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			nil,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "", "/tmp/key.txt")
@@ -369,8 +373,18 @@ func TestInitCommand_Execute(t *testing.T) {
 
 		gitignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".gitignore"))
 		require.NoError(t, readErr)
-		assert.Contains(t, string(gitignoreContent), ".aisync/*", "default .gitignore must exclude per-device .aisync/ runtime state")
-		assert.Contains(t, string(gitignoreContent), "!.aisync/.gitkeep", "default .gitignore must keep .aisync/.gitkeep tracked")
+		assert.Contains(
+			t,
+			string(gitignoreContent),
+			".aisync/*",
+			"default .gitignore must exclude per-device .aisync/ runtime state",
+		)
+		assert.Contains(
+			t,
+			string(gitignoreContent),
+			"!.aisync/.gitkeep",
+			"default .gitignore must keep .aisync/.gitkeep tracked",
+		)
 
 		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
 		require.NoError(t, readErr)
@@ -380,8 +394,12 @@ func TestInitCommand_Execute(t *testing.T) {
 		// and would silently hide encrypted .age files inside personal/<tool>/
 		// when synced. The default exclusion forces the repo root .gitignore
 		// to be the single source of truth for git-ignore semantics.
-		assert.Contains(t, string(ignoreContent), "**/.gitignore",
-			"default .aisyncignore must exclude tool-managed .gitignore files to prevent them from masking encrypted .age siblings")
+		assert.Contains(
+			t,
+			string(ignoreContent),
+			"**/.gitignore",
+			"default .aisyncignore must exclude tool-managed .gitignore files to prevent them from masking encrypted .age siblings",
+		)
 
 		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
 		require.NoError(t, readErr)
@@ -390,11 +408,31 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Contains(t, string(encryptContent), "personal/**/memories/**")
 		assert.Contains(t, string(encryptContent), "personal/**/settings.local.json")
 		// Spot-check a few critical new categories.
-		assert.Contains(t, string(encryptContent), "personal/**/*.key", "private keys should be in default encrypt list")
-		assert.Contains(t, string(encryptContent), "personal/**/id_ed25519", "SSH private keys should be in default encrypt list")
+		assert.Contains(
+			t,
+			string(encryptContent),
+			"personal/**/*.key",
+			"private keys should be in default encrypt list",
+		)
+		assert.Contains(
+			t,
+			string(encryptContent),
+			"personal/**/id_ed25519",
+			"SSH private keys should be in default encrypt list",
+		)
 		assert.Contains(t, string(encryptContent), "personal/**/.netrc", ".netrc should be in default encrypt list")
-		assert.Contains(t, string(encryptContent), "personal/**/mcp.json", "MCP server configs should be in default encrypt list")
-		assert.Contains(t, string(encryptContent), "personal/**/auth.json", "auth.json should be in default encrypt list")
+		assert.Contains(
+			t,
+			string(encryptContent),
+			"personal/**/mcp.json",
+			"MCP server configs should be in default encrypt list",
+		)
+		assert.Contains(
+			t,
+			string(encryptContent),
+			"personal/**/auth.json",
+			"auth.json should be in default encrypt list",
+		)
 	})
 
 	t.Run("should not overwrite existing .gitignore, .aisyncignore and .aisyncencrypt on clone", func(t *testing.T) {
@@ -440,38 +478,41 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Equal(t, customEncrypt, string(encryptContent), "existing .aisyncencrypt must not be overwritten")
 	})
 
-	t.Run("should write default .gitignore, .aisyncignore and .aisyncencrypt when missing after clone", func(t *testing.T) {
-		// given — legacy cloned repo with no ignore/encrypt files yet.
-		tmpDir := t.TempDir()
-		repoPath := filepath.Join(tmpDir, "aifiles")
-		require.NoError(t, os.MkdirAll(repoPath, 0700))
+	t.Run(
+		"should write default .gitignore, .aisyncignore and .aisyncencrypt when missing after clone",
+		func(t *testing.T) {
+			// given — legacy cloned repo with no ignore/encrypt files yet.
+			tmpDir := t.TempDir()
+			repoPath := filepath.Join(tmpDir, "aifiles")
+			require.NoError(t, os.MkdirAll(repoPath, 0700))
 
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
-			},
-		}
-		stateRepo := &doubles.MockStateRepository{}
-		toolDetector := &doubles.MockToolDetector{}
-		gitRepo := &doubles.MockGitRepository{}
-		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
+			configRepo := &doubles.MockConfigRepository{
+				Config: &entities.Config{
+					Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
+				},
+			}
+			stateRepo := &doubles.MockStateRepository{}
+			toolDetector := &doubles.MockToolDetector{}
+			gitRepo := &doubles.MockGitRepository{}
+			encryptionService := &doubles.MockEncryptionService{}
+			cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, nil)
 
-		// when
-		err := cmd.Execute(repoPath, "testuser", "", "")
+			// when
+			err := cmd.Execute(repoPath, "testuser", "", "")
 
-		// then
-		require.NoError(t, err)
+			// then
+			require.NoError(t, err)
 
-		_, statErr := os.Stat(filepath.Join(repoPath, ".gitignore"))
-		assert.NoError(t, statErr, "clone should backfill .gitignore when missing")
+			_, statErr := os.Stat(filepath.Join(repoPath, ".gitignore"))
+			require.NoError(t, statErr, "clone should backfill .gitignore when missing")
 
-		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncignore"))
-		assert.NoError(t, statErr, "clone should backfill .aisyncignore when missing")
+			_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncignore"))
+			require.NoError(t, statErr, "clone should backfill .aisyncignore when missing")
 
-		_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncencrypt"))
-		assert.NoError(t, statErr, "clone should backfill .aisyncencrypt when missing")
-	})
+			_, statErr = os.Stat(filepath.Join(repoPath, ".aisyncencrypt"))
+			assert.NoError(t, statErr, "clone should backfill .aisyncencrypt when missing")
+		},
+	)
 
 	t.Run("should include only enabled tools in fresh config on create", func(t *testing.T) {
 		// given — detector returns a mix: two enabled (installed) and two
@@ -526,7 +567,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		stateRepo := &doubles.MockStateRepository{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			nil,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "testuser", "https://custom.git/repo.git", "")
@@ -572,8 +621,12 @@ func TestInitCommand_Execute(t *testing.T) {
 		ignoreContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncignore"))
 		require.NoError(t, readErr)
 		assert.NotContains(t, string(ignoreContent), "stale-from-old-aisync-release")
-		assert.Contains(t, string(ignoreContent), "**/.gitignore",
-			"refreshed .aisyncignore must include the **/.gitignore exclusion that prevents tool-managed gitignores from masking .age siblings")
+		assert.Contains(
+			t,
+			string(ignoreContent),
+			"**/.gitignore",
+			"refreshed .aisyncignore must include the **/.gitignore exclusion that prevents tool-managed gitignores from masking .age siblings",
+		)
 
 		encryptContent, readErr := os.ReadFile(filepath.Join(repoPath, ".aisyncencrypt"))
 		require.NoError(t, readErr)
@@ -597,15 +650,27 @@ func TestInitCommand_Execute(t *testing.T) {
 		stateRepo := &doubles.MockStateRepository{}
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, nil)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			nil,
+		)
 
 		// when
 		err := cmd.RefreshScaffolding(repoPath)
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no aifiles repo found",
-			"refreshing a non-existent repo must fail loudly so the user does not accidentally drop default templates into an unrelated directory")
+		assert.Contains(
+			t,
+			err.Error(),
+			"no aifiles repo found",
+			"refreshing a non-existent repo must fail loudly so the user does not accidentally drop default templates into an unrelated directory",
+		)
 	})
 
 	t.Run("should retry clone with each SSH alias when the bare hostname fails", func(t *testing.T) {
@@ -636,7 +701,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		sshAliasRepo := &doubles.MockSSHAliasRepository{
 			Aliases: []string{"github.com-personal", "github.com-work"},
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, toolDetector, gitRepo, encryptionService, nil, sshAliasRepo)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			toolDetector,
+			gitRepo,
+			encryptionService,
+			nil,
+			sshAliasRepo,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", bareURL, "")
@@ -676,7 +749,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		}
 		encryptionService := &doubles.MockEncryptionService{}
 		sshAliasRepo := &doubles.MockSSHAliasRepository{Aliases: []string{"github.com-mine"}}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			sshAliasRepo,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", bareURL, "")
@@ -697,7 +778,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		gitRepo := &doubles.MockGitRepository{CloneErr: assert.AnError}
 		encryptionService := &doubles.MockEncryptionService{}
 		sshAliasRepo := &doubles.MockSSHAliasRepository{Aliases: nil}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			sshAliasRepo,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", "git@github.com:user/aifiles.git", "")
@@ -733,7 +822,15 @@ func TestInitCommand_Execute(t *testing.T) {
 			Aliases:           []string{"github.com-mine"},
 			ResolveAliasesErr: assert.AnError,
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, nil, sshAliasRepo)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			nil,
+			sshAliasRepo,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", bareURL, "")
@@ -743,48 +840,59 @@ func TestInitCommand_Execute(t *testing.T) {
 		assert.Equal(t, []string{bareURL, aliasURL}, gitRepo.CloneAttempts)
 	})
 
-	t.Run("should auto-import age identity from 1Password when op is enabled and no explicit key is provided", func(t *testing.T) {
-		// given — config has encryption.op.enabled = true and the cloned repo
-		// has no identity file yet, so init must transparently fetch the key
-		// from 1Password instead of leaving the device unable to decrypt.
-		tmpDir := t.TempDir()
-		repoPath := filepath.Join(tmpDir, "aifiles")
-		identityPath := filepath.Join(tmpDir, ".config", "aisync", "key.txt")
-		t.Setenv("HOME", tmpDir)
+	t.Run(
+		"should auto-import age identity from 1Password when op is enabled and no explicit key is provided",
+		func(t *testing.T) {
+			// given — config has encryption.op.enabled = true and the cloned repo
+			// has no identity file yet, so init must transparently fetch the key
+			// from 1Password instead of leaving the device unable to decrypt.
+			tmpDir := t.TempDir()
+			repoPath := filepath.Join(tmpDir, "aifiles")
+			identityPath := filepath.Join(tmpDir, ".config", "aisync", "key.txt")
+			t.Setenv("HOME", tmpDir)
 
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Encryption: entities.EncryptionConfig{
-					Identity: "~/.config/aisync/key.txt",
-					Op: &entities.OpConfig{
-						Enabled: true,
-						Vault:   "Personal",
-						Item:    "aisync.age",
+			configRepo := &doubles.MockConfigRepository{
+				Config: &entities.Config{
+					Encryption: entities.EncryptionConfig{
+						Identity: "~/.config/aisync/key.txt",
+						Op: &entities.OpConfig{
+							Enabled: true,
+							Vault:   "Personal",
+							Item:    "aisync.age",
+						},
 					},
 				},
-			},
-		}
-		stateRepo := &doubles.MockStateRepository{}
-		gitRepo := &doubles.MockGitRepository{}
-		encryptionService := &doubles.MockEncryptionService{}
-		opSecretRepo := &doubles.MockOpSecretRepository{
-			Identity: "AGE-SECRET-KEY-FROM-1PASSWORD",
-		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+			}
+			stateRepo := &doubles.MockStateRepository{}
+			gitRepo := &doubles.MockGitRepository{}
+			encryptionService := &doubles.MockEncryptionService{}
+			opSecretRepo := &doubles.MockOpSecretRepository{
+				Identity: "AGE-SECRET-KEY-FROM-1PASSWORD",
+			}
+			cmd := commands.NewInitCommand(
+				configRepo,
+				stateRepo,
+				&doubles.MockToolDetector{},
+				gitRepo,
+				encryptionService,
+				opSecretRepo,
+				nil,
+			)
 
-		// when
-		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
+			// when
+			err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
 
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, opSecretRepo.GetIdentityCalls)
-		assert.Equal(t, "Personal", opSecretRepo.RequestedVault)
-		assert.Equal(t, "aisync.age", opSecretRepo.RequestedItem)
-		assert.Equal(t, 1, encryptionService.ImportContentCalls)
-		assert.Equal(t, identityPath, encryptionService.ImportContentDest)
-		assert.Equal(t, 0, encryptionService.ImportCalls,
-			"ImportKey is only used for the explicit --key path; the 1Password flow must use ImportKeyContent")
-	})
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, 1, opSecretRepo.GetIdentityCalls)
+			assert.Equal(t, "Personal", opSecretRepo.RequestedVault)
+			assert.Equal(t, "aisync.age", opSecretRepo.RequestedItem)
+			assert.Equal(t, 1, encryptionService.ImportContentCalls)
+			assert.Equal(t, identityPath, encryptionService.ImportContentDest)
+			assert.Equal(t, 0, encryptionService.ImportCalls,
+				"ImportKey is only used for the explicit --key path; the 1Password flow must use ImportKeyContent")
+		},
+	)
 
 	t.Run("should skip 1Password import when an identity file already exists", func(t *testing.T) {
 		// given — re-running `aisync init` against an existing setup must
@@ -816,7 +924,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		opSecretRepo := &doubles.MockOpSecretRepository{
 			Identity: "AGE-SECRET-KEY-FROM-1PASSWORD",
 		}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			opSecretRepo,
+			nil,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", "")
@@ -858,7 +974,15 @@ func TestInitCommand_Execute(t *testing.T) {
 		gitRepo := &doubles.MockGitRepository{}
 		encryptionService := &doubles.MockEncryptionService{}
 		opSecretRepo := &doubles.MockOpSecretRepository{Identity: "AGE-SECRET-KEY-FROM-1PASSWORD"}
-		cmd := commands.NewInitCommand(configRepo, stateRepo, &doubles.MockToolDetector{}, gitRepo, encryptionService, opSecretRepo, nil)
+		cmd := commands.NewInitCommand(
+			configRepo,
+			stateRepo,
+			&doubles.MockToolDetector{},
+			gitRepo,
+			encryptionService,
+			opSecretRepo,
+			nil,
+		)
 
 		// when
 		err := cmd.Execute(repoPath, "", "https://github.com/user/aifiles.git", sourceKeyPath)

@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -8,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
@@ -47,7 +46,7 @@ func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T)
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -61,7 +60,7 @@ func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T)
 	journal, err := svc.Stage(files)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, journal)
 	assert.Len(t, journal.Operations, 1)
 	assert.Equal(t, "pending", journal.Operations[0].Status)
@@ -69,7 +68,7 @@ func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T)
 
 	// Verify staging directory was created
 	_, statErr := os.Stat(journal.StagingDir)
-	assert.NoError(t, statErr)
+	require.NoError(t, statErr)
 
 	// Verify journal was saved
 	assert.True(t, repo.Exists())
@@ -79,7 +78,7 @@ func TestAtomicApplyService_Apply_ShouldMoveFilesToTarget(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -91,16 +90,16 @@ func TestAtomicApplyService_Apply_ShouldMoveFilesToTarget(t *testing.T) {
 	}
 
 	journal, err := svc.Stage(files)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	applyErr := svc.Apply(journal)
 
 	// then
-	assert.NoError(t, applyErr)
+	require.NoError(t, applyErr)
 
 	data, readErr := os.ReadFile(targetPath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, content, data)
 
 	// Journal should be cleared
@@ -111,7 +110,7 @@ func TestAtomicApplyService_Apply_ShouldHandleMultipleFiles(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -124,13 +123,13 @@ func TestAtomicApplyService_Apply_ShouldHandleMultipleFiles(t *testing.T) {
 	}
 
 	journal, err := svc.Stage(files)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	applyErr := svc.Apply(journal)
 
 	// then
-	assert.NoError(t, applyErr)
+	require.NoError(t, applyErr)
 
 	data1, _ := os.ReadFile(target1)
 	assert.Equal(t, []byte("content one"), data1)
@@ -143,7 +142,7 @@ func TestAtomicApplyService_Recover_ShouldCompleteApplyWhenPendingJournalExists(
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -156,17 +155,17 @@ func TestAtomicApplyService_Recover_ShouldCompleteApplyWhenPendingJournalExists(
 
 	// Stage but do NOT apply — simulate interrupted apply
 	journal, err := svc.Stage(files)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, journal)
 
 	// when
 	recoverErr := svc.Recover()
 
 	// then
-	assert.NoError(t, recoverErr)
+	require.NoError(t, recoverErr)
 
 	data, readErr := os.ReadFile(targetPath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, content, data)
 
 	// Journal should be cleared after recovery
@@ -183,7 +182,7 @@ func TestAtomicApplyService_Recover_ShouldNoOpWhenNoJournalExists(t *testing.T) 
 	err := svc.Recover()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, repo.Exists())
 }
 
@@ -196,13 +195,13 @@ func TestAtomicApplyService_Recover_ShouldClearJournalWhenStagingDirIsMissing(t 
 	// Create a journal pointing to a non-existent staging directory
 	journal := entities.NewJournal(filepath.Join(tmpDir, "nonexistent-staging"))
 	journal.AddOperation("/fake/source", "/fake/target", "", "abc123")
-	assert.NoError(t, repo.Save(journal))
+	require.NoError(t, repo.Save(journal))
 
 	// when
 	err := svc.Recover()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, repo.Exists())
 }
 
@@ -210,10 +209,10 @@ func TestAtomicApplyService_Stage_ShouldRecordOldChecksumWhenTargetExists(t *tes
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	targetPath := filepath.Join(targetDir, "existing.txt")
-	assert.NoError(t, os.WriteFile(targetPath, []byte("old content"), 0600))
+	require.NoError(t, os.WriteFile(targetPath, []byte("old content"), 0600))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -226,7 +225,7 @@ func TestAtomicApplyService_Stage_ShouldRecordOldChecksumWhenTargetExists(t *tes
 	journal, err := svc.Stage(files)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, journal.Operations, 1)
 	assert.NotEmpty(t, journal.Operations[0].OldChecksum, "old checksum should be recorded for existing target")
 	assert.NotEmpty(t, journal.Operations[0].NewChecksum)
@@ -240,7 +239,7 @@ func TestAtomicApplyService_Apply_ShouldFallbackToCopyWhenCrossDevice(t *testing
 
 	stagingFile := filepath.Join(stagingDir, "cross.txt")
 	content := []byte("cross-device content")
-	assert.NoError(t, os.WriteFile(stagingFile, content, 0600))
+	require.NoError(t, os.WriteFile(stagingFile, content, 0600))
 
 	targetPath := filepath.Join(targetDir, "cross.txt")
 
@@ -249,16 +248,16 @@ func TestAtomicApplyService_Apply_ShouldFallbackToCopyWhenCrossDevice(t *testing
 
 	journal := entities.NewJournal(stagingDir)
 	journal.AddOperation(stagingFile, targetPath, "", services.ComputeChecksum(content))
-	assert.NoError(t, repo.Save(journal))
+	require.NoError(t, repo.Save(journal))
 
 	// when
 	err := svc.Apply(journal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	data, readErr := os.ReadFile(targetPath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, content, data)
 
 	// Source file should be removed after copy
@@ -270,16 +269,16 @@ func TestAtomicApplyService_Apply_ShouldSkipAlreadyAppliedOperations(t *testing.
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	stagingDir := filepath.Join(tmpDir, "staging", "test")
-	assert.NoError(t, os.MkdirAll(stagingDir, 0700))
+	require.NoError(t, os.MkdirAll(stagingDir, 0700))
 
 	// Only create a staging file for the pending operation
 	pendingTarget := filepath.Join(targetDir, "pending.txt")
 	pendingContent := []byte("pending content")
 	pendingStagingFile := filepath.Join(stagingDir, "pending.txt")
-	assert.NoError(t, os.WriteFile(pendingStagingFile, pendingContent, 0600))
+	require.NoError(t, os.WriteFile(pendingStagingFile, pendingContent, 0600))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -296,17 +295,17 @@ func TestAtomicApplyService_Apply_ShouldSkipAlreadyAppliedOperations(t *testing.
 
 	// Add a pending operation
 	journal.AddOperation(pendingStagingFile, pendingTarget, "", services.ComputeChecksum(pendingContent))
-	assert.NoError(t, repo.Save(journal))
+	require.NoError(t, repo.Save(journal))
 
 	// when
 	err := svc.Apply(journal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Only the pending file should be moved
 	data, readErr := os.ReadFile(pendingTarget)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, pendingContent, data)
 }
 
@@ -323,13 +322,13 @@ func TestAtomicApplyService_Recover_ShouldClearWhenJournalIsComplete(t *testing.
 		NewChecksum: "abc",
 		Status:      "applied",
 	})
-	assert.NoError(t, repo.Save(journal))
+	require.NoError(t, repo.Save(journal))
 
 	// when
 	err := svc.Recover()
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, repo.Exists())
 }
 
@@ -337,11 +336,11 @@ func TestAtomicApplyService_Apply_ShouldCreateTargetDirectoryIfMissing(t *testin
 	// given
 	tmpDir := t.TempDir()
 	stagingDir := filepath.Join(tmpDir, "staging", "test")
-	assert.NoError(t, os.MkdirAll(stagingDir, 0700))
+	require.NoError(t, os.MkdirAll(stagingDir, 0700))
 
 	content := []byte("deep content")
 	stagingFile := filepath.Join(stagingDir, "deep.txt")
-	assert.NoError(t, os.WriteFile(stagingFile, content, 0600))
+	require.NoError(t, os.WriteFile(stagingFile, content, 0600))
 
 	targetPath := filepath.Join(tmpDir, "deep", "nested", "dir", "deep.txt")
 
@@ -350,16 +349,16 @@ func TestAtomicApplyService_Apply_ShouldCreateTargetDirectoryIfMissing(t *testin
 
 	journal := entities.NewJournal(stagingDir)
 	journal.AddOperation(stagingFile, targetPath, "", services.ComputeChecksum(content))
-	assert.NoError(t, repo.Save(journal))
+	require.NoError(t, repo.Save(journal))
 
 	// when
 	err := svc.Apply(journal)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	data, readErr := os.ReadFile(targetPath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, content, data)
 }
 
@@ -369,16 +368,16 @@ func TestMoveFile_ShouldMoveFileSuccessfully(t *testing.T) {
 	srcFile := filepath.Join(tmpDir, "source.txt")
 	dstFile := filepath.Join(tmpDir, "dest.txt")
 	content := []byte("move me")
-	assert.NoError(t, os.WriteFile(srcFile, content, 0600))
+	require.NoError(t, os.WriteFile(srcFile, content, 0600))
 
 	// when
 	err := services.MoveFile(srcFile, dstFile)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	data, readErr := os.ReadFile(dstFile)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, content, data)
 
 	// Source should no longer exist
@@ -428,7 +427,7 @@ func TestReadExistingChecksum_ShouldReturnChecksumForExistingFile(t *testing.T) 
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "existing.txt")
 	content := []byte("existing content")
-	assert.NoError(t, os.WriteFile(path, content, 0600))
+	require.NoError(t, os.WriteFile(path, content, 0600))
 
 	// when
 	result := services.ReadExistingChecksum(path)
@@ -497,7 +496,7 @@ func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
-	assert.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0700))
 
 	repo := newInMemoryJournalRepo()
 	svc := services.NewAtomicApplyService(repo, tmpDir)
@@ -511,10 +510,10 @@ func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
 	journal, err := svc.Stage(files)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, journal)
 
 	stagedContent, readErr := os.ReadFile(journal.Operations[0].SourcePath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, []byte("# Rule\n\nSome content\n"), stagedContent)
 }

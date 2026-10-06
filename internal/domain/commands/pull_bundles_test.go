@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -35,6 +33,8 @@ func TestPullCommand_PromptToRemoveBundleDeletedUpstream(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should remove the local source dir when the user confirms", func(t *testing.T) {
+		t.Parallel()
+
 		// given — cache says we last saw bundle "stale-hash" mapped to
 		// project "old-project"; the freshly-pulled bundle dir is empty
 		// (the project was pruned upstream), and the local source dir
@@ -86,6 +86,8 @@ func TestPullCommand_PromptToRemoveBundleDeletedUpstream(t *testing.T) {
 	})
 
 	t.Run("should keep the local source dir when the user declines", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		toolPath := t.TempDir()
 		repoPath := t.TempDir()

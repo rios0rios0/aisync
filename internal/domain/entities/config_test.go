@@ -1,12 +1,12 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,13 +41,13 @@ func TestConfig_MarshalUnmarshalYAML(t *testing.T) {
 
 	// when
 	data, err := yaml.Marshal(&original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var restored entities.Config
 	err = yaml.Unmarshal(data, &restored)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, original.Sync.Remote, restored.Sync.Remote)
 	assert.Equal(t, original.Sync.Branch, restored.Sync.Branch)
 	assert.Equal(t, original.Sync.AutoPush, restored.Sync.AutoPush)
@@ -77,7 +77,7 @@ func TestConfig_EmptyHooksExclude_OmittedInYAML(t *testing.T) {
 	data, err := yaml.Marshal(&cfg)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotContains(t, string(data), "hooks_exclude")
 }
 
@@ -122,7 +122,7 @@ hooks_exclude:
 	err := yaml.Unmarshal([]byte(raw), &cfg)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "origin", cfg.Sync.Remote)
 	assert.Equal(t, "main", cfg.Sync.Branch)
 	assert.False(t, cfg.Sync.AutoPush)
@@ -157,12 +157,12 @@ func TestHooksExcludeEntry_MarshalRoundTrip(t *testing.T) {
 
 	// when
 	data, err := yaml.Marshal(&entry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var restored entities.HooksExcludeEntry
 	err = yaml.Unmarshal(data, &restored)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, entry, restored)
 }

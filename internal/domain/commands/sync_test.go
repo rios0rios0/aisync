@@ -1,9 +1,7 @@
-//go:build unit
-
 package commands_test
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +36,7 @@ func newTestPullCommand(
 		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
 		&doubles.MockBundleService{},
 		&doubles.MockBundleStateRepository{},
-)
+	)
 }
 
 // newTestPushCommand creates a PushCommand wired with test doubles for sync tests.
@@ -140,7 +138,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 	t.Run("should return error when pull phase fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{
-			LoadErr: fmt.Errorf("config not found"),
+			LoadErr: errors.New("config not found"),
 		}
 		stateRepo := &doubles.MockStateRepository{}
 		gitRepo := &doubles.MockGitRepository{}

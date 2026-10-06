@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -8,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
@@ -17,10 +16,10 @@ func TestConflictDetector_DetectConflicts_ShouldDetectConflictWhenBothSidesDiver
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version of the file")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "settings.json"), localContent, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "settings.json"), localContent, 0600))
 
 	incomingContent := []byte("remote version from another device")
 	incomingFiles := map[string][]byte{
@@ -41,7 +40,7 @@ func TestConflictDetector_DetectConflicts_ShouldDetectConflictWhenBothSidesDiver
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, conflicts, 1)
 	assert.Equal(t, "settings.json", conflicts[0].Path)
 	assert.Equal(t, "laptop", conflicts[0].LocalDevice)
@@ -52,7 +51,7 @@ func TestConflictDetector_DetectConflicts_ShouldDetectConflictWhenBothSidesDiver
 	// Verify conflict file was written
 	conflictPath := filepath.Join(toolDir, "settings.json.conflict.desktop")
 	conflictData, readErr := os.ReadFile(conflictPath)
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, incomingContent, conflictData)
 }
 
@@ -60,10 +59,10 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalIsUnchanged(
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("unchanged content")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules.md"), localContent, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules.md"), localContent, 0600))
 
 	localChecksum := services.ChecksumContent(localContent)
 
@@ -85,15 +84,15 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalIsUnchanged(
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, conflicts, 0)
+	require.NoError(t, err)
+	assert.Empty(t, conflicts)
 }
 
 func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalFileDoesNotExist(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	incomingFiles := map[string][]byte{
 		"new-file.md": []byte("brand new file from remote"),
@@ -106,18 +105,18 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalFileDoesNotE
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, conflicts, 0)
+	require.NoError(t, err)
+	assert.Empty(t, conflicts)
 }
 
 func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenBothSidesHaveSameContent(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	content := []byte("identical content on both sides")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), content, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), content, 0600))
 
 	incomingFiles := map[string][]byte{
 		"same.md": content,
@@ -130,18 +129,18 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenBothSidesHaveSame
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, conflicts, 0)
+	require.NoError(t, err)
+	assert.Empty(t, conflicts)
 }
 
 func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLocal(t *testing.T) {
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
 
 	conflict := entities.Conflict{
 		Path:          "file.md",
@@ -152,7 +151,7 @@ func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLo
 	}
 
 	conflictPath := filepath.Join(toolDir, conflict.ConflictFileName())
-	assert.NoError(t, os.WriteFile(conflictPath, conflict.RemoteContent, 0600))
+	require.NoError(t, os.WriteFile(conflictPath, conflict.RemoteContent, 0600))
 
 	detector := services.NewConflictDetector()
 
@@ -160,7 +159,7 @@ func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLo
 	err := detector.ResolveConflict(toolDir, conflict, "local")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Conflict file should be removed
 	_, statErr := os.Stat(conflictPath)
@@ -168,7 +167,7 @@ func TestConflictDetector_ResolveConflict_ShouldRemoveConflictFileWhenChoiceIsLo
 
 	// Local file should remain unchanged
 	data, readErr := os.ReadFile(filepath.Join(toolDir, "file.md"))
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, localContent, data)
 }
 
@@ -176,11 +175,11 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
-	assert.NoError(t, os.MkdirAll(toolDir, 0700))
+	require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 	localContent := []byte("local version")
 	remoteContent := []byte("remote version that wins")
-	assert.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(toolDir, "file.md"), localContent, 0600))
 
 	conflict := entities.Conflict{
 		Path:          "file.md",
@@ -191,7 +190,7 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 	}
 
 	conflictPath := filepath.Join(toolDir, conflict.ConflictFileName())
-	assert.NoError(t, os.WriteFile(conflictPath, remoteContent, 0600))
+	require.NoError(t, os.WriteFile(conflictPath, remoteContent, 0600))
 
 	detector := services.NewConflictDetector()
 
@@ -199,7 +198,7 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 	err := detector.ResolveConflict(toolDir, conflict, "remote")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Conflict file should be removed
 	_, statErr := os.Stat(conflictPath)
@@ -207,7 +206,7 @@ func TestConflictDetector_ResolveConflict_ShouldReplaceLocalFileWhenChoiceIsRemo
 
 	// Local file should be replaced with remote content
 	data, readErr := os.ReadFile(filepath.Join(toolDir, "file.md"))
-	assert.NoError(t, readErr)
+	require.NoError(t, readErr)
 	assert.Equal(t, remoteContent, data)
 }
 
@@ -225,7 +224,7 @@ func TestConflictDetector_ResolveConflict_ShouldReturnErrorForInvalidChoice(t *t
 	err := detector.ResolveConflict(tmpDir, conflict, "invalid")
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid choice")
 }
 
@@ -256,7 +255,7 @@ func TestConflictDetector_DetectConflicts_ShouldDetectMultipleConflictsInOneCall
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, conflicts, 2)
 
 	paths := []string{conflicts[0].Path, conflicts[1].Path}
@@ -292,6 +291,6 @@ func TestConflictDetector_DetectConflicts_ShouldNotConflictWhenLocalFileIsEmpty(
 	conflicts, err := detector.DetectConflicts(toolDir, incomingFiles, manifest, "desktop")
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, conflicts, 0, "empty local file unchanged from manifest should not conflict")
+	require.NoError(t, err)
+	assert.Empty(t, conflicts, "empty local file unchanged from manifest should not conflict")
 }

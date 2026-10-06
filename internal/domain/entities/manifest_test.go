@@ -1,9 +1,8 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +21,7 @@ func TestNewManifest_CreatesWithCorrectFields(t *testing.T) {
 	assert.Equal(t, version, m.Version)
 	assert.Equal(t, device, m.Device)
 	assert.NotNil(t, m.Files)
-	assert.Len(t, m.Files, 0)
+	assert.Empty(t, m.Files)
 	assert.False(t, m.LastSync.IsZero(), "LastSync should be set to a non-zero time")
 }
 

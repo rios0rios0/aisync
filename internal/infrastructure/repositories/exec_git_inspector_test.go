@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -308,7 +306,7 @@ func TestExecGitInspector_LocalRemotes(t *testing.T) {
 
 // TestExecGitInspector_SSHHostAliases must NOT call t.Parallel() at any
 // level because t.Setenv panics inside parallel tests, and SSHHostAliases
-// reads `~/.ssh/config` via os.UserHomeDir(), which respects $HOME.
+// reads `~/.ssh/config` via [os.UserHomeDir], which respects $HOME.
 func TestExecGitInspector_SSHHostAliases(t *testing.T) {
 	t.Run("should extract <alias> segments from `Host <forge>-<alias>` entries", func(t *testing.T) {
 		// given — a synthetic ~/.ssh/config with a mix of ADO and

@@ -1,9 +1,8 @@
-//go:build unit
-
 package entities_test
 
 import (
 	"testing"
+
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 
 	"github.com/stretchr/testify/assert"
@@ -94,10 +93,10 @@ func TestParseEncryptPatterns_StripsTrailingActionKeywords(t *testing.T) {
 
 func TestEncryptPatterns_Matches(t *testing.T) {
 	tests := []struct {
-		name         string
-		patterns     []string
-		path         string
-		shouldMatch  bool
+		name        string
+		patterns    []string
+		path        string
+		shouldMatch bool
 	}{
 		{
 			name:        "should match exact glob pattern",

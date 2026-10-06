@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -307,4 +305,3 @@ func TestDiffCommand_Execute(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
-

@@ -1,5 +1,3 @@
-//go:build unit
-
 package doubles
 
 import (
@@ -25,7 +23,7 @@ type MockConfigRepository struct {
 	ExistsCalls int
 }
 
-func (m *MockConfigRepository) Load(path string) (*entities.Config, error) {
+func (m *MockConfigRepository) Load(_ string) (*entities.Config, error) {
 	m.LoadCalls++
 	if m.LoadErr != nil {
 		return nil, m.LoadErr
@@ -54,7 +52,7 @@ func (m *MockConfigRepository) Save(path string, config *entities.Config) error 
 	return nil
 }
 
-func (m *MockConfigRepository) Exists(path string) bool {
+func (m *MockConfigRepository) Exists(_ string) bool {
 	m.ExistsCalls++
 	return m.ExistsVal
 }
@@ -71,7 +69,7 @@ type MockStateRepository struct {
 	SaveCalls  int
 }
 
-func (m *MockStateRepository) Load(repoPath string) (*entities.State, error) {
+func (m *MockStateRepository) Load(_ string) (*entities.State, error) {
 	m.LoadCalls++
 	if m.LoadErr != nil {
 		return nil, m.LoadErr
@@ -89,7 +87,7 @@ func (m *MockStateRepository) Save(repoPath string, state *entities.State) error
 	return nil
 }
 
-func (m *MockStateRepository) Exists(repoPath string) bool {
+func (m *MockStateRepository) Exists(_ string) bool {
 	return m.ExistsVal
 }
 
@@ -102,7 +100,10 @@ type MockSourceRepository struct {
 	FetchCalls      int
 }
 
-func (m *MockSourceRepository) Fetch(source *entities.Source, hints repositories.CacheHints) (*repositories.FetchResult, error) {
+func (m *MockSourceRepository) Fetch(
+	source *entities.Source,
+	_ repositories.CacheHints,
+) (*repositories.FetchResult, error) {
 	m.FetchCalls++
 	m.FetchedSources = append(m.FetchedSources, source)
 	if m.FetchErr != nil {
@@ -128,7 +129,7 @@ type MockManifestRepository struct {
 	SaveCalls     int
 }
 
-func (m *MockManifestRepository) Load(toolDir string) (*entities.Manifest, error) {
+func (m *MockManifestRepository) Load(_ string) (*entities.Manifest, error) {
 	m.LoadCalls++
 	if m.LoadErr != nil {
 		return nil, m.LoadErr
@@ -146,18 +147,18 @@ func (m *MockManifestRepository) Save(toolDir string, manifest *entities.Manifes
 	return nil
 }
 
-func (m *MockManifestRepository) Exists(toolDir string) bool {
+func (m *MockManifestRepository) Exists(_ string) bool {
 	return m.ExistsVal
 }
 
 // MockGitRepository is a manual stub for repositories.GitRepository.
 type MockGitRepository struct {
-	CloneURL       string
-	CloneDir       string
-	CloneBranch    string
-	CloneErr       error
-	CloneErrByURL  map[string]error // per-URL errors; falls back to CloneErr
-	CloneAttempts  []string         // all URLs passed to Clone in order
+	CloneURL      string
+	CloneDir      string
+	CloneBranch   string
+	CloneErr      error
+	CloneErrByURL map[string]error // per-URL errors; falls back to CloneErr
+	CloneAttempts []string         // all URLs passed to Clone in order
 	// SimulatePartialClone, when true, makes Clone create a `.git/HEAD`
 	// stub at dir on every invocation. This mirrors go-git's PlainClone,
 	// which leaves a partial .git/ skeleton behind on failure and breaks
@@ -172,29 +173,29 @@ type MockGitRepository struct {
 	RefuseIfNotEmpty bool
 	InitDir          string
 	InitErr          error
-	OpenDir        string
-	OpenErr        error
-	PullErr        error
-	CommitMsg      string
-	CommitErr      error
-	PushErr        error
-	IsCleanVal     bool
-	IsCleanErr     error
-	HasRemoteVal   bool
-	AddRemoteName  string
-	AddRemoteURL   string
-	AddRemoteErr   error
-	AddRemoteCalls int
-	SetConfigKey   string
-	SetConfigValue string
-	SetConfigErr   error
-	SetConfigCalls int
-	CloneCalls     int
-	InitCalls      int
-	OpenCalls      int
-	PullCalls      int
-	CommitAllCalls int
-	PushCalls      int
+	OpenDir          string
+	OpenErr          error
+	PullErr          error
+	CommitMsg        string
+	CommitErr        error
+	PushErr          error
+	IsCleanVal       bool
+	IsCleanErr       error
+	HasRemoteVal     bool
+	AddRemoteName    string
+	AddRemoteURL     string
+	AddRemoteErr     error
+	AddRemoteCalls   int
+	SetConfigKey     string
+	SetConfigValue   string
+	SetConfigErr     error
+	SetConfigCalls   int
+	CloneCalls       int
+	InitCalls        int
+	OpenCalls        int
+	PullCalls        int
+	CommitAllCalls   int
+	PushCalls        int
 }
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
@@ -329,7 +330,7 @@ func (m *MockEncryptionService) ExportPublicKey(identityPath string) (string, er
 	return m.ExportedPublicKey, nil
 }
 
-func (m *MockEncryptionService) Encrypt(plaintext []byte, recipients []string) ([]byte, error) {
+func (m *MockEncryptionService) Encrypt(plaintext []byte, _ []string) ([]byte, error) {
 	m.EncryptCalls++
 	m.EncryptPlaintext = plaintext
 	if m.EncryptErr != nil {
@@ -338,7 +339,7 @@ func (m *MockEncryptionService) Encrypt(plaintext []byte, recipients []string) (
 	return m.EncryptedData, nil
 }
 
-func (m *MockEncryptionService) Decrypt(ciphertext []byte, identityPath string) ([]byte, error) {
+func (m *MockEncryptionService) Decrypt(_ []byte, _ string) ([]byte, error) {
 	m.DecryptCalls++
 	if m.DecryptErr != nil {
 		return nil, m.DecryptErr
@@ -366,7 +367,7 @@ type MockSecretScanner struct {
 	ScanCalls int
 }
 
-func (m *MockSecretScanner) Scan(files map[string][]byte) []repositories.SecretFinding {
+func (m *MockSecretScanner) Scan(_ map[string][]byte) []repositories.SecretFinding {
 	m.ScanCalls++
 	return m.Findings
 }
@@ -382,23 +383,23 @@ type MockDiffService struct {
 }
 
 func (m *MockDiffService) ComputeSharedDiff(
-	config *entities.Config,
-	repoPath string,
-	incomingFiles map[string][]byte,
+	_ *entities.Config,
+	_ string,
+	_ map[string][]byte,
 ) ([]entities.FileChange, error) {
 	return m.SharedDiff, m.SharedErr
 }
 
 func (m *MockDiffService) ComputeLocalDiff(
-	config *entities.Config,
-	repoPath string,
+	_ *entities.Config,
+	_ string,
 ) ([]entities.FileChange, error) {
 	return m.LocalDiff, m.LocalErr
 }
 
 func (m *MockDiffService) ComputePersonalDiff(
-	config *entities.Config,
-	repoPath string,
+	_ *entities.Config,
+	_ string,
 ) ([]entities.FileChange, error) {
 	return m.PersonalDiff, m.PersonalErr
 }
@@ -434,7 +435,7 @@ type MockWatchService struct {
 	IgnorePatterns *entities.IgnorePatterns
 }
 
-func (m *MockWatchService) Watch(trees []repositories.WatchedTree, callback func(event repositories.FileEvent)) error {
+func (m *MockWatchService) Watch(trees []repositories.WatchedTree, _ func(event repositories.FileEvent)) error {
 	m.WatchCalls++
 	m.WatchTrees = trees
 	return m.WatchErr
@@ -457,7 +458,7 @@ type MockMerger struct {
 	MergeCalls int
 }
 
-func (m *MockMerger) Merge(sharedSources [][]byte, personal []byte) ([]byte, error) {
+func (m *MockMerger) Merge(_ [][]byte, _ []byte) ([]byte, error) {
 	m.MergeCalls++
 	if m.MergeErr != nil {
 		return nil, m.MergeErr
@@ -476,7 +477,7 @@ type MockApplyService struct {
 	RecoverCalls  int
 }
 
-func (m *MockApplyService) Stage(files map[string][]byte) (*entities.Journal, error) {
+func (m *MockApplyService) Stage(_ map[string][]byte) (*entities.Journal, error) {
 	m.StageCalls++
 	if m.StageErr != nil {
 		return nil, m.StageErr
@@ -488,7 +489,7 @@ func (m *MockApplyService) Stage(files map[string][]byte) (*entities.Journal, er
 	return j, nil
 }
 
-func (m *MockApplyService) Apply(journal *entities.Journal) error {
+func (m *MockApplyService) Apply(_ *entities.Journal) error {
 	m.ApplyCalls++
 	return m.ApplyErr
 }
@@ -508,16 +509,16 @@ type MockConflictDetector struct {
 }
 
 func (m *MockConflictDetector) DetectConflicts(
-	toolDir string,
-	incomingFiles map[string][]byte,
-	manifest *entities.Manifest,
-	deviceName string,
+	_ string,
+	_ map[string][]byte,
+	_ *entities.Manifest,
+	_ string,
 ) ([]entities.Conflict, error) {
 	m.DetectCalls++
 	return m.Conflicts, m.DetectErr
 }
 
-func (m *MockConflictDetector) ResolveConflict(toolDir string, conflict entities.Conflict, choice string) error {
+func (m *MockConflictDetector) ResolveConflict(_ string, _ entities.Conflict, _ string) error {
 	m.ResolveCalls++
 	return m.ResolveErr
 }
@@ -542,7 +543,7 @@ func (m *MockJournalRepository) Load() (*entities.Journal, error) {
 	return m.Journal, nil
 }
 
-func (m *MockJournalRepository) Save(journal *entities.Journal) error {
+func (m *MockJournalRepository) Save(_ *entities.Journal) error {
 	m.SaveCalls++
 	return m.SaveErr
 }

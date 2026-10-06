@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -118,7 +116,12 @@ func TestSourceCommand_List(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
 				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated", Mappings: []entities.SourceMapping{{Source: "a", Target: "b"}}},
+					{
+						Name:     "guide",
+						Repo:     "rios0rios0/guide",
+						Branch:   "generated",
+						Mappings: []entities.SourceMapping{{Source: "a", Target: "b"}},
+					},
 				},
 			},
 		}

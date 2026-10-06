@@ -1,5 +1,3 @@
-//go:build unit
-
 package commands_test
 
 import (
@@ -546,15 +544,15 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		encryptedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "user.md.age")
 		_, statErr := os.Stat(encryptedMemory)
-		assert.NoError(t, statErr, "memories/user.md should have been encrypted")
+		require.NoError(t, statErr, "memories/user.md should have been encrypted")
 
 		encryptedNestedMemory := filepath.Join(repoPath, "personal", "claude", "memories", "nested", "user.md.age")
 		_, statErr = os.Stat(encryptedNestedMemory)
-		assert.NoError(t, statErr, "memories/nested/user.md should have been encrypted")
+		require.NoError(t, statErr, "memories/nested/user.md should have been encrypted")
 
 		encryptedSettings := filepath.Join(repoPath, "personal", "claude", "settings.local.json.age")
 		_, statErr = os.Stat(encryptedSettings)
-		assert.NoError(t, statErr, "settings.local.json should have been encrypted")
+		require.NoError(t, statErr, "settings.local.json should have been encrypted")
 
 		// CLAUDE.md is not matched and must remain plaintext.
 		plaintextClaude := filepath.Join(repoPath, "personal", "claude", "CLAUDE.md")
@@ -824,7 +822,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// personal.md should have been copied
 		personalFile := filepath.Join(repoPath, "personal", "claude", "rules", "personal.md")
 		_, err = os.Stat(personalFile)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// shared.md should NOT have been copied to personal/
 		sharedPersonalFile := filepath.Join(repoPath, "personal", "claude", "rules", "shared.md")
@@ -927,7 +925,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		// rules/rule.md should be copied, rules/debug.log should not
 		ruleFile := filepath.Join(repoPath, "personal", "claude", "rules", "rule.md")
 		_, err = os.Stat(ruleFile)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		logFile := filepath.Join(repoPath, "personal", "claude", "rules", "debug.log")
 		_, err = os.Stat(logFile)

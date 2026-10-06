@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -9,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	repositories "github.com/rios0rios0/aisync/internal/infrastructure/repositories"
@@ -41,12 +40,12 @@ func TestJSONStateRepository_SaveThenLoad(t *testing.T) {
 
 	// when
 	err := repo.Save(repoPath, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(repoPath)
 
 	// then
-	assert.NoError(t, err)
-	assert.Equal(t, len(original.Devices), len(loaded.Devices))
+	require.NoError(t, err)
+	assert.Len(t, loaded.Devices, len(original.Devices))
 	assert.Equal(t, original.Devices[0].ID, loaded.Devices[0].ID)
 	assert.Equal(t, original.Devices[0].Name, loaded.Devices[0].Name)
 	assert.Equal(t, original.Devices[0].Platform, loaded.Devices[0].Platform)
@@ -70,7 +69,7 @@ func TestJSONStateRepository_StateFileLocation(t *testing.T) {
 	err := repo.Save(repoPath, state)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	expectedPath := filepath.Join(repoPath, ".aisync", "state.json")
 	assert.FileExists(t, expectedPath)
 }
@@ -84,7 +83,7 @@ func TestJSONStateRepository_Load_MissingFile(t *testing.T) {
 	state, err := repo.Load(repoPath)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, state)
 	assert.Contains(t, err.Error(), "failed to read state file")
 }
@@ -98,7 +97,7 @@ func TestJSONStateRepository_Exists_WithFile(t *testing.T) {
 		SourceETags: make(map[string]string),
 	}
 	err := repo.Save(repoPath, state)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	exists := repo.Exists(repoPath)
@@ -155,12 +154,12 @@ func TestJSONStateRepository_PreservesAllFields(t *testing.T) {
 
 	// when
 	err := repo.Save(repoPath, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(repoPath)
 
 	// then
-	assert.NoError(t, err)
-	assert.Equal(t, 2, len(loaded.Devices))
+	require.NoError(t, err)
+	assert.Len(t, loaded.Devices, 2)
 	assert.Equal(t, "id-alpha", loaded.Devices[0].ID)
 	assert.Equal(t, "desktop", loaded.Devices[0].Name)
 	assert.Equal(t, "id-beta", loaded.Devices[1].ID)
@@ -168,7 +167,7 @@ func TestJSONStateRepository_PreservesAllFields(t *testing.T) {
 	assert.Equal(t, "arm64", loaded.Devices[1].Platform)
 	assert.Equal(t, "darwin", loaded.Devices[1].OS)
 	assert.True(t, device2Sync.Equal(loaded.Devices[1].LastSync))
-	assert.Equal(t, 3, len(loaded.SourceETags))
+	assert.Len(t, loaded.SourceETags, 3)
 	assert.Equal(t, "etag-111", loaded.SourceETags["source-a"])
 	assert.Equal(t, "etag-222", loaded.SourceETags["source-b"])
 	assert.Equal(t, "etag-333", loaded.SourceETags["source-c"])
@@ -194,11 +193,11 @@ func TestJSONStateRepository_Save_ShouldCreateAisyncDirectory(t *testing.T) {
 	err := repo.Save(repoPath, state)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// .aisync/ directory should now exist
 	info, statErr := os.Stat(aisyncDir)
-	assert.NoError(t, statErr)
+	require.NoError(t, statErr)
 	assert.True(t, info.IsDir())
 }
 
@@ -214,7 +213,7 @@ func TestJSONStateRepository_Load_InvalidJSON(t *testing.T) {
 	state, err := repo.Load(repoPath)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, state)
 	assert.Contains(t, err.Error(), "failed to parse state file")
 }
@@ -232,12 +231,12 @@ func TestJSONStateRepository_SaveThenLoad_WithEmptyDevicesList(t *testing.T) {
 
 	// when
 	err := repo.Save(repoPath, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(repoPath)
 
 	// then
-	assert.NoError(t, err)
-	assert.Len(t, loaded.Devices, 0)
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Devices)
 	assert.Equal(t, "etag-1", loaded.SourceETags["src"])
 	assert.True(t, original.LastPull.Equal(loaded.LastPull))
 }

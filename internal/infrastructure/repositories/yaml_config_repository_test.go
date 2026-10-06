@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -8,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 	repositories "github.com/rios0rios0/aisync/internal/infrastructure/repositories"
@@ -54,11 +53,11 @@ func TestYAMLConfigRepository_SaveThenLoad(t *testing.T) {
 
 	// when
 	err := repo.Save(path, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(path)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, original.Sync, loaded.Sync)
 	assert.Equal(t, original.Encryption, loaded.Encryption)
 	assert.Equal(t, original.Tools, loaded.Tools)
@@ -72,13 +71,13 @@ func TestYAMLConfigRepository_Load_InvalidYAML(t *testing.T) {
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	err := os.WriteFile(path, []byte(":\tinvalid:\n\t- [yaml broken"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	config, err := repo.Load(path)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, config)
 	assert.Contains(t, err.Error(), "failed to parse config file")
 }
@@ -92,7 +91,7 @@ func TestYAMLConfigRepository_Load_MissingFile(t *testing.T) {
 	config, err := repo.Load(path)
 
 	// then
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, config)
 	assert.Contains(t, err.Error(), "failed to read config file")
 }
@@ -102,7 +101,7 @@ func TestYAMLConfigRepository_Exists_ExistingFile(t *testing.T) {
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	err := os.WriteFile(path, []byte("sync:\n  branch: main\n"), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	exists := repo.Exists(path)
@@ -167,11 +166,11 @@ func TestYAMLConfigRepository_AllConfigFieldsSurviveRoundtrip(t *testing.T) {
 
 	// when
 	err := repo.Save(path, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(path)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, original.Sync.Remote, loaded.Sync.Remote)
 	assert.Equal(t, original.Sync.Branch, loaded.Sync.Branch)
 	assert.Equal(t, original.Sync.AutoPush, loaded.Sync.AutoPush)
@@ -180,14 +179,14 @@ func TestYAMLConfigRepository_AllConfigFieldsSurviveRoundtrip(t *testing.T) {
 	assert.Equal(t, original.Encryption.Identity, loaded.Encryption.Identity)
 	assert.Equal(t, original.Encryption.Recipients, loaded.Encryption.Recipients)
 	assert.Equal(t, original.Tools, loaded.Tools)
-	assert.Equal(t, len(original.Sources), len(loaded.Sources))
+	assert.Len(t, loaded.Sources, len(original.Sources))
 	assert.Equal(t, original.Sources[0].Name, loaded.Sources[0].Name)
 	assert.Equal(t, original.Sources[0].Ref, loaded.Sources[0].Ref)
 	assert.Equal(t, original.Sources[0].Refresh, loaded.Sources[0].Refresh)
 	assert.Equal(t, original.Sources[0].Mappings, loaded.Sources[0].Mappings)
 	assert.Equal(t, original.Watch.PollingInterval, loaded.Watch.PollingInterval)
 	assert.Equal(t, original.Watch.IgnoredPatterns, loaded.Watch.IgnoredPatterns)
-	assert.Equal(t, len(original.HooksExclude), len(loaded.HooksExclude))
+	assert.Len(t, loaded.HooksExclude, len(original.HooksExclude))
 	assert.Equal(t, original.HooksExclude[0], loaded.HooksExclude[0])
 	assert.Equal(t, original.HooksExclude[1], loaded.HooksExclude[1])
 }
@@ -214,7 +213,7 @@ func TestYAMLConfigRepository_Save_ShouldCreateParentDirectories(t *testing.T) {
 	// then
 	// The current implementation does NOT create parent dirs, so this should fail.
 	// This test documents the current behavior.
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to write config file")
 }
 
@@ -249,9 +248,9 @@ func TestYAMLConfigRepository_Save_ShouldEmitSingleQuotedStringValues(t *testing
 	err := repo.Save(path, config)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	raw, err := os.ReadFile(path)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	yamlText := string(raw)
 
 	// String values must be wrapped in single quotes.
@@ -316,11 +315,11 @@ func TestYAMLConfigRepository_Save_QuotedStringRoundtripsCleanly(t *testing.T) {
 
 	// when
 	err := repo.Save(path, original)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	loaded, err := repo.Load(path)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, original.Sync, loaded.Sync)
 	assert.Equal(t, original.Encryption, loaded.Encryption)
 	assert.Equal(t, original.Tools, loaded.Tools)
@@ -341,13 +340,13 @@ tools:
     enabled: true
 `
 	err := os.WriteFile(path, []byte(content), 0600)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// when
 	config, err := repo.Load(path)
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, config)
 	assert.Equal(t, "https://github.com/test/repo.git", config.Sync.Remote)
 	assert.Equal(t, "main", config.Sync.Branch)

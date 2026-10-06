@@ -1,5 +1,3 @@
-//go:build unit
-
 package services_test
 
 import (
@@ -86,38 +84,33 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		var hit *entities.NDAFinding
-		for i, f := range findings {
-			if f.Kind == "heuristic:ado-org-url" {
-				hit = &findings[i]
-				break
-			}
-		}
+		hit := findingOfKind(findings, "heuristic:ado-org-url")
 		require.NotNil(t, hit, "expected ado-org-url heuristic to fire")
 		// The capture group strips the leading boundary char so the
 		// reported Term is the URL itself, not " https://...".
 		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term)
 	})
 
-	t.Run("should NOT fire ado-org-url heuristic when dev.azure.com is a substring of an attacker host", func(t *testing.T) {
-		t.Parallel()
+	t.Run(
+		"should NOT fire ado-org-url heuristic when dev.azure.com is a substring of an attacker host",
+		func(t *testing.T) {
+			t.Parallel()
 
-		// given — the (?:^|[^A-Za-z0-9.]) leading anchor is the part
-		// CodeQL recognizes as a real URL boundary. Without it, the
-		// pattern would match `dev.azure.com/Foo` as a substring of an
-		// attacker-controlled host like `evil.dev.azure.com.example/`.
-		scanner := services.NewForbiddenTermsScanner(nil, nil, true)
-		content := []byte("Bogus URL: https://attacker.dev.azure.com.example/Foo")
+			// given — the (?:^|[^A-Za-z0-9.]) leading anchor is the part
+			// CodeQL recognizes as a real URL boundary. Without it, the
+			// pattern would match `dev.azure.com/Foo` as a substring of an
+			// attacker-controlled host like `evil.dev.azure.com.example/`.
+			scanner := services.NewForbiddenTermsScanner(nil, nil, true)
+			content := []byte("Bogus URL: https://attacker.dev.azure.com.example/Foo")
 
-		// when
-		findings := scanner.Scan(map[string][]byte{"t.md": content})
+			// when
+			findings := scanner.Scan(map[string][]byte{"t.md": content})
 
-		// then
-		for _, f := range findings {
-			assert.NotEqual(t, "heuristic:ado-org-url", f.Kind,
+			// then
+			assert.Nil(t, findingOfKind(findings, "heuristic:ado-org-url"),
 				"attacker host should not fire ado-org-url heuristic")
-		}
-	})
+		},
+	)
 
 	t.Run("should NOT fire ado-org-url heuristic on a contrived scheme prefix", func(t *testing.T) {
 		t.Parallel()
@@ -142,10 +135,8 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		for _, f := range findings {
-			assert.NotEqual(t, "heuristic:ado-org-url", f.Kind,
-				"contrived scheme prefix `xhttps://` must be rejected by the boundary anchor")
-		}
+		assert.Nil(t, findingOfKind(findings, "heuristic:ado-org-url"),
+			"contrived scheme prefix `xhttps://` must be rejected by the boundary anchor")
 	})
 
 	t.Run("should fire ado-org-url heuristic when the boundary char is punctuation", func(t *testing.T) {
@@ -162,13 +153,7 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		var hit *entities.NDAFinding
-		for i, f := range findings {
-			if f.Kind == "heuristic:ado-org-url" {
-				hit = &findings[i]
-				break
-			}
-		}
+		hit := findingOfKind(findings, "heuristic:ado-org-url")
 		require.NotNil(t, hit, "expected ado-org-url heuristic to fire when URL is wrapped in parens")
 		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term,
 			"capture group must strip the leading `(` from the reported Term")
@@ -186,13 +171,7 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		var hit *entities.NDAFinding
-		for i, f := range findings {
-			if f.Kind == "heuristic:ado-org-url" {
-				hit = &findings[i]
-				break
-			}
-		}
+		hit := findingOfKind(findings, "heuristic:ado-org-url")
 		require.NotNil(t, hit, "expected ado-org-url heuristic to fire at start-of-line")
 		assert.Equal(t, "https://dev.azure.com/CorporateOrg", hit.Term)
 	})
@@ -209,10 +188,8 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		for _, f := range findings {
-			assert.NotEqual(t, "heuristic:ado-org-url", f.Kind,
-				"placeholder URL should not fire ado-org-url heuristic")
-		}
+		assert.Nil(t, findingOfKind(findings, "heuristic:ado-org-url"),
+			"placeholder URL should not fire ado-org-url heuristic")
 	})
 
 	t.Run("should fire ssh-host-alias heuristic", func(t *testing.T) {
@@ -226,14 +203,11 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		findings := scanner.Scan(map[string][]byte{"t.md": content})
 
 		// then
-		found := false
-		for _, f := range findings {
-			if f.Kind == "heuristic:ssh-host-alias" {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found, "expected ssh-host-alias heuristic to fire")
+		assert.NotNil(
+			t,
+			findingOfKind(findings, "heuristic:ssh-host-alias"),
+			"expected ssh-host-alias heuristic to fire",
+		)
 	})
 
 	t.Run("should NOT fire heuristics when disabled", func(t *testing.T) {
@@ -270,4 +244,15 @@ func TestForbiddenTermsScanner_Scan(t *testing.T) {
 		// then
 		assert.Empty(t, findings)
 	})
+}
+
+// findingOfKind returns the first of findings that is of kind, or nil when none
+// is.
+func findingOfKind(findings []entities.NDAFinding, kind string) *entities.NDAFinding {
+	for i := range findings {
+		if findings[i].Kind == kind {
+			return &findings[i]
+		}
+	}
+	return nil
 }

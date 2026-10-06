@@ -28,7 +28,7 @@ make sast           # CodeQL, Semgrep, Trivy, Hadolint, Gitleaks
 ```
 
 **Never call tool binaries directly** (`golangci-lint`, `semgrep`, `trivy`,
-`hadolint`, `gitleaks`, `go test` without the unit tag, etc.). The Makefile
+`hadolint`, `gitleaks`, etc.). The Makefile
 imports shared targets from the [`pipelines`](https://github.com/rios0rios0/pipelines)
 repo that load the correct configuration before invoking each tool. Calling
 binaries directly bypasses that configuration and produces false positives.
@@ -36,11 +36,11 @@ binaries directly bypasses that configuration and produces false positives.
 Running a single test during development is the only exception:
 
 ```bash
-go test -tags unit -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
+go test -run "TestHooksMerger_Merge" ./internal/infrastructure/services/
 ```
 
-All unit test files carry `//go:build unit`. Build and the unit suite each
-complete in under three seconds, so run them on every change — don't save
+Unit test files carry no build tag, so `go test ./...` runs them. Build and
+the unit suite each complete in under three seconds, so run them on every change — don't save
 them for the end.
 
 ## Architecture — Clean / Hexagonal
@@ -143,7 +143,8 @@ out directly.
 Tests in this repo follow a strict BDD pattern — Copilot's suggestions must
 match this pattern, not generate free-form tests.
 
-- **Build tag:** every test file starts with `//go:build unit`.
+- **Build tag:** none on unit test files, so `go test ./...` runs them; only a
+  test that needs real infrastructure carries `//go:build integration`.
 - **External test package:** if production code is in `package commands`,
   the test file uses `package commands_test` and accesses only exported
   API. Never reach into internals.

@@ -1,5 +1,3 @@
-//go:build unit
-
 package entities_test
 
 import (
@@ -507,6 +505,8 @@ func TestToolAllowlists_CoversTier1Tools(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should have compiled-in entries for every Tier-1 enabled-by-default tool", func(t *testing.T) {
+		t.Parallel()
+
 		// given — Tier-1 tools are those enabled: true in DefaultTools()
 		tier1 := []string{}
 		for name, tool := range entities.DefaultTools() {

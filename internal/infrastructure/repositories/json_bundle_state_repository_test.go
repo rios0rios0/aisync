@@ -1,5 +1,3 @@
-//go:build unit
-
 package repositories_test
 
 import (
@@ -19,6 +17,8 @@ func TestJSONBundleStateRepository_LoadAndSave(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should return empty state when cache file does not exist", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		repo := repositories.NewJSONBundleStateRepository(t.TempDir())
 
@@ -32,6 +32,8 @@ func TestJSONBundleStateRepository_LoadAndSave(t *testing.T) {
 	})
 
 	t.Run("should round-trip entries through Save and Load", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		dir := t.TempDir()
 		repo := repositories.NewJSONBundleStateRepository(dir)
@@ -59,6 +61,8 @@ func TestJSONBundleStateRepository_LoadAndSave(t *testing.T) {
 	})
 
 	t.Run("should write the cache file at 0600 permissions", func(t *testing.T) {
+		t.Parallel()
+
 		// given
 		dir := t.TempDir()
 		repo := repositories.NewJSONBundleStateRepository(dir)
