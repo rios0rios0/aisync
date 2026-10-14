@@ -22,6 +22,15 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.5.13] - 2026-10-14
+
+### Changed
+
+- changed the Go modules `github.com/charmbracelet/x/ansi` from `v0.11.8` to `v0.11.9`, `github.com/Microsoft/go-winio` from `v0.6.2` to `v0.6.3` and `golang.org/x/net` from `v0.59.0` to `v0.61.0`
+- changed the Go modules `github.com/mattn/go-runewidth` from `v0.0.30` to `v0.0.31` and `github.com/rios0rios0/cliforge` from `v0.4.7` to `v0.5.0`
+- changed the Go modules `golang.org/x/crypto` from `v0.57.0` to `v0.58.0`, `golang.org/x/sys` from `v0.48.0` to `v0.49.0`, `golang.org/x/term` from `v0.46.0` to `v0.47.0` and `golang.org/x/text` from `v0.42.0` to `v0.43.0`
+- changed the Go version from `1.27.1` to `1.27.2`
+
 ## [1.5.12] - 2026-10-07
 
 ### Changed
