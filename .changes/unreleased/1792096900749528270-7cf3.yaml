@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed answers piped to the conflict prompt without a terminal being lost after the first conflict: every prompt now reads from one shared input instead of its own read-ahead buffer'
+time: '2026-10-15T20:41:40.749402315Z'

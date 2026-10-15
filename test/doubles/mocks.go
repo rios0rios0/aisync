@@ -482,8 +482,11 @@ type MockApplyService struct {
 	ApplyErr      error
 	RecoverErr    error
 	StageCalls    int
-	ApplyCalls    int
-	RecoverCalls  int
+	// StageVerbatimCalls counts StageVerbatim calls, which are also counted
+	// in StageCalls.
+	StageVerbatimCalls int
+	ApplyCalls         int
+	RecoverCalls       int
 }
 
 func (m *MockApplyService) Stage(files map[string][]byte) (*entities.Journal, error) {
@@ -497,6 +500,12 @@ func (m *MockApplyService) Stage(files map[string][]byte) (*entities.Journal, er
 	}
 	j := entities.NewJournal("/tmp/staging")
 	return j, nil
+}
+
+// StageVerbatim records the call and the files like Stage.
+func (m *MockApplyService) StageVerbatim(files map[string][]byte) (*entities.Journal, error) {
+	m.StageVerbatimCalls++
+	return m.Stage(files)
 }
 
 func (m *MockApplyService) Apply(_ *entities.Journal) error {

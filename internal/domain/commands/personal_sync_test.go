@@ -769,3 +769,24 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		assert.NoFileExists(t, link+".age")
 	})
 }
+
+func TestPersonalSyncer_LineEndings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should stage pulled files byte for byte so their CRLF line endings survive", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.writeRepo("skills/fonts/LICENSE.txt", "Copyright\r\nreserved\n")
+
+		// when
+		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncIncoming})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, report.Pulled)
+		assert.Equal(t, 1, f.apply.StageVerbatimCalls)
+		local, _ := f.readLocal("skills/fonts/LICENSE.txt")
+		assert.Equal(t, "Copyright\r\nreserved\n", local)
+	})
+}

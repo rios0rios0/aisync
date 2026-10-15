@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -19,17 +18,22 @@ const actionApplyValue = "apply"
 
 // HuhPromptService provides interactive prompts using charmbracelet/huh for
 // TTY environments, falling back to simple stdin/stdout otherwise.
-type HuhPromptService struct{}
+type HuhPromptService struct {
+	// lines feeds every fallback prompt from one reader, so answers piped in
+	// for later prompts are not lost to an earlier prompt's read-ahead.
+	lines       *lineReader
+	interactive func() bool
+}
 
-// NewHuhPromptService creates a new HuhPromptService.
+// NewHuhPromptService creates a new HuhPromptService reading stdin.
 func NewHuhPromptService() *HuhPromptService {
-	return &HuhPromptService{}
+	return &HuhPromptService{lines: newLineReader(os.Stdin), interactive: isInteractive}
 }
 
 // PromptToolAction asks the user what to do for a specific tool during pull.
 func (s *HuhPromptService) PromptToolAction(toolName string) string {
-	if !isInteractive() {
-		return promptToolActionFallback(toolName)
+	if !s.interactive() {
+		return promptToolActionFallback(s.lines, toolName)
 	}
 
 	var choice string
@@ -52,8 +56,8 @@ func (s *HuhPromptService) PromptToolAction(toolName string) string {
 
 // PromptConfirmation asks a yes/no question.
 func (s *HuhPromptService) PromptConfirmation(prompt string) bool {
-	if !isInteractive() {
-		return promptConfirmationFallback(prompt)
+	if !s.interactive() {
+		return promptConfirmationFallback(s.lines, prompt)
 	}
 
 	var confirmed bool
@@ -76,8 +80,8 @@ func (s *HuhPromptService) PromptConfirmation(prompt string) bool {
 // prompt quits the whole run, which leaves every file untouched.
 func (s *HuhPromptService) PromptSyncConflict(detail entities.ConflictDetail) entities.ConflictChoice {
 	printConflictHeader(detail)
-	if !isInteractive() {
-		return promptSyncConflictFallback(detail)
+	if !s.interactive() {
+		return promptSyncConflictFallback(s.lines, detail)
 	}
 
 	for {
@@ -182,8 +186,8 @@ func showConflictDiff(detail entities.ConflictDetail) {
 
 // PromptFileAction asks the user what to do for a specific file.
 func (s *HuhPromptService) PromptFileAction(path, direction string) string {
-	if !isInteractive() {
-		return promptFileActionFallback(path, direction)
+	if !s.interactive() {
+		return promptFileActionFallback(s.lines, path, direction)
 	}
 
 	var choice string
@@ -209,14 +213,14 @@ func isInteractive() bool {
 
 // Fallback prompts for non-interactive environments.
 
-func promptToolActionFallback(toolName string) string {
-	scanner := bufio.NewScanner(os.Stdin)
+func promptToolActionFallback(lines *lineReader, toolName string) string {
 	for {
 		fmt.Fprintf(os.Stdout, "Apply changes to %s? [y/n/d(iff)/s(kip)]: ", toolName)
-		if !scanner.Scan() {
+		line, ok := lines.next()
+		if !ok {
 			return actionAbort
 		}
-		switch strings.TrimSpace(strings.ToLower(scanner.Text())) {
+		switch strings.TrimSpace(strings.ToLower(line)) {
 		case "y", "yes":
 			return actionApplyValue
 		case "n", "no":
@@ -231,21 +235,19 @@ func promptToolActionFallback(toolName string) string {
 	}
 }
 
-func promptConfirmationFallback(prompt string) bool {
+func promptConfirmationFallback(lines *lineReader, prompt string) bool {
 	fmt.Fprintf(os.Stdout, "%s [y/N]: ", prompt)
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	if line, ok := lines.next(); ok {
+		answer := strings.TrimSpace(strings.ToLower(line))
 		return answer == "y" || answer == "yes"
 	}
 	return false
 }
 
-func promptFileActionFallback(path, direction string) string {
+func promptFileActionFallback(lines *lineReader, path, direction string) string {
 	fmt.Fprintf(os.Stdout, "  [%s] %s — apply? [Y/n]: ", direction, path)
-	scanner := bufio.NewScanner(os.Stdin)
-	if scanner.Scan() {
-		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+	if line, ok := lines.next(); ok {
+		answer := strings.TrimSpace(strings.ToLower(line))
 		if answer == "n" || answer == "no" {
 			return actionSkipValue
 		}
@@ -256,16 +258,16 @@ func promptFileActionFallback(path, direction string) string {
 // promptSyncConflictFallback reads one answer per line from stdin, so a
 // script can pipe in decisions. End of input skips the conflict: without a
 // person to ask, nothing is overwritten.
-func promptSyncConflictFallback(detail entities.ConflictDetail) entities.ConflictChoice {
-	scanner := bufio.NewScanner(os.Stdin)
+func promptSyncConflictFallback(lines *lineReader, detail entities.ConflictDetail) entities.ConflictChoice {
 	for {
 		fmt.Fprint(os.Stdout,
 			"  [d]iff / keep [l]ocal / keep [r]emote / [s]kip / [L] local for all / [R] remote for all / [q]uit: ")
-		if !scanner.Scan() {
+		line, read := lines.next()
+		if !read {
 			fmt.Fprintln(os.Stdout, "(no input: skipped)")
 			return entities.ChoiceSkip
 		}
-		answer := strings.TrimSpace(scanner.Text())
+		answer := strings.TrimSpace(line)
 		if answer == "d" || answer == choiceShowDiff {
 			showConflictDiffPlain(detail)
 			continue

@@ -9,6 +9,12 @@ type ApplyService interface {
 	// target paths and values are the file contents.
 	Stage(files map[string][]byte) (*entities.Journal, error)
 
+	// StageVerbatim stages files like Stage but writes their bytes exactly
+	// as given, for content that must round-trip unchanged (personal files
+	// and conversations), where rewritten line endings would read as a local
+	// change on the next sync.
+	StageVerbatim(files map[string][]byte) (*entities.Journal, error)
+
 	// Apply moves all pending staged files from the staging directory to their
 	// final target paths, updating the journal after each successful move.
 	Apply(journal *entities.Journal) error

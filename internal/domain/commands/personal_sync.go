@@ -654,10 +654,11 @@ func (s *PersonalSyncer) applyPulls(state *executionState) error {
 	return nil
 }
 
-// applyLocal writes incoming files through the atomic apply journal, so an
-// interrupted pull is completed or rolled back on the next run.
+// applyLocal writes incoming files byte for byte through the atomic apply
+// journal, so an interrupted pull is completed or rolled back on the next
+// run, and a file reads back exactly as the base recorded for it.
 func (s *PersonalSyncer) applyLocal(pending map[string][]byte) error {
-	journal, err := s.applyService.Stage(pending)
+	journal, err := s.applyService.StageVerbatim(pending)
 	if err != nil {
 		return fmt.Errorf("failed to stage incoming files: %w", err)
 	}

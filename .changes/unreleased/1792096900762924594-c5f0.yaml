@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed pulled personal files losing their CRLF line endings, which made the receiving device push each such file back as its own change; personal files are now written byte for byte'
+time: '2026-10-15T20:41:40.762838076Z'
