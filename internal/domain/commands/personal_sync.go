@@ -462,6 +462,21 @@ func (s *PersonalSyncer) chooseResolution(
 	opts PersonalSyncOptions,
 	sticky *entities.ConflictChoice,
 ) entities.ConflictChoice {
+	return decideConflict(s.prompt, opts, sticky, func(withDiff bool) entities.ConflictDetail {
+		return s.conflictDetail(repoPath, plan, entry, withDiff)
+	})
+}
+
+// decideConflict is the resolution order shared by every syncer: a "for
+// all" answer given earlier in the run, then --prefer, then the prompt.
+// detail builds the conflict description, with the diff only when it will be
+// shown, since computing it reads both contents.
+func decideConflict(
+	prompt repositories.PromptService,
+	opts PersonalSyncOptions,
+	sticky *entities.ConflictChoice,
+	detail func(withDiff bool) entities.ConflictDetail,
+) entities.ConflictChoice {
 	if *sticky != "" {
 		return *sticky
 	}
@@ -469,13 +484,13 @@ func (s *PersonalSyncer) chooseResolution(
 		return choice
 	}
 	if opts.Preference == entities.PreferNewer {
-		return s.conflictDetail(repoPath, plan, entry, false).NewerSide()
+		return detail(false).NewerSide()
 	}
 	if opts.DryRun || opts.NoPrompt {
 		return entities.ChoiceSkip
 	}
 
-	choice := s.prompt.PromptSyncConflict(s.conflictDetail(repoPath, plan, entry, true))
+	choice := prompt.PromptSyncConflict(detail(true))
 	if choice == entities.ChoiceKeepLocalAll || choice == entities.ChoiceKeepRemoteAll {
 		*sticky = choice
 	}

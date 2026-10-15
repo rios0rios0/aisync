@@ -43,6 +43,7 @@ type PullCommand struct {
 	gitRepo           repositories.GitRepository
 	encryptionService repositories.EncryptionService
 	personalSyncer    *PersonalSyncer
+	transcriptSyncer  *TranscriptSyncer
 	hooksMerger       repositories.Merger
 	settingsMerger    repositories.Merger
 	sectionMerger     repositories.Merger
@@ -61,6 +62,7 @@ func NewPullCommand(
 	gitRepo repositories.GitRepository,
 	encryptionService repositories.EncryptionService,
 	personalSyncer *PersonalSyncer,
+	transcriptSyncer *TranscriptSyncer,
 	hooksMerger repositories.Merger,
 	settingsMerger repositories.Merger,
 	sectionMerger repositories.Merger,
@@ -77,6 +79,7 @@ func NewPullCommand(
 		gitRepo:           gitRepo,
 		encryptionService: encryptionService,
 		personalSyncer:    personalSyncer,
+		transcriptSyncer:  transcriptSyncer,
 		hooksMerger:       hooksMerger,
 		settingsMerger:    settingsMerger,
 		sectionMerger:     sectionMerger,
@@ -134,16 +137,7 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	// only suppresses prompts: unresolved conflicts are skipped, never
 	// overwritten, unless --prefer picks a side.
 	if !opts.SkipPersonal {
-		direction := opts.Direction
-		if direction == "" {
-			direction = entities.SyncIncoming
-		}
-		if _, syncErr := c.personalSyncer.Sync(config, repoPath, PersonalSyncOptions{
-			Direction:  direction,
-			Preference: opts.Preference,
-			NoPrompt:   opts.Force,
-			DryRun:     opts.DryRun,
-		}); syncErr != nil {
+		if syncErr := c.syncPersonal(config, repoPath, opts); syncErr != nil {
 			return syncErr
 		}
 	}
@@ -157,6 +151,30 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	c.finalizeState(state, repoPath)
 
 	fmt.Fprintln(os.Stdout, "Pull complete.")
+	return nil
+}
+
+// syncPersonal reconciles personal files and then conversations.
+func (c *PullCommand) syncPersonal(config *entities.Config, repoPath string, opts PullOptions) error {
+	direction := opts.Direction
+	if direction == "" {
+		direction = entities.SyncIncoming
+	}
+	syncOpts := PersonalSyncOptions{
+		Direction:  direction,
+		Preference: opts.Preference,
+		NoPrompt:   opts.Force,
+		DryRun:     opts.DryRun,
+	}
+	if _, err := c.personalSyncer.Sync(config, repoPath, syncOpts); err != nil {
+		return err
+	}
+	if c.transcriptSyncer == nil {
+		return nil
+	}
+	if _, err := c.transcriptSyncer.Sync(config, repoPath, syncOpts); err != nil {
+		return fmt.Errorf("conversations: %w", err)
+	}
 	return nil
 }
 

@@ -123,26 +123,31 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	)
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
 	promptSvc := ui.NewHuhPromptService()
+	differ := services.NewUnifiedDiffer()
 	personalSyncer := commands.NewPersonalSyncer(
 		manifestRepo, encryptionSvc, atomicApplySvc, promptSvc,
-		services.NewUnifiedDiffer(), infraRepos.NewExecGitRepoHistory(),
+		differ, infraRepos.NewExecGitRepoHistory(),
+	)
+	transcriptSyncer := commands.NewTranscriptSyncer(
+		services.NewGitTranscriptService(encryptionSvc), infraRepos.NewJSONTranscriptBaseRepository(),
+		atomicApplySvc, promptSvc, differ,
 	)
 	pullCmd := commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo, manifestRepo,
-		gitProxy, encryptionSvc, personalSyncer,
+		gitProxy, encryptionSvc, personalSyncer, transcriptSyncer,
 		hooksMerger, settingsMerger, sectionMerger,
 		atomicApplySvc, promptSvc,
 		bundleSvc, bundleStateRepo,
 	)
 	pushCmd := commands.NewPushCommand(
 		configRepo, stateRepo, gitProxy,
-		secretScanner, ndaChecker, bundleSvc, personalSyncer,
+		secretScanner, ndaChecker, bundleSvc, personalSyncer, transcriptSyncer,
 	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
 	diffCmd := commands.NewDiffCommand(
-		configRepo, sourceRepo, diffSvc, personalSyncer, services.NewUnifiedDiffer(), formatter, diffViewer,
+		configRepo, sourceRepo, diffSvc, personalSyncer, differ, formatter, diffViewer,
 	)
 	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc, opSecretRepo)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)

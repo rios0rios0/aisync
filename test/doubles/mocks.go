@@ -1,9 +1,13 @@
 package doubles
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
@@ -857,4 +861,137 @@ func (m *MockSSHAliasRepository) ResolveAliases(hostname string) ([]string, erro
 	m.ResolveAliasesCalls++
 	m.ResolvedHostname = hostname
 	return m.Aliases, m.ResolveAliasesErr
+}
+
+// MockTranscriptService is an in-memory repositories.TranscriptService with
+// real lease semantics: Publish fails with ErrSnapshotMoved when the given
+// snapshot was not fetched from the current state.
+type MockTranscriptService struct {
+	Files map[string]entities.TranscriptFile // current snapshot, by key
+	Blobs map[string][]byte                  // stored path -> plaintext
+	Lease string                             // current branch commit ("" before the first publish)
+
+	// MoveBeforeNextPublish simulates another device publishing between
+	// this device's fetch and publish, once.
+	MoveBeforeNextPublish bool
+	FetchErr              error
+	PublishErr            error
+
+	FetchCalls   int
+	ReadCalls    int
+	PublishCalls int
+	commits      int
+}
+
+func (m *MockTranscriptService) Fetch(_, _, _ string) (*entities.TranscriptSnapshot, error) {
+	m.FetchCalls++
+	if m.FetchErr != nil {
+		return nil, m.FetchErr
+	}
+	snapshot := &entities.TranscriptSnapshot{Lease: m.Lease, Files: make(map[string]entities.TranscriptFile)}
+	maps.Copy(snapshot.Files, m.Files)
+	return snapshot, nil
+}
+
+func (m *MockTranscriptService) Read(_, _ string, file entities.TranscriptFile, _ string) ([]byte, error) {
+	m.ReadCalls++
+	content, ok := m.Blobs[file.Stored]
+	if !ok {
+		return nil, errors.New("not stored: " + file.Key)
+	}
+	return content, nil
+}
+
+func (m *MockTranscriptService) Publish(
+	_, _ string,
+	snapshot *entities.TranscriptSnapshot,
+	_ []string,
+	_, _ string,
+) error {
+	m.PublishCalls++
+	if m.PublishErr != nil {
+		return m.PublishErr
+	}
+	if m.MoveBeforeNextPublish {
+		m.MoveBeforeNextPublish = false
+		m.commits++
+		m.Lease = "moved-" + strconv.Itoa(m.commits)
+		return repositories.ErrSnapshotMoved
+	}
+	if snapshot.Lease != m.Lease {
+		return repositories.ErrSnapshotMoved
+	}
+
+	if m.Blobs == nil {
+		m.Blobs = make(map[string][]byte)
+	}
+	m.Files = make(map[string]entities.TranscriptFile, len(snapshot.Files))
+	for key, file := range snapshot.Files {
+		if file.Content != nil {
+			file.Stored = "stored/" + key
+			m.Blobs[file.Stored] = file.Content
+			file.Content = nil
+		}
+		m.Files[key] = file
+	}
+	m.commits++
+	m.Lease = "commit-" + strconv.Itoa(m.commits)
+	snapshot.Lease = m.Lease
+	return nil
+}
+
+// Seed stores content under key as if another device had published it.
+func (m *MockTranscriptService) Seed(key string, content []byte, modTime time.Time, device string) {
+	if m.Files == nil {
+		m.Files = make(map[string]entities.TranscriptFile)
+	}
+	if m.Blobs == nil {
+		m.Blobs = make(map[string][]byte)
+	}
+	stored := "stored/" + key
+	m.Blobs[stored] = content
+	m.Files[key] = entities.TranscriptFile{
+		Key:      key,
+		Checksum: "sha256:" + hex.EncodeToString(sha256Sum(content)),
+		ModTime:  modTime,
+		Device:   device,
+		Stored:   stored,
+	}
+	if m.Lease == "" {
+		m.commits++
+		m.Lease = "commit-" + strconv.Itoa(m.commits)
+	}
+}
+
+func sha256Sum(content []byte) []byte {
+	sum := sha256.Sum256(content)
+	return sum[:]
+}
+
+// MockTranscriptBaseRepository is an in-memory
+// repositories.TranscriptBaseRepository.
+type MockTranscriptBaseRepository struct {
+	Base      map[string]string
+	LoadErr   error
+	SaveErr   error
+	SaveCalls int
+}
+
+func (m *MockTranscriptBaseRepository) Load(_ string) (map[string]string, error) {
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	base := make(map[string]string, len(m.Base))
+	maps.Copy(base, m.Base)
+	return base, nil
+}
+
+func (m *MockTranscriptBaseRepository) Save(_ string, base map[string]string) error {
+	m.SaveCalls++
+	if m.SaveErr != nil {
+		return m.SaveErr
+	}
+	m.Base = make(map[string]string, len(base))
+	maps.Copy(m.Base, base)
+	return nil
 }

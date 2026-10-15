@@ -23,6 +23,9 @@ type Tool struct {
 	Enabled        bool         `yaml:"enabled"`
 	ExtraAllowlist []string     `yaml:"extra_allowlist,omitempty"`
 	Bundles        []BundleSpec `yaml:"bundles,omitempty"`
+	// Transcripts, when set, syncs the tool's conversations through the
+	// transcript snapshot branch instead of personal/<tool>/.
+	Transcripts *TranscriptSpec `yaml:"transcripts,omitempty"`
 }
 
 // BundleMergeStrategy controls how an extracted bundle merges into a local

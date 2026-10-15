@@ -16,13 +16,14 @@ import (
 // PushCommand reconciles personal files from AI tool directories into the
 // sync repository, commits the result, and pushes it to the remote.
 type PushCommand struct {
-	configRepo     repositories.ConfigRepository
-	stateRepo      repositories.StateRepository
-	gitRepo        repositories.GitRepository
-	secretScanner  repositories.SecretScanner
-	ndaChecker     repositories.NDAContentChecker
-	bundleService  repositories.BundleService
-	personalSyncer *PersonalSyncer
+	configRepo       repositories.ConfigRepository
+	stateRepo        repositories.StateRepository
+	gitRepo          repositories.GitRepository
+	secretScanner    repositories.SecretScanner
+	ndaChecker       repositories.NDAContentChecker
+	bundleService    repositories.BundleService
+	personalSyncer   *PersonalSyncer
+	transcriptSyncer *TranscriptSyncer
 }
 
 // NewPushCommand creates a new PushCommand.
@@ -34,15 +35,17 @@ func NewPushCommand(
 	ndaChecker repositories.NDAContentChecker,
 	bundleService repositories.BundleService,
 	personalSyncer *PersonalSyncer,
+	transcriptSyncer *TranscriptSyncer,
 ) *PushCommand {
 	return &PushCommand{
-		configRepo:     configRepo,
-		stateRepo:      stateRepo,
-		gitRepo:        gitRepo,
-		secretScanner:  secretScanner,
-		ndaChecker:     ndaChecker,
-		bundleService:  bundleService,
-		personalSyncer: personalSyncer,
+		configRepo:       configRepo,
+		stateRepo:        stateRepo,
+		gitRepo:          gitRepo,
+		secretScanner:    secretScanner,
+		ndaChecker:       ndaChecker,
+		bundleService:    bundleService,
+		personalSyncer:   personalSyncer,
+		transcriptSyncer: transcriptSyncer,
 	}
 }
 
@@ -107,12 +110,13 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 	if bundleErr != nil {
 		return bundleErr
 	}
-	report, err := c.personalSyncer.Sync(config, repoPath, PersonalSyncOptions{
+	syncOpts := PersonalSyncOptions{
 		Direction:  direction,
 		Preference: opts.Preference,
 		NoPrompt:   opts.NoPrompt,
 		DryRun:     opts.DryRun,
-	})
+	}
+	report, err := c.personalSyncer.Sync(config, repoPath, syncOpts)
 	if err != nil {
 		return err
 	}
@@ -128,11 +132,17 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 			encrypted,
 			bundleCount,
 		)
-		return c.scanContent(repoPath, config, report.Plaintext, opts)
+		if err = c.scanContent(repoPath, config, report.Plaintext, opts); err != nil {
+			return err
+		}
+		return c.syncTranscripts(config, repoPath, syncOpts)
 	}
 
 	if err = c.commitAndPush(repoPath, commitMsg, opts, config); err != nil {
 		return err
+	}
+	if err = c.syncTranscripts(config, repoPath, syncOpts); err != nil {
+		return fmt.Errorf("personal files were pushed, but conversations were not: %w", err)
 	}
 
 	if updateErr := c.updateState(repoPath); updateErr != nil {
@@ -141,6 +151,16 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 
 	fmt.Fprintln(os.Stdout, "Push complete.")
 	return nil
+}
+
+// syncTranscripts publishes conversations to their snapshot branch, which is
+// pushed separately from the commit on the main branch.
+func (c *PushCommand) syncTranscripts(config *entities.Config, repoPath string, opts PersonalSyncOptions) error {
+	if c.transcriptSyncer == nil {
+		return nil
+	}
+	_, err := c.transcriptSyncer.Sync(config, repoPath, opts)
+	return err
 }
 
 // ageSuffix is the filename suffix the PersonalSyncer appends to files that

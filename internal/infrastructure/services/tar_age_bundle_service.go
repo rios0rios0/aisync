@@ -180,7 +180,7 @@ func (s *TarAgeBundleService) loadOrDeriveNameKey(identityPath string) ([]byte, 
 	}
 	s.nameKeysMu.RUnlock()
 
-	derived, err := deriveBundleNameKey(cacheKey)
+	derived, err := deriveNameKey(cacheKey, bundleNameKeyInfoV1)
 	if err != nil {
 		return nil, err
 	}
@@ -195,16 +195,17 @@ func (s *TarAgeBundleService) loadOrDeriveNameKey(identityPath string) ([]byte, 
 	return derived, nil
 }
 
-// deriveBundleNameKey reads the age identity file, gathers every line
-// that begins with `AGE-SECRET-KEY-` as input keying material, and
-// HKDF-extracts a 32-byte HMAC key namespaced by [bundleNameKeyInfoV1].
+// deriveNameKey reads the age identity file, gathers every line that
+// begins with `AGE-SECRET-KEY-` as input keying material, and
+// HKDF-extracts a 32-byte HMAC key namespaced by info, so bundle names
+// ([bundleNameKeyInfoV1]) and transcript names use independent keys.
 //
 // Using the literal Bech32-encoded secret key string as IKM avoids
 // pulling a Bech32 decoder into the bundle service while still binding
 // the derivation to the secret material — anyone who can read the
 // identity file can already decrypt every bundle, so deriving an HMAC
 // key from it adds no new exposure.
-func deriveBundleNameKey(identityPath string) ([]byte, error) {
+func deriveNameKey(identityPath, info string) ([]byte, error) {
 	file, err := os.Open(identityPath)
 	if err != nil {
 		return nil, fmt.Errorf("open identity file %s: %w", identityPath, err)
@@ -227,7 +228,7 @@ func deriveBundleNameKey(identityPath string) ([]byte, error) {
 		return nil, fmt.Errorf("no AGE-SECRET-KEY entry found in identity file %s", identityPath)
 	}
 
-	reader := hkdf.New(sha256.New, ikm, nil, []byte(bundleNameKeyInfoV1))
+	reader := hkdf.New(sha256.New, ikm, nil, []byte(info))
 	key := make([]byte, bundleNameKeyLength)
 	if _, readErr := io.ReadFull(reader, key); readErr != nil {
 		return nil, fmt.Errorf("hkdf expand: %w", readErr)

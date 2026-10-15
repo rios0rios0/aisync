@@ -32,7 +32,7 @@ func newPushCmd(
 		&doubles.MockTextDiffer{}, &doubles.MockRepoHistory{},
 	)
 	return commands.NewPushCommand(
-		configRepo, stateRepo, gitRepo, secretScanner, ndaChecker, bundleService, personalSyncer,
+		configRepo, stateRepo, gitRepo, secretScanner, ndaChecker, bundleService, personalSyncer, nil,
 	)
 }
 

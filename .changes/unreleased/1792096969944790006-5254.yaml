@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed pulled memory files losing their CRLF line endings: conversations and memory files are now written byte for byte, like personal files'
+time: '2026-10-15T20:42:49.944686931Z'

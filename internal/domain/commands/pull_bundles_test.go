@@ -23,7 +23,7 @@ func newPullCommandWithBundles(
 	prompt repositories.PromptService,
 ) *commands.PullCommand {
 	return commands.NewPullCommand(
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		prompt,
 		bundleSvc, stateRepo,
 	)

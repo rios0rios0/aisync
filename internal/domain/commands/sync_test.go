@@ -35,6 +35,7 @@ func newTestPullCommand(
 			manifestRepo, encryptionService, applyService, promptService,
 			&doubles.MockTextDiffer{}, &doubles.MockRepoHistory{},
 		),
+		nil,
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
