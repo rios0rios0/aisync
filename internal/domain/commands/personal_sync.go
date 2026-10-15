@@ -58,6 +58,9 @@ type PersonalSyncReport struct {
 	ConflictsSkipped int
 	PendingIncoming  int
 	PendingOutgoing  int
+	// Encrypted counts plaintext repo files stored encrypted because they
+	// match .aisyncencrypt, although their content did not change.
+	Encrypted int
 	// Plaintext maps every repo-relative path this run wrote, or in a dry
 	// run would write, without encryption to its content.
 	Plaintext map[string][]byte
@@ -186,6 +189,12 @@ func (s *PersonalSyncer) Sync(
 		if err := s.executeTool(state, opts); err != nil {
 			return report, fmt.Errorf("failed to sync %s: %w", plan.name, err)
 		}
+	}
+
+	if opts.Direction.Allows(entities.SyncActionPush) {
+		report.Encrypted = s.encryptStoredPlaintext(
+			repoPath, config, encryptPatterns, outgoingPaths(plans, opts), opts.DryRun,
+		)
 	}
 
 	if !opts.DryRun {
@@ -924,6 +933,9 @@ func printSyncSummary(report *PersonalSyncReport) {
 	}
 	if pending := report.PendingIncoming + report.PendingOutgoing; pending > 0 {
 		fmt.Fprintf(os.Stdout, ", %d change(s) left for the other direction", pending)
+	}
+	if report.Encrypted > 0 {
+		fmt.Fprintf(os.Stdout, ", %d plaintext file(s) encrypted in the repo", report.Encrypted)
 	}
 	fmt.Fprintln(os.Stdout, ".")
 	if report.ConflictsSkipped > 0 {

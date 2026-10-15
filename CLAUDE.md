@@ -91,7 +91,7 @@ On interruption, the next invocation detects the incomplete journal and resumes 
 - **Direction**: `push` runs outgoing actions, `pull` incoming ones, and `sync` both in its push phase (its pull phase passes `SkipPersonal`, so each conflict is asked once). A conflict the user resolves runs in full whatever the direction.
 - **Conflict detail**: local mtime, the last repo commit touching the path (`RepoHistory`, `git log -1`), and a unified diff (`TextDiffer`, `services/unified_differ.go` on top of go-diff). The huh prompt pages long diffs; without a terminal it reads answers from stdin and skips at end of input.
 - **Scope**: the same filter applies to all three sides: the tool allowlist, `.aisyncignore`, and paths owned by external sources. Out-of-scope paths are never touched. Local files are read through an `os.Root`, so a symlink is followed only when it is relative and stays inside the tool directory.
-- **Encryption**: `.age` copies are decrypted for comparison, so an unchanged encrypted file is never rewritten; a copy this device cannot decrypt is left alone on both sides. The owner-execute bit is carried to the repo and restored on pull.
+- **Encryption**: `.age` copies are decrypted for comparison, so an unchanged encrypted file is never rewritten; a copy this device cannot decrypt is left alone on both sides. The owner-execute bit is carried to the repo and restored on pull. A push or sync also encrypts in place every plaintext file under `personal/` that matches `.aisyncencrypt`, including those of tools not installed on the device, so a pattern added later protects the files already committed (`commands/personal_encryption.go`).
 
 ### Bundle Sync
 

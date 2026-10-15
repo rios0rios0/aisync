@@ -85,7 +85,7 @@ Like chezmoi expects a `dotfiles` repo, aisync expects an `aifiles` repo:
 | Local clone | `~/.local/share/chezmoi/` | `~/.config/aisync/repo/` |
 | Shorthand | `chezmoi init <user>` | `aisync init <user>` |
 
-The `aifiles` repo **can** be public — bundle contents (memories, project history, MCP configs, local settings) are age-encrypted, bundle filenames are HMAC-derived from the device's identity (so guessed project names can't be confirmed against the public-clone view), and bundle ciphertext is padded to fixed power-of-2 size buckets (so file sizes don't profile per-project activity). What still rides as plaintext: rules, agents, commands, hooks, scripts, and skills under `personal/<tool>/` — review those before flipping visibility.
+The `aifiles` repo **can** be public — bundle contents (memories, project history, MCP configs, local settings) are age-encrypted, bundle filenames are HMAC-derived from the device's identity (so guessed project names can't be confirmed against the public-clone view), and bundle ciphertext is padded to fixed power-of-2 size buckets (so file sizes don't profile per-project activity). What still rides as plaintext: rules, agents, commands, hooks, scripts, and skills under `personal/<tool>/` — review those before flipping visibility, or add `personal/**` to `.aisyncencrypt` to store every personal file encrypted. Plaintext files already in the repo that match a pattern are encrypted in place on the next push or sync.
 
 ## Usage
 

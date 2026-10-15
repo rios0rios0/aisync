@@ -205,7 +205,8 @@ Test description patterns by layer:
      to basename matching.
   2. **`.aisyncignore`** — gitignore-syntax additional exclusions.
   3. **`.aisyncencrypt` + age** — paths matching the patterns are
-     written as ciphertext to the configured recipients.
+     written as ciphertext to the configured recipients; plaintext copies
+     already committed are encrypted in place on the next push or sync.
   4. **Content scanners** — run on every uncommitted plaintext file under
      `personal/` (exactly what the commit would publish), so a finding in a
      file that is already committed does not block unrelated pushes —

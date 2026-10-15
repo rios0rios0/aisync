@@ -116,9 +116,14 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 	c.warnLegacyRepoFiles(config, repoPath)
 
 	if opts.DryRun {
-		fmt.Fprintf(os.Stdout,
-			"\n[dry-run] %d file(s) to send to the repo, %d to delete there, %d project bundle(s)\n",
-			report.Pushed, report.DeletedRepo, bundleCount)
+		fmt.Fprintf(
+			os.Stdout,
+			"\n[dry-run] %d file(s) to send to the repo, %d to delete there, %d to encrypt there, %d project bundle(s)\n",
+			report.Pushed,
+			report.DeletedRepo,
+			report.Encrypted,
+			bundleCount,
+		)
 		return c.scanContent(repoPath, config, report.Plaintext, opts)
 	}
 
@@ -197,7 +202,7 @@ func (c *PushCommand) collectLegacyHitsForTool(repoPath, toolName string, extra 
 			checkPath = checkPath[:len(checkPath)-len(ageSuffix)]
 		}
 		// .gitkeep files are the repo's own scaffolding, not obsolete content.
-		if filepath.Base(relPath) == ".gitkeep" || entities.IsSyncable(toolName, checkPath, extra) {
+		if filepath.Base(relPath) == gitkeepName || entities.IsSyncable(toolName, checkPath, extra) {
 			return nil
 		}
 		hits = append(hits, legacyHit{
