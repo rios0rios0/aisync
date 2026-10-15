@@ -640,24 +640,20 @@ func TestPersonalSyncer_ExecutableBit(t *testing.T) {
 func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 	t.Parallel()
 
-	outgoing := commands.PersonalSyncOptions{Direction: entities.SyncOutgoing}
 	encryptAll := "personal/**\n"
 
-	t.Run("should encrypt an in-sync plaintext repo copy that now matches .aisyncencrypt", func(t *testing.T) {
+	t.Run("should encrypt a plaintext repo copy that matches .aisyncencrypt", func(t *testing.T) {
 		t.Parallel()
 		// given
 		f := newSyncFixture(t)
 		writeFile(t, filepath.Join(f.repoPath, ".aisyncencrypt"), encryptAll)
-		f.writeLocal("rules/go.md", "rule")
 		f.writeRepo("rules/go.md", "rule")
 
 		// when
-		report, err := f.sync(outgoing)
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, report.Encrypted)
-		assert.Equal(t, 0, report.Pushed)
+		assert.Equal(t, 1, encrypted)
 		stored, ok := f.readRepo("rules/go.md.age")
 		require.True(t, ok)
 		assert.Equal(t, "ciphertext", stored)
@@ -675,13 +671,28 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		writeFile(t, cursorRule, "rule")
 
 		// when
-		report, err := f.sync(outgoing)
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, report.Encrypted)
+		assert.Equal(t, 1, encrypted)
 		assert.FileExists(t, cursorRule+".age")
 		assert.NoFileExists(t, cursorRule)
+	})
+
+	t.Run("should leave files that match no pattern in plaintext", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		writeFile(t, filepath.Join(f.repoPath, ".aisyncencrypt"), "personal/**/settings.local.json\n")
+		f.writeRepo("rules/go.md", "rule")
+
+		// when
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
+
+		// then
+		assert.Equal(t, 0, encrypted)
+		_, plaintextLeft := f.readRepo("rules/go.md")
+		assert.True(t, plaintextLeft)
 	})
 
 	t.Run("should keep the executable bit and leave .gitkeep placeholders alone", func(t *testing.T) {
@@ -694,11 +705,10 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		f.writeRepo("rules/.gitkeep", "")
 
 		// when
-		report, err := f.sync(outgoing)
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, report.Encrypted)
+		assert.Equal(t, 1, encrypted)
 		info, statErr := os.Stat(filepath.Join(f.repoPath, "personal", "claude", "scripts", "run.sh.age"))
 		require.NoError(t, statErr)
 		assert.NotZero(t, info.Mode().Perm()&0o100)
@@ -706,7 +716,7 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		assert.True(t, gitkeepLeft)
 	})
 
-	t.Run("should only list the files in a dry run", func(t *testing.T) {
+	t.Run("should only count the files in a dry run", func(t *testing.T) {
 		t.Parallel()
 		// given
 		f := newSyncFixture(t)
@@ -714,47 +724,11 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		f.writeRepo("rules/go.md", "rule")
 
 		// when
-		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncOutgoing, DryRun: true})
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, true)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, report.Encrypted)
+		assert.Equal(t, 1, encrypted)
 		assert.Equal(t, 0, f.encryption.EncryptCalls)
-		_, plaintextLeft := f.readRepo("rules/go.md")
-		assert.True(t, plaintextLeft)
-	})
-
-	t.Run("should not count a file the run already writes encrypted", func(t *testing.T) {
-		t.Parallel()
-		// given
-		f := newSyncFixture(t)
-		writeFile(t, filepath.Join(f.repoPath, ".aisyncencrypt"), encryptAll)
-		f.base("rules/go.md", "old rule")
-		f.writeRepo("rules/go.md", "old rule")
-		f.writeLocal("rules/go.md", "new rule")
-
-		// when
-		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncOutgoing, DryRun: true})
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, 1, report.Pushed)
-		assert.Equal(t, 0, report.Encrypted)
-	})
-
-	t.Run("should leave plaintext repo files alone when pulling", func(t *testing.T) {
-		t.Parallel()
-		// given
-		f := newSyncFixture(t)
-		writeFile(t, filepath.Join(f.repoPath, ".aisyncencrypt"), encryptAll)
-		f.writeRepo("rules/go.md", "rule")
-
-		// when
-		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncIncoming})
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, 0, report.Encrypted)
 		_, plaintextLeft := f.readRepo("rules/go.md")
 		assert.True(t, plaintextLeft)
 	})
@@ -768,11 +742,10 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		f.writeRepo("rules/go.md", "rule")
 
 		// when
-		report, err := f.sync(outgoing)
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 0, report.Encrypted)
+		assert.Equal(t, 0, encrypted)
 		assert.Equal(t, 0, f.encryption.EncryptCalls)
 	})
 
@@ -788,11 +761,10 @@ func TestPersonalSyncer_EncryptStoredPlaintext(t *testing.T) {
 		require.NoError(t, os.Symlink(outside, link))
 
 		// when
-		report, err := f.sync(outgoing)
+		encrypted := f.syncer().EncryptStoredPlaintext(f.config, f.repoPath, false)
 
 		// then
-		require.NoError(t, err)
-		assert.Equal(t, 0, report.Encrypted)
+		assert.Equal(t, 0, encrypted)
 		assert.Equal(t, 0, f.encryption.EncryptCalls)
 		assert.NoFileExists(t, link+".age")
 	})

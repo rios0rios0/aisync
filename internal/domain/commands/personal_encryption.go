@@ -17,30 +17,23 @@ import (
 // gitkeepName is the placeholder that keeps an empty directory in the repo.
 const gitkeepName = ".gitkeep"
 
-// encryptStoredPlaintext stores as ciphertext every plaintext file under
+// EncryptStoredPlaintext stores as ciphertext every plaintext file under
 // personal/ that matches .aisyncencrypt. A file is encrypted when it is
 // written, so without this pass a pattern added later would leave the copies
 // already committed in plaintext, including those of tools not installed on
-// this device. Paths in handled, which this run writes or deletes itself, are
-// skipped. A dry run only lists the files. It returns how many files it
+// this device. A dry run only lists the files. It returns how many files it
 // encrypted, or would encrypt.
-func (s *PersonalSyncer) encryptStoredPlaintext(
-	repoPath string,
-	config *entities.Config,
-	patterns *entities.EncryptPatterns,
-	handled map[string]bool,
-	dryRun bool,
-) int {
+func (s *PersonalSyncer) EncryptStoredPlaintext(config *entities.Config, repoPath string, dryRun bool) int {
 	if len(config.Encryption.Recipients) == 0 {
 		return 0
 	}
 
+	patterns := readEncryptPatterns(repoPath)
 	personalDir := filepath.Join(repoPath, "personal")
 	var candidates []string
 	walkRoot(personalDir, func(_ fs.FS, rel string, d fs.DirEntry) {
-		stored := path.Join("personal", rel)
 		if d.Type().IsRegular() && !strings.HasSuffix(rel, ageSuffix) && path.Base(rel) != gitkeepName &&
-			!handled[stored] && patterns.Matches(stored) {
+			patterns.Matches(path.Join("personal", rel)) {
 			candidates = append(candidates, rel)
 		}
 	})
@@ -105,18 +98,4 @@ func (s *PersonalSyncer) encryptRepoFile(root *os.Root, name string, recipients 
 		return err
 	}
 	return root.Remove(name)
-}
-
-// outgoingPaths returns the repo paths this run writes or deletes through the
-// plans, which the encryption pass leaves to them.
-func outgoingPaths(plans []*toolPlan, opts PersonalSyncOptions) map[string]bool {
-	paths := make(map[string]bool)
-	for _, plan := range plans {
-		for _, entry := range plan.entries {
-			if entry.Action.IsOutgoing() && (opts.Direction.Allows(entry.Action) || plan.resolved[entry.Path]) {
-				paths[path.Join("personal", plan.name, entry.Path)] = true
-			}
-		}
-	}
-	return paths
 }

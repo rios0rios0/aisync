@@ -622,13 +622,19 @@ type MockRepoChange struct {
 	Subject string
 }
 
-func (m *MockRepoHistory) LastChange(_, relPath string) (time.Time, string, error) {
+// LastChange reports the change recorded for the first of relPaths that has
+// one.
+func (m *MockRepoHistory) LastChange(_ string, relPaths ...string) (time.Time, string, error) {
 	m.Calls++
 	if m.Err != nil {
 		return time.Time{}, "", m.Err
 	}
-	change := m.Changes[relPath]
-	return change.When, change.Subject, nil
+	for _, relPath := range relPaths {
+		if change, ok := m.Changes[relPath]; ok {
+			return change.When, change.Subject, nil
+		}
+	}
+	return time.Time{}, "", nil
 }
 
 func (m *MockPromptService) PromptFileAction(_, _ string) string {

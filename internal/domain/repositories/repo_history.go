@@ -6,8 +6,11 @@ import "time"
 // conflict prompt can say when and by which device the repo side changed.
 type RepoHistory interface {
 	// LastChange returns the commit time and subject of the most recent
-	// commit that touched relPath (slash-separated, relative to the repository
-	// root at repoPath). It returns a zero time and an empty subject when the
-	// path has no history or the history is unavailable.
-	LastChange(repoPath, relPath string) (time.Time, string, error)
+	// commit that touched any of relPaths (slash-separated, relative to the
+	// repository root at repoPath), skipping commits that carry the
+	// entities.ChangeTrailerKey trailer with entities.ChangeEncryptionOnly,
+	// since those only changed how a file is stored. It returns a zero time
+	// and an empty subject when the paths have no such history or the history
+	// is unavailable.
+	LastChange(repoPath string, relPaths ...string) (time.Time, string, error)
 }

@@ -88,3 +88,90 @@ func TestExecGitRepoHistory_LastChange(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestExecGitRepoHistory_LastChange_EncryptionOnly(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should skip an encryption-only commit and find the change under the plaintext name", func(t *testing.T) {
+		t.Parallel()
+		// given
+		_, dir := initTempRepo(t)
+		changed := time.Date(2026, 9, 25, 13, 0, 0, 0, time.UTC)
+		encrypted := changed.Add(20 * 24 * time.Hour)
+		commitFile(t, dir, "personal/claude/rules/go.md", "rule", "feat(rules): updated the Go rule", changed)
+		out, rmErr := exec.Command("git", "-C", dir, "rm", "-q", "personal/claude/rules/go.md").CombinedOutput()
+		require.NoError(t, rmErr, string(out))
+		commitFile(
+			t,
+			dir,
+			"personal/claude/rules/go.md.age",
+			"ciphertext",
+			"sync(laptop): encrypted 1 personal file(s) in place\n\nAisync-Change: encryption-only",
+			encrypted,
+		)
+		history := repositories.NewExecGitRepoHistory()
+
+		// when
+		when, subject, err := history.LastChange(dir, "personal/claude/rules/go.md", "personal/claude/rules/go.md.age")
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, changed.Equal(when), "expected %s, got %s", changed, when)
+		assert.Equal(t, "feat(rules): updated the Go rule", subject)
+	})
+
+	t.Run("should report a later content change of the encrypted copy", func(t *testing.T) {
+		t.Parallel()
+		// given
+		_, dir := initTempRepo(t)
+		first := time.Date(2026, 9, 25, 13, 0, 0, 0, time.UTC)
+		commitFile(
+			t,
+			dir,
+			"personal/claude/rules/go.md.age",
+			"ciphertext v1",
+			"sync(laptop): encrypted 1 personal file(s) in place\n\nAisync-Change: encryption-only",
+			first,
+		)
+		commitFile(
+			t,
+			dir,
+			"personal/claude/rules/go.md.age",
+			"ciphertext v2",
+			"sync(desktop): updated personal configurations",
+			first.Add(time.Hour),
+		)
+		history := repositories.NewExecGitRepoHistory()
+
+		// when
+		when, subject, err := history.LastChange(dir, "personal/claude/rules/go.md", "personal/claude/rules/go.md.age")
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, first.Add(time.Hour).Equal(when))
+		assert.Equal(t, "sync(desktop): updated personal configurations", subject)
+	})
+
+	t.Run("should return a zero time when every commit only encrypted the file", func(t *testing.T) {
+		t.Parallel()
+		// given
+		_, dir := initTempRepo(t)
+		commitFile(
+			t,
+			dir,
+			"personal/claude/rules/go.md.age",
+			"ciphertext",
+			"sync(laptop): encrypted 1 personal file(s) in place\n\nAisync-Change: encryption-only",
+			time.Now(),
+		)
+		history := repositories.NewExecGitRepoHistory()
+
+		// when
+		when, subject, err := history.LastChange(dir, "personal/claude/rules/go.md.age")
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, when.IsZero())
+		assert.Empty(t, subject)
+	})
+}

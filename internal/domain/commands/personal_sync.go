@@ -58,9 +58,6 @@ type PersonalSyncReport struct {
 	ConflictsSkipped int
 	PendingIncoming  int
 	PendingOutgoing  int
-	// Encrypted counts plaintext repo files stored encrypted because they
-	// match .aisyncencrypt, although their content did not change.
-	Encrypted int
 	// Plaintext maps every repo-relative path this run wrote, or in a dry
 	// run would write, without encryption to its content.
 	Plaintext map[string][]byte
@@ -189,12 +186,6 @@ func (s *PersonalSyncer) Sync(
 		if err := s.executeTool(state, opts); err != nil {
 			return report, fmt.Errorf("failed to sync %s: %w", plan.name, err)
 		}
-	}
-
-	if opts.Direction.Allows(entities.SyncActionPush) {
-		report.Encrypted = s.encryptStoredPlaintext(
-			repoPath, config, encryptPatterns, outgoingPaths(plans, opts), opts.DryRun,
-		)
 	}
 
 	if !opts.DryRun {
@@ -520,25 +511,18 @@ func (s *PersonalSyncer) conflictDetail(
 	return detail
 }
 
-// remoteChange returns when the repo copy of rel last changed and the
-// subject of that commit. A path deleted from the repo is looked up under
-// both its plaintext and encrypted names, since either may have been removed.
+// remoteChange returns when the content of the repo copy of rel last changed
+// and the subject of that commit. Both stored names are searched together,
+// so a file encrypted in place, or deleted under either name, keeps the date
+// of its last real change.
 func (s *PersonalSyncer) remoteChange(repoPath string, plan *toolPlan, rel string) (time.Time, string) {
-	candidates := []string{rel, rel + ageSuffix}
-	if remote, ok := plan.remote[rel]; ok {
-		candidates = []string{remote.storedPath}
+	plain := path.Join("personal", plan.name, rel)
+	when, subject, err := s.history.LastChange(repoPath, plain, plain+ageSuffix)
+	if err != nil {
+		logger.Debugf("no history for %s/%s: %v", plan.name, rel, err)
+		return time.Time{}, ""
 	}
-	for _, stored := range candidates {
-		when, subject, err := s.history.LastChange(repoPath, path.Join("personal", plan.name, stored))
-		if err != nil {
-			logger.Debugf("no history for %s/%s: %v", plan.name, stored, err)
-			continue
-		}
-		if !when.IsZero() {
-			return when, subject
-		}
-	}
-	return time.Time{}, ""
+	return when, subject
 }
 
 // executionState carries one tool's run: its plan and configuration, the
@@ -933,9 +917,6 @@ func printSyncSummary(report *PersonalSyncReport) {
 	}
 	if pending := report.PendingIncoming + report.PendingOutgoing; pending > 0 {
 		fmt.Fprintf(os.Stdout, ", %d change(s) left for the other direction", pending)
-	}
-	if report.Encrypted > 0 {
-		fmt.Fprintf(os.Stdout, ", %d plaintext file(s) encrypted in the repo", report.Encrypted)
 	}
 	fmt.Fprintln(os.Stdout, ".")
 	if report.ConflictsSkipped > 0 {

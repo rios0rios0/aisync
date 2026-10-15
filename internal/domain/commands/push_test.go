@@ -1297,3 +1297,80 @@ func TestPushCommand_LegacyRepoFiles(t *testing.T) {
 		assert.Equal(t, []string{"personal/claude/projects/old.jsonl"}, hits)
 	})
 }
+
+func TestPushCommand_EncryptInPlace(t *testing.T) {
+	t.Parallel()
+
+	newFixture := func(t *testing.T, clean bool) (*commands.PushCommand, *doubles.MockGitRepository, string) {
+		t.Helper()
+		repoPath := filepath.Join(t.TempDir(), "repo")
+		writeFile(t, filepath.Join(repoPath, ".aisyncencrypt"), "personal/**\n")
+		writeFile(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc"), "rule")
+		config := &entities.Config{
+			Tools:      map[string]entities.Tool{},
+			Encryption: entities.EncryptionConfig{Recipients: []string{"age1recipient"}},
+		}
+		gitRepo := &doubles.MockGitRepository{HasRemoteVal: true, IsCleanVal: clean}
+		cmd := newPushCmd(
+			&doubles.MockConfigRepository{Config: config},
+			&doubles.MockStateRepository{State: entities.NewState("test-device"), ExistsVal: true},
+			gitRepo,
+			&doubles.MockEncryptionService{EncryptedData: []byte("ciphertext")},
+			&doubles.MockManifestRepository{},
+			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
+		)
+		return cmd, gitRepo, repoPath
+	}
+
+	t.Run("should commit files encrypted in place on their own with the encryption-only trailer", func(t *testing.T) {
+		t.Parallel()
+		// given
+		cmd, gitRepo, repoPath := newFixture(t, true)
+
+		// when
+		err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "", commands.PushOptions{})
+
+		// then
+		require.NoError(t, err)
+		assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc.age"))
+		assert.Equal(t, 1, gitRepo.CommitAllCalls)
+		assert.Contains(t, gitRepo.CommitMsg, "encrypted 1 personal file(s) in place")
+		assert.Contains(t, gitRepo.CommitMsg, "\n\nAisync-Change: encryption-only")
+		assert.Equal(t, 1, gitRepo.PushCalls)
+	})
+
+	t.Run(
+		"should leave files encrypted in place to the main commit when other changes are pending",
+		func(t *testing.T) {
+			t.Parallel()
+			// given
+			cmd, gitRepo, repoPath := newFixture(t, false)
+
+			// when
+			err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "main commit", commands.PushOptions{})
+
+			// then
+			require.NoError(t, err)
+			assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc.age"))
+			assert.Equal(t, 1, gitRepo.CommitAllCalls)
+			assert.Equal(t, "main commit", gitRepo.CommitMsg)
+		},
+	)
+
+	t.Run("should change nothing in a dry run", func(t *testing.T) {
+		t.Parallel()
+		// given
+		cmd, gitRepo, repoPath := newFixture(t, true)
+
+		// when
+		err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "", commands.PushOptions{DryRun: true})
+
+		// then
+		require.NoError(t, err)
+		assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc"))
+		assert.Equal(t, 0, gitRepo.CommitAllCalls)
+		assert.Equal(t, 0, gitRepo.PushCalls)
+	})
+}

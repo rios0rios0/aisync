@@ -94,14 +94,18 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 		}
 	}
 
-	bundleCount, bundleErr := c.produceBundles(config, repoPath, opts.DryRun)
-	if bundleErr != nil {
-		return bundleErr
-	}
-
 	direction := opts.Direction
 	if direction == "" {
 		direction = entities.SyncOutgoing
+	}
+	encrypted, err := c.encryptStoredPlaintext(config, repoPath, direction, opts.DryRun)
+	if err != nil {
+		return err
+	}
+
+	bundleCount, bundleErr := c.produceBundles(config, repoPath, opts.DryRun)
+	if bundleErr != nil {
+		return bundleErr
 	}
 	report, err := c.personalSyncer.Sync(config, repoPath, PersonalSyncOptions{
 		Direction:  direction,
@@ -121,7 +125,7 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 			"\n[dry-run] %d file(s) to send to the repo, %d to delete there, %d to encrypt there, %d project bundle(s)\n",
 			report.Pushed,
 			report.DeletedRepo,
-			report.Encrypted,
+			encrypted,
 			bundleCount,
 		)
 		return c.scanContent(repoPath, config, report.Plaintext, opts)
@@ -234,6 +238,47 @@ func logLegacyWarning(repoPath string, legacy []legacyHit) {
 		}
 		logger.Warnf("    %s \\", hit.fullPath)
 	}
+}
+
+// encryptStoredPlaintext encrypts in place the plaintext personal files that
+// match .aisyncencrypt. When the repo had no other uncommitted change, it
+// commits them on their own with the encryption-only trailer, so history
+// lookups keep each file's last real change instead of this commit. With
+// other changes pending, the files ride in the main commit, which is
+// scanned, rather than sweeping unscanned plaintext into this one.
+func (c *PushCommand) encryptStoredPlaintext(
+	config *entities.Config,
+	repoPath string,
+	direction entities.SyncDirection,
+	dryRun bool,
+) (int, error) {
+	if !direction.Allows(entities.SyncActionPush) || len(config.Encryption.Recipients) == 0 {
+		return 0, nil
+	}
+	if dryRun {
+		return c.personalSyncer.EncryptStoredPlaintext(config, repoPath, true), nil
+	}
+
+	clean, err := c.gitRepo.IsClean()
+	if err != nil {
+		return 0, fmt.Errorf("failed to check git status: %w", err)
+	}
+	encrypted := c.personalSyncer.EncryptStoredPlaintext(config, repoPath, false)
+	if encrypted == 0 {
+		return 0, nil
+	}
+	fmt.Fprintf(os.Stdout, "Encrypted %d plaintext personal file(s) in the repo.\n", encrypted)
+	if !clean {
+		return encrypted, nil
+	}
+
+	hostname, _ := os.Hostname()
+	message := fmt.Sprintf("sync(%s): encrypted %d personal file(s) in place\n\n%s: %s",
+		hostname, encrypted, entities.ChangeTrailerKey, entities.ChangeEncryptionOnly)
+	if err = c.gitRepo.CommitAll(message); err != nil {
+		return encrypted, fmt.Errorf("failed to commit the encrypted files: %w", err)
+	}
+	return encrypted, nil
 }
 
 // commitAndPush scans the plaintext files about to be committed (secret
