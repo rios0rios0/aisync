@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed the secret scanner flagging connection strings made only of variable references, such as `"${DATABASE_HOST}:${DATABASE_PORT}"`'
+time: '2026-10-15T19:40:56.071005195Z'

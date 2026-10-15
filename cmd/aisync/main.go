@@ -35,10 +35,10 @@ func main() {
 		}
 
 		useSystemGit, _ := cmd.Flags().GetBool("use-system-git")
-		if useSystemGit {
+		if useSystemGit || controllers.ConfigWantsSystemGit(cmd) {
 			repo, err := controllers.NewExecGitRepository()
 			if err != nil {
-				logger.Fatalf("--use-system-git: %v", err)
+				logger.Fatalf("--use-system-git (or sync.use_system_git): %v", err)
 			}
 			setGitImpl(repo)
 		}

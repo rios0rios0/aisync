@@ -1,6 +1,7 @@
 package commands_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,296 +13,211 @@ import (
 	"github.com/rios0rios0/aisync/test/doubles"
 )
 
+// newDiffCmd wires a DiffCommand around a sync fixture, with a viewer that
+// records what it would page.
+func newDiffCmd(
+	f *syncFixture,
+	sourceRepo *doubles.MockSourceRepository,
+	diffService *doubles.MockDiffService,
+) (*commands.DiffCommand, *doubles.MockDiffViewer, *doubles.MockConfigRepository) {
+	viewer := &doubles.MockDiffViewer{}
+	configRepo := &doubles.MockConfigRepository{Config: f.config}
+	cmd := commands.NewDiffCommand(
+		configRepo, sourceRepo, diffService, f.syncer(), &doubles.MockTextDiffer{},
+		&entities.PlainFormatter{}, viewer,
+	)
+	return cmd, viewer, configRepo
+}
+
+// sharedSource configures one external source that delivers one changed file.
+func sharedSource(f *syncFixture) (*doubles.MockSourceRepository, *doubles.MockDiffService) {
+	f.config.Sources = []entities.Source{{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"}}
+	sourceRepo := &doubles.MockSourceRepository{
+		Result: &repositories.FetchResult{Files: map[string][]byte{"shared/claude/rules/test.md": []byte("# Test")}},
+	}
+	diffService := &doubles.MockDiffService{SharedDiff: []entities.FileChange{
+		{Path: "shared/claude/rules/test.md", Direction: entities.ChangeAdded, Source: "guide"},
+	}}
+	return sourceRepo, diffService
+}
+
 func TestDiffCommand_Execute(t *testing.T) {
-	t.Run("should display changes when shared diff has results", func(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should show changes arriving from external sources", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
-				},
-				Tools: map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{
-			Result: &repositories.FetchResult{
-				Files: map[string][]byte{
-					"shared/claude/rules/test.md": []byte("# Test"),
-				},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			SharedDiff: []entities.FileChange{
-				{
-					Path:      "shared/claude/rules/test.md",
-					Direction: entities.ChangeAdded,
-					Source:    "guide",
-				},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		sourceRepo, diffService := sharedSource(f)
+		cmd, viewer, _ := newDiffCmd(f, sourceRepo, diffService)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Summary: true,
-		})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{})
 
 		// then
 		require.NoError(t, err)
+		require.Len(t, viewer.Shown, 1)
+		assert.Contains(t, viewer.Shown[0], "External sources:")
+		assert.Contains(t, viewer.Shown[0], "shared/claude/rules/test.md")
 	})
 
-	t.Run("should print no changes message when diff is empty", func(t *testing.T) {
+	t.Run("should report no changes when nothing differs", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{},
-				Tools:   map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{}
-		diffService := &doubles.MockDiffService{}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		f.writeLocal("rules/go.md", "same")
+		f.writeRepo("rules/go.md", "same")
+		cmd, viewer, _ := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{})
 
 		// then
 		require.NoError(t, err)
+		assert.Empty(t, viewer.Shown)
 	})
 
-	t.Run("should return error when config load fails", func(t *testing.T) {
+	t.Run("should return an error when the config cannot be loaded", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			LoadErr: assert.AnError,
-		}
-		cmd := commands.NewDiffCommand(configRepo, nil, nil, nil, nil)
+		f := newSyncFixture(t)
+		cmd, _, configRepo := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
+		configRepo.LoadErr = errors.New("config not found")
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{})
 
 		// then
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load config")
 	})
 
-	t.Run("should compute local diff in reverse mode", func(t *testing.T) {
+	t.Run("should show a personal file changed here as the repo becoming this version", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{},
-				Tools:   map[string]entities.Tool{},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			LocalDiff: []entities.FileChange{
-				{
-					Path:      "rules/custom.md",
-					Direction: entities.ChangeModified,
-					Source:    "personal",
-				},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "old")
+		f.writeRepo("rules/go.md", "old")
+		f.writeLocal("rules/go.md", "new")
+		cmd, viewer, _ := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Reverse: true,
-			Summary: true,
-		})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{})
 
 		// then
 		require.NoError(t, err)
+		require.Len(t, viewer.Shown, 1)
+		shown := viewer.Shown[0]
+		assert.Contains(t, shown, "→ repo")
+		assert.Contains(t, shown, "claude/rules/go.md")
+		assert.Contains(t, shown, "changed here")
+		assert.Contains(t, shown, "--- repo: claude/rules/go.md\n+++ local: claude/rules/go.md\n-old\n+new\n")
 	})
 
-	t.Run("should only show personal diff when personal filter is set", func(t *testing.T) {
+	t.Run("should show an incoming personal change as this device becoming the repo version", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
-				},
-				Tools: map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{
-			Result: &repositories.FetchResult{
-				Files: map[string][]byte{"shared/claude/rules/test.md": []byte("# Test")},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			SharedDiff: []entities.FileChange{
-				{Path: "shared/claude/rules/test.md", Direction: entities.ChangeAdded, Source: "guide"},
-			},
-			PersonalDiff: []entities.FileChange{
-				{Path: "rules/custom.md", Direction: entities.ChangeModified, Source: "personal"},
-			},
-			LocalDiff: []entities.FileChange{
-				{Path: "rules/local.md", Direction: entities.ChangeAdded, Source: "personal"},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "old")
+		f.writeLocal("rules/go.md", "old")
+		f.writeRepo("rules/go.md", "from the other machine")
+		cmd, viewer, _ := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Personal: true,
-			Summary:  true,
-		})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{})
 
 		// then
 		require.NoError(t, err)
-		// With Personal=true, shared diff should not be computed (sourceRepo not called)
+		require.Len(t, viewer.Shown, 1)
+		assert.Contains(t, viewer.Shown[0], "← repo")
+		assert.Contains(t, viewer.Shown[0], "--- local: claude/rules/go.md\n+++ repo: claude/rules/go.md\n")
+	})
+
+	t.Run("should print without paging or diffs when summarizing", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.writeLocal("rules/go.md", "new here")
+		cmd, viewer, _ := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{Summary: true})
+
+		// then
+		require.NoError(t, err)
+		assert.Empty(t, viewer.Shown)
+	})
+
+	t.Run("should show only what a push would send, plus conflicts, in reverse mode", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.writeLocal("skills/mine/SKILL.md", "only here")
+		f.writeRepo("agents/theirs.md", "only in the repo")
+		f.writeLocal("rules/both.md", "mine")
+		f.writeRepo("rules/both.md", "theirs")
+		cmd, viewer, _ := newDiffCmd(f, &doubles.MockSourceRepository{}, &doubles.MockDiffService{})
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{Reverse: true})
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, viewer.Shown, 1)
+		assert.Contains(t, viewer.Shown[0], "skills/mine/SKILL.md")
+		assert.Contains(t, viewer.Shown[0], "rules/both.md")
+		assert.NotContains(t, viewer.Shown[0], "agents/theirs.md")
+	})
+
+	t.Run("should leave out external sources when the personal filter is set", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		sourceRepo, diffService := sharedSource(f)
+		f.writeLocal("rules/go.md", "new here")
+		cmd, viewer, _ := newDiffCmd(f, sourceRepo, diffService)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{Personal: true})
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, viewer.Shown, 1)
+		assert.NotContains(t, viewer.Shown[0], "External sources:")
+		assert.Contains(t, viewer.Shown[0], "claude/rules/go.md")
 		assert.Equal(t, 0, sourceRepo.FetchCalls)
 	})
 
-	t.Run("should only show shared diff when shared filter is set", func(t *testing.T) {
+	t.Run("should leave out personal files when the shared filter is set", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
-				},
-				Tools: map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{
-			Result: &repositories.FetchResult{
-				Files: map[string][]byte{"shared/claude/rules/test.md": []byte("# Test")},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			SharedDiff: []entities.FileChange{
-				{Path: "shared/claude/rules/test.md", Direction: entities.ChangeAdded, Source: "guide"},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		sourceRepo, diffService := sharedSource(f)
+		f.writeLocal("rules/go.md", "new here")
+		cmd, viewer, _ := newDiffCmd(f, sourceRepo, diffService)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Shared:  true,
-			Summary: true,
-		})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{Shared: true})
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 1, sourceRepo.FetchCalls)
+		require.Len(t, viewer.Shown, 1)
+		assert.Contains(t, viewer.Shown[0], "External sources:")
+		assert.NotContains(t, viewer.Shown[0], "claude/rules/go.md")
 	})
 
-	t.Run("should filter by source when source filter is provided", func(t *testing.T) {
+	t.Run("should skip sources that do not match the source filter", func(t *testing.T) {
+		t.Parallel()
 		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
-					{Name: "other", Repo: "foo/bar", Branch: "main"},
-				},
-				Tools: map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{
-			Result: &repositories.FetchResult{
-				Files: map[string][]byte{"shared/claude/rules/test.md": []byte("# Test")},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			SharedDiff: []entities.FileChange{
-				{Path: "shared/claude/rules/test.md", Direction: entities.ChangeAdded, Source: "guide"},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
+		f := newSyncFixture(t)
+		sourceRepo, diffService := sharedSource(f)
+		cmd, _, _ := newDiffCmd(f, sourceRepo, diffService)
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			SourceFilter: "guide",
-			Summary:      true,
-		})
+		err := cmd.Execute("/tmp/config.yaml", f.repoPath, commands.DiffOptions{SourceFilter: "another"})
 
 		// then
 		require.NoError(t, err)
-		// Only one source should be fetched
-		assert.Equal(t, 1, sourceRepo.FetchCalls)
-		require.Len(t, sourceRepo.FetchedSources, 1)
-		assert.Equal(t, "guide", sourceRepo.FetchedSources[0].Name)
-	})
-
-	t.Run("should show detailed output when summary is false", func(t *testing.T) {
-		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{
-					{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
-				},
-				Tools: map[string]entities.Tool{},
-			},
-		}
-		sourceRepo := &doubles.MockSourceRepository{
-			Result: &repositories.FetchResult{
-				Files: map[string][]byte{"shared/claude/rules/test.md": []byte("# Test")},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			SharedDiff: []entities.FileChange{
-				{
-					Path:       "shared/claude/rules/test.md",
-					Direction:  entities.ChangeAdded,
-					Source:     "guide",
-					RemoteSize: 100,
-				},
-			},
-			PersonalDiff: []entities.FileChange{
-				{
-					Path:       "rules/personal.md",
-					Direction:  entities.ChangeModified,
-					Source:     "personal",
-					LocalSize:  50,
-					RemoteSize: 75,
-				},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, sourceRepo, diffService, formatter, nil)
-
-		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Summary: false, // detailed output
-		})
-
-		// then
-		require.NoError(t, err)
-	})
-
-	t.Run("should show reverse mode with detailed output", func(t *testing.T) {
-		// given
-		configRepo := &doubles.MockConfigRepository{
-			Config: &entities.Config{
-				Sources: []entities.Source{},
-				Tools:   map[string]entities.Tool{},
-			},
-		}
-		diffService := &doubles.MockDiffService{
-			LocalDiff: []entities.FileChange{
-				{
-					Path:      "rules/custom.md",
-					Direction: entities.ChangeRemoved,
-					Source:    "personal",
-				},
-			},
-		}
-		formatter := &entities.PlainFormatter{}
-		cmd := commands.NewDiffCommand(configRepo, nil, diffService, formatter, nil)
-
-		// when
-		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.DiffOptions{
-			Reverse: true,
-			Summary: false,
-		})
-
-		// then
-		require.NoError(t, err)
+		assert.Equal(t, 0, sourceRepo.FetchCalls)
 	})
 }

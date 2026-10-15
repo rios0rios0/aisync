@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"strings"
 
@@ -9,15 +9,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
-
-	"github.com/rios0rios0/aisync/internal/domain/entities"
 )
 
-const (
-	bytesPerKBViewer = 1024
-)
+// errPrintInstead tells the caller to print the content itself: there is no
+// terminal to page in, or the content already fits on the screen.
+var errPrintInstead = errors.New("print the content instead of paging it")
 
-// BubbleteaDiffViewer displays diff results in an interactive scrollable viewport.
+// BubbleteaDiffViewer pages diff output in an interactive scrollable viewport.
 type BubbleteaDiffViewer struct{}
 
 // NewBubbleteaDiffViewer creates a new BubbleteaDiffViewer.
@@ -25,78 +23,16 @@ func NewBubbleteaDiffViewer() *BubbleteaDiffViewer {
 	return &BubbleteaDiffViewer{}
 }
 
-// Show renders the diff result in an interactive bubbletea viewport.
-// Returns immediately if stdout is not a TTY.
-func (v *BubbleteaDiffViewer) Show(result *entities.DiffResult, f entities.Formatter) error {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return nil
+// ShowText pages content in a scrollable viewport when it is taller than the
+// terminal. Otherwise it returns an error without showing anything, so the
+// caller prints the content and it stays visible after the command exits.
+func (v *BubbleteaDiffViewer) ShowText(content string) error {
+	_, height, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || strings.Count(content, "\n") < height-1 {
+		return errPrintInstead
 	}
-
-	content := BuildDiffContent(result, f)
-	if content == "" {
-		fmt.Fprintln(os.Stdout, "No changes detected.")
-		return nil
-	}
-
-	m := newDiffModel(content)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
+	_, err = tea.NewProgram(newDiffModel(content), tea.WithAltScreen()).Run()
 	return err
-}
-
-// BuildDiffContent formats a DiffResult into styled text for display.
-func BuildDiffContent(result *entities.DiffResult, f entities.Formatter) string {
-	var b strings.Builder
-
-	writeSection := func(title string, changes []entities.FileChange) {
-		if len(changes) == 0 {
-			return
-		}
-		b.WriteString(f.Bold(title))
-		b.WriteString("\n")
-		for _, ch := range changes {
-			symbol := f.DiffSymbol(string(ch.Direction))
-			line := fmt.Sprintf("  %s %s", symbol, f.FilePath(ch.Path))
-			b.WriteString(line)
-			b.WriteString("\n")
-
-			var details []string
-			if ch.Source != "" {
-				details = append(details, "source: "+ch.Source)
-			}
-			switch ch.Direction {
-			case entities.ChangeModified:
-				details = append(details, fmt.Sprintf("%s → %s", humanSize(ch.LocalSize), humanSize(ch.RemoteSize)))
-			case entities.ChangeAdded:
-				details = append(details, humanSize(ch.RemoteSize))
-			case entities.ChangeRemoved:
-				details = append(details, "removed upstream")
-			}
-			if ch.Encrypted {
-				details = append(details, "encrypted")
-			}
-			if len(details) > 0 {
-				fmt.Fprintf(&b, "      %s\n", f.Subtle(strings.Join(details, " | ")))
-			}
-		}
-		b.WriteString("\n")
-	}
-
-	writeSection("External sources:", result.SharedChanges)
-	writeSection("Personal (from other devices):", result.PersonalChanges)
-	writeSection("Local uncommitted changes:", result.LocalUncommitted)
-
-	return b.String()
-}
-
-func humanSize(bytes int64) string {
-	if bytes < bytesPerKBViewer {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	if bytes < bytesPerKBViewer*bytesPerKBViewer {
-		return fmt.Sprintf("%.1f KB", float64(bytes)/bytesPerKBViewer)
-	}
-	return fmt.Sprintf("%.1f MB", float64(bytes)/(bytesPerKBViewer*bytesPerKBViewer))
 }
 
 // diffModel is the bubbletea model for the interactive diff viewport.

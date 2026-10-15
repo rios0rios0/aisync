@@ -174,3 +174,41 @@ func TestLipglossFormatter_Error_ShouldReturnNonEmptyString(t *testing.T) {
 	assert.NotEmpty(t, result)
 	assert.Contains(t, result, "critical failure")
 }
+
+func TestLipglossFormatter_DiffLine(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should keep the text of every kind of unified diff line", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := ui.NewLipglossFormatter()
+		lines := []string{
+			"--- repo: claude/rules/go.md",
+			"+++ local: claude/rules/go.md",
+			"@@ -1,2 +1,2 @@",
+			"+added",
+			"-removed",
+			" context",
+		}
+
+		for _, line := range lines {
+			// when
+			result := f.DiffLine(line)
+
+			// then
+			assert.Contains(t, result, line)
+		}
+	})
+
+	t.Run("should return a context line unchanged", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := ui.NewLipglossFormatter()
+
+		// when
+		result := f.DiffLine(" unchanged context")
+
+		// then
+		assert.Equal(t, " unchanged context", result)
+	})
+}

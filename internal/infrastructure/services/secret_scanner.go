@@ -3,6 +3,7 @@ package services
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
@@ -30,6 +31,34 @@ var patterns = []secretPattern{ //nolint:gochecknoglobals // compiled regex patt
 	{regexp.MustCompile(`xox[bpras]-[A-Za-z0-9-]{10,}`), "Slack Token"},
 }
 
+// allowedMatches maps a pattern description to a check that recognizes
+// matches with a known-safe shape, for patterns broad enough to also match
+// documentation. A line is only reported when one of its matches fails
+// the check.
+var allowedMatches = map[string]func(match string) bool{ //nolint:gochecknoglobals // compiled-in allow rules
+	"Connection String": isPlaceholderOnly,
+}
+
+// placeholderPattern matches variable references: ${NAME}, $NAME, and {{ name }}.
+var placeholderPattern = regexp.MustCompile(
+	`\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*|\{\{[^}]*\}\}`,
+)
+
+// isPlaceholderOnly reports whether a matched assignment's quoted value is
+// made only of variable references and punctuation, such as
+// "${DATABASE_HOST}:${DATABASE_PORT}": it documents where a value comes
+// from instead of containing one.
+func isPlaceholderOnly(match string) bool {
+	start := strings.IndexAny(match, `'"`)
+	if start < 0 || len(match) < start+2 {
+		return false
+	}
+	rest := placeholderPattern.ReplaceAllString(match[start+1:len(match)-1], "")
+	return !strings.ContainsFunc(rest, func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsDigit(r)
+	})
+}
+
 // RegexSecretScanner scans files for common secret patterns using compiled regexes.
 type RegexSecretScanner struct{}
 
@@ -46,7 +75,7 @@ func (s *RegexSecretScanner) Scan(files map[string][]byte) []repositories.Secret
 		lines := strings.Split(string(content), "\n")
 		for lineNum, line := range lines {
 			for _, p := range patterns {
-				if p.regex.MatchString(line) {
+				if matchesSecret(p, line) {
 					findings = append(findings, repositories.SecretFinding{
 						Path:        path,
 						Line:        lineNum + 1,
@@ -59,4 +88,19 @@ func (s *RegexSecretScanner) Scan(files map[string][]byte) []repositories.Secret
 	}
 
 	return findings
+}
+
+// matchesSecret reports whether line contains a match of p that is not a
+// known-safe shape for that pattern.
+func matchesSecret(p secretPattern, line string) bool {
+	allowed, hasAllowRule := allowedMatches[p.description]
+	if !hasAllowRule {
+		return p.regex.MatchString(line)
+	}
+	for _, match := range p.regex.FindAllString(line, -1) {
+		if !allowed(match) {
+			return true
+		}
+	}
+	return false
 }

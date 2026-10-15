@@ -12,9 +12,6 @@ import (
 // DefaultSeparator exposes defaultSeparator for black-box testing.
 const DefaultSeparator = defaultSeparator
 
-// ChecksumContent exposes checksumContent for black-box testing.
-var ChecksumContent = checksumContent //nolint:gochecknoglobals // test export for black-box testing
-
 // MoveFile exposes moveFile for black-box testing.
 var MoveFile = moveFile //nolint:gochecknoglobals // test export for black-box testing
 

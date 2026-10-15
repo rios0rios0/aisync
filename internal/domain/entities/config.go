@@ -75,6 +75,10 @@ type SyncConfig struct {
 	AutoPush     bool   `yaml:"auto_push"`
 	Debounce     string `yaml:"debounce"`
 	CommitPrefix string `yaml:"commit_prefix"`
+	// UseSystemGit makes every command use the system git binary, as if
+	// --use-system-git were passed. System git honors the user's SSH config,
+	// agents, and credential helpers, which the built-in go-git does not.
+	UseSystemGit bool `yaml:"use_system_git,omitempty"`
 }
 
 // EncryptionConfig holds age encryption settings.

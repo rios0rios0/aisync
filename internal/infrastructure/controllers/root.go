@@ -60,6 +60,7 @@ func (p *gitRepoProxy) Pull() error                         { return p.impl.Pull
 func (p *gitRepoProxy) CommitAll(message string) error      { return p.impl.CommitAll(message) }
 func (p *gitRepoProxy) Push() error                         { return p.impl.Push() }
 func (p *gitRepoProxy) IsClean() (bool, error)              { return p.impl.IsClean() }
+func (p *gitRepoProxy) ChangedFiles() ([]string, error)     { return p.impl.ChangedFiles() }
 func (p *gitRepoProxy) HasRemote() bool                     { return p.impl.HasRemote() }
 func (p *gitRepoProxy) AddRemote(name, url string) error    { return p.impl.AddRemote(name, url) }
 func (p *gitRepoProxy) SetConfig(key, value string) error   { return p.impl.SetConfig(key, value) }
@@ -88,7 +89,6 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	encryptionSvc := services.NewAgeEncryptionService()
 	diffSvc := services.NewFSDiffService()
 	secretScanner := services.NewRegexSecretScanner()
-	conflictDetector := services.NewConflictDetector()
 	bundleSvc := services.NewTarAgeBundleService(encryptionSvc)
 	bundleStateRepo := infraRepos.NewJSONBundleStateRepository(defaultCacheDir())
 
@@ -123,21 +123,27 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	)
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
 	promptSvc := ui.NewHuhPromptService()
+	personalSyncer := commands.NewPersonalSyncer(
+		manifestRepo, encryptionSvc, atomicApplySvc, promptSvc,
+		services.NewUnifiedDiffer(), infraRepos.NewExecGitRepoHistory(),
+	)
 	pullCmd := commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo, manifestRepo,
-		gitProxy, encryptionSvc, conflictDetector,
+		gitProxy, encryptionSvc, personalSyncer,
 		hooksMerger, settingsMerger, sectionMerger,
 		atomicApplySvc, promptSvc,
 		bundleSvc, bundleStateRepo,
 	)
 	pushCmd := commands.NewPushCommand(
-		configRepo, stateRepo, gitProxy, encryptionSvc,
-		manifestRepo, secretScanner, ndaChecker, bundleSvc,
+		configRepo, stateRepo, gitProxy,
+		secretScanner, ndaChecker, bundleSvc, personalSyncer,
 	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
-	diffCmd := commands.NewDiffCommand(configRepo, sourceRepo, diffSvc, formatter, diffViewer)
+	diffCmd := commands.NewDiffCommand(
+		configRepo, sourceRepo, diffSvc, personalSyncer, services.NewUnifiedDiffer(), formatter, diffViewer,
+	)
 	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc, opSecretRepo)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)
@@ -243,6 +249,14 @@ func defaultCacheDir() string {
 		return filepath.Join(home, ".cache", "aisync")
 	}
 	return filepath.Join(os.TempDir(), "aisync")
+}
+
+// ConfigWantsSystemGit reports whether the config.yaml the command will use
+// sets sync.use_system_git. A missing or unreadable config (for example
+// before `aisync init`) means no.
+func ConfigWantsSystemGit(cmd *cobra.Command) bool {
+	config, err := infraRepos.NewYAMLConfigRepository().Load(resolveConfigPath(cmd))
+	return err == nil && config.Sync.UseSystemGit
 }
 
 func resolveConfigPath(cmd *cobra.Command) string {
@@ -404,16 +418,22 @@ func newPullSubcmd(pullCmd *commands.PullCommand) *cobra.Command {
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 			force, _ := cmd.Flags().GetBool("force")
 			source, _ := cmd.Flags().GetString("source")
+			preference, err := preferenceFlag(cmd)
+			if err != nil {
+				return err
+			}
 			opts := commands.PullOptions{
 				DryRun:       dryRun,
 				Force:        force,
 				SourceFilter: source,
+				Preference:   preference,
 			}
 			return pullCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), opts)
 		},
 	}
 	cmd.Flags().Bool("dry-run", false, "preview changes without applying")
 	cmd.Flags().String("source", "", "pull only from a specific source")
+	addPreferenceFlag(cmd)
 	return cmd
 }
 
@@ -428,6 +448,10 @@ func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
 			skipSecretScan, _ := cmd.Flags().GetBool("skip-secret-scan")
 			skipNDAScan, _ := cmd.Flags().GetBool("skip-nda-scan")
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			preference, err := preferenceFlag(cmd)
+			if err != nil {
+				return err
+			}
 			return pushCmd.Execute(
 				resolveConfigPath(cmd),
 				resolveRepoPath(cmd),
@@ -436,6 +460,7 @@ func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
 					SkipSecretScan: skipSecretScan,
 					SkipNDAScan:    skipNDAScan,
 					DryRun:         dryRun,
+					Preference:     preference,
 				},
 			)
 		},
@@ -443,7 +468,8 @@ func newPushSubcmd(pushCmd *commands.PushCommand) *cobra.Command {
 	cmd.Flags().StringP("message", "m", "", "custom commit message")
 	cmd.Flags().Bool("skip-secret-scan", false, "skip credential regex scanning (not recommended)")
 	cmd.Flags().Bool("skip-nda-scan", false, "skip NDA content scanning (strongly discouraged)")
-	cmd.Flags().Bool("dry-run", false, "preview files that would be pushed without modifying anything")
+	cmd.Flags().Bool("dry-run", false, "preview what would be sent to the repo without changing anything")
+	addPreferenceFlag(cmd)
 	return cmd
 }
 
@@ -455,11 +481,40 @@ func newSyncSubcmd(syncCmd *commands.SyncCommand) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
-			return syncCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), "", dryRun)
+			msg, _ := cmd.Flags().GetString("message")
+			skipSecretScan, _ := cmd.Flags().GetBool("skip-secret-scan")
+			skipNDAScan, _ := cmd.Flags().GetBool("skip-nda-scan")
+			preference, err := preferenceFlag(cmd)
+			if err != nil {
+				return err
+			}
+			return syncCmd.Execute(resolveConfigPath(cmd), resolveRepoPath(cmd), msg, commands.SyncOptions{
+				DryRun:         dryRun,
+				Preference:     preference,
+				SkipSecretScan: skipSecretScan,
+				SkipNDAScan:    skipNDAScan,
+			})
 		},
 	}
-	cmd.Flags().Bool("dry-run", false, "preview changes without applying")
+	cmd.Flags().Bool("dry-run", false, "preview changes in both directions without applying them")
+	cmd.Flags().StringP("message", "m", "", "custom commit message")
+	cmd.Flags().Bool("skip-secret-scan", false, "skip credential regex scanning (not recommended)")
+	cmd.Flags().Bool("skip-nda-scan", false, "skip NDA content scanning (strongly discouraged)")
+	addPreferenceFlag(cmd)
 	return cmd
+}
+
+// addPreferenceFlag registers --prefer, which resolves personal-file
+// conflicts without prompting.
+func addPreferenceFlag(cmd *cobra.Command) {
+	cmd.Flags().String("prefer", "",
+		"resolve conflicts without asking: local, remote, or newer (default: ask; skip when no terminal)")
+}
+
+// preferenceFlag parses and validates --prefer.
+func preferenceFlag(cmd *cobra.Command) (entities.SyncPreference, error) {
+	value, _ := cmd.Flags().GetString("prefer")
+	return entities.ParseSyncPreference(value)
 }
 
 func newDiffSubcmd(diffCmd *commands.DiffCommand) *cobra.Command {

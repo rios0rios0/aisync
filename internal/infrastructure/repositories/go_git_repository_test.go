@@ -342,8 +342,9 @@ func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
 	// when -- push without any remote configured
 	err = repo.Push()
 
-	// then -- should not error (logs warning and returns nil)
-	assert.NoError(t, err)
+	// then -- the failure is reported; PushCommand only pushes when a remote exists
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to push")
 }
 
 func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
@@ -382,14 +383,18 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 
 func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	// given
-	// Create a bare repo to push to
-	bareDir := t.TempDir()
-	bareRepo := repositories.NewGoGitRepository()
-	err := bareRepo.Init(bareDir)
+	// Seed a working repo, then mirror it into a bare repo that can accept
+	// pushes to main (a non-bare remote refuses pushes to its checked-out branch).
+	seedDir := t.TempDir()
+	seedRepo := repositories.NewGoGitRepository()
+	err := seedRepo.Init(seedDir)
 	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(bareDir, "init.txt"), []byte("initial"), 0600)
+	err = os.WriteFile(filepath.Join(seedDir, "init.txt"), []byte("initial"), 0600)
 	require.NoError(t, err)
-	err = bareRepo.CommitAll("chore: initial commit")
+	err = seedRepo.CommitAll("chore: initial commit")
+	require.NoError(t, err)
+	bareDir := filepath.Join(t.TempDir(), "remote.git")
+	_, err = git.PlainClone(bareDir, true, &git.CloneOptions{URL: seedDir})
 	require.NoError(t, err)
 
 	// Clone it
@@ -407,9 +412,17 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	// when -- push to the local remote
 	err = cloneRepo.Push()
 
-	// then -- should succeed or log warning (local bare repo may not accept pushes)
-	// The important thing is that it doesn't error fatally
-	assert.NoError(t, err)
+	// then -- the remote's main now points at the new commit
+	require.NoError(t, err)
+	remote, err := git.PlainOpen(bareDir)
+	require.NoError(t, err)
+	remoteMain, err := remote.Reference("refs/heads/main", true)
+	require.NoError(t, err)
+	local, err := git.PlainOpen(cloneDir)
+	require.NoError(t, err)
+	localHead, err := local.Head()
+	require.NoError(t, err)
+	assert.Equal(t, localHead.Hash(), remoteMain.Hash())
 }
 
 func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
@@ -523,8 +536,9 @@ func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
 	// when -- push to an unreachable remote
 	err = repo.Push()
 
-	// then -- should return nil (logs warning for unreachable remote)
-	assert.NoError(t, err)
+	// then -- the failure is reported instead of being logged and swallowed
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to push")
 }
 
 func TestGoGitRepository_Clone_ShouldFailWithInvalidURL(t *testing.T) {

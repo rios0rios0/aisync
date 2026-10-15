@@ -142,3 +142,51 @@ func TestPlainFormatter_EmptyStringInputs(t *testing.T) {
 	assert.Empty(t, f.Error(""))
 	assert.Empty(t, f.DiffSymbol(""))
 }
+
+// bracketFormatter marks every diff line it colors, so tests can see which
+// lines ColorizeDiff passed through the formatter.
+type bracketFormatter struct {
+	entities.PlainFormatter
+}
+
+func (f *bracketFormatter) DiffLine(line string) string { return "[" + line + "]" }
+
+func TestColorizeDiff(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should color every line and keep the line breaks", func(t *testing.T) {
+		t.Parallel()
+		// given
+		diff := "--- repo: a.md\n+++ local: a.md\n@@ -1 +1 @@\n-old\n+new\n"
+
+		// when
+		result := entities.ColorizeDiff(diff, &bracketFormatter{})
+
+		// then
+		assert.Equal(t, "[--- repo: a.md]\n[+++ local: a.md]\n[@@ -1 +1 @@]\n[-old]\n[+new]\n", result)
+	})
+
+	t.Run("should color a final line that has no line break", func(t *testing.T) {
+		t.Parallel()
+		// given
+		diff := "+only"
+
+		// when
+		result := entities.ColorizeDiff(diff, &bracketFormatter{})
+
+		// then
+		assert.Equal(t, "[+only]", result)
+	})
+
+	t.Run("should leave lines untouched with the plain formatter", func(t *testing.T) {
+		t.Parallel()
+		// given
+		diff := "-a\n+b\n"
+
+		// when
+		result := entities.ColorizeDiff(diff, &entities.PlainFormatter{})
+
+		// then
+		assert.Equal(t, diff, result)
+	})
+}

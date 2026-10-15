@@ -137,6 +137,8 @@ func (m *MockManifestRepository) Load(_ string) (*entities.Manifest, error) {
 	return m.Manifest, nil
 }
 
+// Save records the manifest and, like the real repository, makes it what
+// later Load and Exists calls see.
 func (m *MockManifestRepository) Save(toolDir string, manifest *entities.Manifest) error {
 	m.SaveCalls++
 	m.SavedDir = toolDir
@@ -144,6 +146,8 @@ func (m *MockManifestRepository) Save(toolDir string, manifest *entities.Manifes
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
+	m.Manifest = manifest
+	m.ExistsVal = true
 	return nil
 }
 
@@ -181,6 +185,8 @@ type MockGitRepository struct {
 	PushErr          error
 	IsCleanVal       bool
 	IsCleanErr       error
+	ChangedFilesVal  []string
+	ChangedFilesErr  error
 	HasRemoteVal     bool
 	AddRemoteName    string
 	AddRemoteURL     string
@@ -231,6 +237,10 @@ func (m *MockGitRepository) Open(dir string) error {
 	m.OpenCalls++
 	m.OpenDir = dir
 	return m.OpenErr
+}
+
+func (m *MockGitRepository) ChangedFiles() ([]string, error) {
+	return m.ChangedFilesVal, m.ChangedFilesErr
 }
 
 func (m *MockGitRepository) Pull() error {
@@ -374,12 +384,8 @@ func (m *MockSecretScanner) Scan(_ map[string][]byte) []repositories.SecretFindi
 
 // MockDiffService is a manual stub for repositories.DiffService.
 type MockDiffService struct {
-	SharedDiff   []entities.FileChange
-	SharedErr    error
-	LocalDiff    []entities.FileChange
-	LocalErr     error
-	PersonalDiff []entities.FileChange
-	PersonalErr  error
+	SharedDiff []entities.FileChange
+	SharedErr  error
 }
 
 func (m *MockDiffService) ComputeSharedDiff(
@@ -390,18 +396,16 @@ func (m *MockDiffService) ComputeSharedDiff(
 	return m.SharedDiff, m.SharedErr
 }
 
-func (m *MockDiffService) ComputeLocalDiff(
-	_ *entities.Config,
-	_ string,
-) ([]entities.FileChange, error) {
-	return m.LocalDiff, m.LocalErr
+// MockDiffViewer is a manual stub for commands.DiffViewer. It records every
+// content it is asked to page and returns Err (nil means "shown").
+type MockDiffViewer struct {
+	Shown []string
+	Err   error
 }
 
-func (m *MockDiffService) ComputePersonalDiff(
-	_ *entities.Config,
-	_ string,
-) ([]entities.FileChange, error) {
-	return m.PersonalDiff, m.PersonalErr
+func (m *MockDiffViewer) ShowText(content string) error {
+	m.Shown = append(m.Shown, content)
+	return m.Err
 }
 
 // MockNDAContentChecker is a manual stub for repositories.NDAContentChecker.
@@ -468,6 +472,11 @@ func (m *MockMerger) Merge(_ [][]byte, _ []byte) ([]byte, error) {
 
 // MockApplyService is a manual stub for repositories.ApplyService.
 type MockApplyService struct {
+	// StagedFiles captures the files passed to the last Stage call.
+	StagedFiles map[string][]byte
+	// WriteOnApply makes Apply write the staged files to disk, so tests can
+	// assert on the resulting tool directory.
+	WriteOnApply  bool
 	StagedJournal *entities.Journal
 	StageErr      error
 	ApplyErr      error
@@ -477,8 +486,9 @@ type MockApplyService struct {
 	RecoverCalls  int
 }
 
-func (m *MockApplyService) Stage(_ map[string][]byte) (*entities.Journal, error) {
+func (m *MockApplyService) Stage(files map[string][]byte) (*entities.Journal, error) {
 	m.StageCalls++
+	m.StagedFiles = files
 	if m.StageErr != nil {
 		return nil, m.StageErr
 	}
@@ -491,36 +501,25 @@ func (m *MockApplyService) Stage(_ map[string][]byte) (*entities.Journal, error)
 
 func (m *MockApplyService) Apply(_ *entities.Journal) error {
 	m.ApplyCalls++
-	return m.ApplyErr
+	if m.ApplyErr != nil {
+		return m.ApplyErr
+	}
+	if m.WriteOnApply {
+		for path, content := range m.StagedFiles {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, content, 0o600); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (m *MockApplyService) Recover() error {
 	m.RecoverCalls++
 	return m.RecoverErr
-}
-
-// MockConflictDetector is a manual stub for repositories.ConflictDetector.
-type MockConflictDetector struct {
-	Conflicts    []entities.Conflict
-	DetectErr    error
-	ResolveErr   error
-	DetectCalls  int
-	ResolveCalls int
-}
-
-func (m *MockConflictDetector) DetectConflicts(
-	_ string,
-	_ map[string][]byte,
-	_ *entities.Manifest,
-	_ string,
-) ([]entities.Conflict, error) {
-	m.DetectCalls++
-	return m.Conflicts, m.DetectErr
-}
-
-func (m *MockConflictDetector) ResolveConflict(_ string, _ entities.Conflict, _ string) error {
-	m.ResolveCalls++
-	return m.ResolveErr
 }
 
 // MockJournalRepository is a manual stub for repositories.JournalRepository.
@@ -559,14 +558,18 @@ func (m *MockJournalRepository) Clear() error {
 
 // MockPromptService is a manual stub for repositories.PromptService.
 type MockPromptService struct {
-	ToolAction         string // preconfigured return for PromptToolAction
-	Confirmation       bool   // preconfigured return for PromptConfirmation
-	ConflictResolution string // preconfigured return for PromptConflictResolution
-	FileAction         string // preconfigured return for PromptFileAction
-	ToolActionCalls    int
-	ConfirmationCalls  int
-	ConflictCalls      int
-	FileActionCalls    int
+	ToolAction        string // preconfigured return for PromptToolAction
+	Confirmation      bool   // preconfigured return for PromptConfirmation
+	FileAction        string // preconfigured return for PromptFileAction
+	ToolActionCalls   int
+	ConfirmationCalls int
+	FileActionCalls   int
+
+	// ConflictChoices are returned by PromptSyncConflict in order; once
+	// exhausted every further conflict is skipped.
+	ConflictChoices []entities.ConflictChoice
+	ConflictDetails []entities.ConflictDetail // every detail passed to PromptSyncConflict
+	ConflictCalls   int
 }
 
 func (m *MockPromptService) PromptToolAction(_ string) string {
@@ -579,9 +582,53 @@ func (m *MockPromptService) PromptConfirmation(_ string) bool {
 	return m.Confirmation
 }
 
-func (m *MockPromptService) PromptConflictResolution(_, _ string) string {
+func (m *MockPromptService) PromptSyncConflict(detail entities.ConflictDetail) entities.ConflictChoice {
 	m.ConflictCalls++
-	return m.ConflictResolution
+	m.ConflictDetails = append(m.ConflictDetails, detail)
+	if len(m.ConflictChoices) == 0 {
+		return entities.ChoiceSkip
+	}
+	choice := m.ConflictChoices[0]
+	m.ConflictChoices = m.ConflictChoices[1:]
+	return choice
+}
+
+// MockTextDiffer is a manual stub for repositories.TextDiffer. It returns a
+// recognisable marker instead of a real diff and records every call.
+type MockTextDiffer struct {
+	Calls int
+}
+
+func (m *MockTextDiffer) Unified(fromLabel, toLabel string, from, to []byte) string {
+	m.Calls++
+	if string(from) == string(to) {
+		return ""
+	}
+	return "--- " + fromLabel + "\n+++ " + toLabel + "\n-" + string(from) + "\n+" + string(to) + "\n"
+}
+
+// MockRepoHistory is a manual stub for repositories.RepoHistory. Changes maps
+// repo-relative paths to the commit returned for them; other paths report no
+// history.
+type MockRepoHistory struct {
+	Changes map[string]MockRepoChange
+	Err     error
+	Calls   int
+}
+
+// MockRepoChange is the commit MockRepoHistory reports for one path.
+type MockRepoChange struct {
+	When    time.Time
+	Subject string
+}
+
+func (m *MockRepoHistory) LastChange(_, relPath string) (time.Time, string, error) {
+	m.Calls++
+	if m.Err != nil {
+		return time.Time{}, "", m.Err
+	}
+	change := m.Changes[relPath]
+	return change.When, change.Subject, nil
 }
 
 func (m *MockPromptService) PromptFileAction(_, _ string) string {

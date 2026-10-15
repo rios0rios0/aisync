@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed encrypted personal files being re-uploaded on every push even when their content had not changed, and pulled scripts and hooks losing their executable bit'
+time: '2026-10-15T19:40:56.067130261Z'

@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed conflict handling on pull: choosing to keep the local copy (or to skip) still overwrote it with the repo copy, and every remote change was reported as a conflict because the manifest and the conflict detector compared checksums in different formats'
+time: '2026-10-15T19:40:56.065397988Z'
