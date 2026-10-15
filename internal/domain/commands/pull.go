@@ -23,6 +23,14 @@ type PullOptions struct {
 	DryRun       bool
 	Force        bool
 	SourceFilter string
+	// Preference resolves personal-file conflicts without prompting.
+	Preference entities.SyncPreference
+	// Direction limits the personal-file reconciliation; empty means
+	// incoming only, which is what a pull is.
+	Direction entities.SyncDirection
+	// SkipPersonal leaves personal files to a later phase (sync reconciles
+	// them once, in its push phase, so each conflict is asked about once).
+	SkipPersonal bool
 }
 
 // PullCommand fetches from external sources, merges single-file configs,
@@ -34,7 +42,7 @@ type PullCommand struct {
 	manifestRepo      repositories.ManifestRepository
 	gitRepo           repositories.GitRepository
 	encryptionService repositories.EncryptionService
-	conflictDetector  repositories.ConflictDetector
+	personalSyncer    *PersonalSyncer
 	hooksMerger       repositories.Merger
 	settingsMerger    repositories.Merger
 	sectionMerger     repositories.Merger
@@ -52,7 +60,7 @@ func NewPullCommand(
 	manifestRepo repositories.ManifestRepository,
 	gitRepo repositories.GitRepository,
 	encryptionService repositories.EncryptionService,
-	conflictDetector repositories.ConflictDetector,
+	personalSyncer *PersonalSyncer,
 	hooksMerger repositories.Merger,
 	settingsMerger repositories.Merger,
 	sectionMerger repositories.Merger,
@@ -68,7 +76,7 @@ func NewPullCommand(
 		manifestRepo:      manifestRepo,
 		gitRepo:           gitRepo,
 		encryptionService: encryptionService,
-		conflictDetector:  conflictDetector,
+		personalSyncer:    personalSyncer,
 		hooksMerger:       hooksMerger,
 		settingsMerger:    settingsMerger,
 		sectionMerger:     sectionMerger,
@@ -121,6 +129,24 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 
 	// Step 8: Apply files to each enabled AI tool directory.
 	c.applyToolDirectories(config, repoPath, allFiles, sourceFileMap, encryptPatterns, opts)
+
+	// Step 8a: Reconcile personal files with the three-way merge. --force
+	// only suppresses prompts: unresolved conflicts are skipped, never
+	// overwritten, unless --prefer picks a side.
+	if !opts.SkipPersonal {
+		direction := opts.Direction
+		if direction == "" {
+			direction = entities.SyncIncoming
+		}
+		if _, syncErr := c.personalSyncer.Sync(config, repoPath, PersonalSyncOptions{
+			Direction:  direction,
+			Preference: opts.Preference,
+			NoPrompt:   opts.Force,
+			DryRun:     opts.DryRun,
+		}); syncErr != nil {
+			return syncErr
+		}
+	}
 
 	// Step 8b: Apply project bundles (post-file-apply so individual files
 	// always land first; bundle merging only runs after the rest of the
@@ -434,15 +460,16 @@ func (c *PullCommand) applyToToolDir(
 		sourceFileMap, encryptPatterns, manifest, opts, tool.ExtraAllowlist,
 	)
 
-	c.applyPersonalOnlyFiles(
-		repoPath, toolName, toolDir, prefix, allFiles,
-		pendingFiles, manifest, encryptPatterns, config, tool.ExtraAllowlist,
-	)
-
-	c.detectAndResolveConflicts(
-		repoPath, toolName, toolDir, hostname, oldManifest,
-		encryptPatterns, config, pendingFiles, manifest, opts,
-	)
+	// Personal files are reconciled separately by the PersonalSyncer, which
+	// owns their manifest entries (the three-way merge base). Carry them over
+	// so rebuilding the shared entries never reads them as deletions.
+	if oldManifest != nil {
+		for relPath, file := range oldManifest.Files {
+			if file.Namespace != "shared" {
+				manifest.Files[relPath] = file
+			}
+		}
+	}
 
 	deletions := c.detectDeletions(oldManifest, manifest, toolDir)
 
@@ -574,44 +601,6 @@ func (c *PullCommand) resolveFileContent(
 	}
 
 	return content
-}
-
-// detectAndResolveConflicts runs conflict detection for incoming personal files
-// and applies resolved remote choices to the pending files and manifest.
-func (c *PullCommand) detectAndResolveConflicts(
-	repoPath, toolName, toolDir, hostname string,
-	oldManifest *entities.Manifest,
-	encryptPatterns *entities.EncryptPatterns,
-	config *entities.Config,
-	pendingFiles map[string][]byte,
-	manifest *entities.Manifest,
-	opts PullOptions,
-) {
-	if c.conflictDetector == nil || oldManifest == nil {
-		return
-	}
-
-	incomingPersonal := c.collectIncomingPersonalFiles(repoPath, toolName, encryptPatterns, config)
-	if len(incomingPersonal) == 0 {
-		return
-	}
-
-	conflicts, detectErr := c.conflictDetector.DetectConflicts(toolDir, incomingPersonal, oldManifest, hostname)
-	if detectErr != nil {
-		logger.Warnf("conflict detection failed for %s: %v", toolName, detectErr)
-		return
-	}
-
-	if len(conflicts) == 0 {
-		return
-	}
-
-	resolved := c.resolveConflicts(toolDir, conflicts, opts.Force)
-	for _, rc := range resolved {
-		destPath := filepath.Join(toolDir, rc.Path)
-		pendingFiles[destPath] = rc.RemoteContent
-		manifest.SetFile(rc.Path, "personal", "personal", checksumBytes(rc.RemoteContent))
-	}
 }
 
 // confirmToolApply prompts the user for confirmation before applying changes to
@@ -797,86 +786,6 @@ func (c *PullCommand) readPersonalFile(
 	return content
 }
 
-// applyPersonalOnlyFiles finds files in personal/<tool>/ that have no shared
-// counterpart and adds them to the pending files and manifest.
-func (c *PullCommand) applyPersonalOnlyFiles(
-	repoPath, toolName, toolDir, sharedPrefix string,
-	allFiles map[string]fileEntry,
-	pendingFiles map[string][]byte,
-	manifest *entities.Manifest,
-	encryptPatterns *entities.EncryptPatterns,
-	config *entities.Config,
-	extraAllowlist []string,
-) {
-	personalDir := filepath.Join(repoPath, "personal", toolName)
-	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
-		return
-	}
-
-	_ = filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		relPath, err := filepath.Rel(personalDir, path)
-		if err != nil {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		if strings.HasSuffix(relPath, ".age") {
-			return nil
-		}
-
-		sharedKey := sharedPrefix + relPath
-		if _, exists := allFiles[sharedKey]; exists {
-			return nil
-		}
-
-		destPath := filepath.Join(toolDir, relPath)
-		if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
-			return nil
-		}
-
-		content := c.readAndDecryptPersonalFile(path, relPath, encryptPatterns, config)
-		if content == nil {
-			return nil
-		}
-
-		pendingFiles[destPath] = content
-		manifest.SetFile(relPath, "personal", "personal", checksumBytes(content))
-		return nil
-	})
-}
-
-// readAndDecryptPersonalFile reads a personal file and decrypts it if it matches
-// encrypt patterns and an encrypted version exists.
-func (c *PullCommand) readAndDecryptPersonalFile(
-	path, relPath string,
-	encryptPatterns *entities.EncryptPatterns,
-	config *entities.Config,
-) []byte {
-	content, readErr := os.ReadFile(path)
-	if readErr != nil {
-		logger.Warnf("failed to read personal file %s: %v", path, readErr)
-		return nil
-	}
-
-	if encryptPatterns.Matches(relPath) && config.Encryption.Identity != "" {
-		encryptedPath := path + ".age"
-		encrypted, encErr := os.ReadFile(encryptedPath)
-		if encErr == nil {
-			identityPath := ExpandHome(config.Encryption.Identity)
-			decrypted, decErr := c.encryptionService.Decrypt(encrypted, identityPath)
-			if decErr == nil {
-				return decrypted
-			}
-			logger.Warnf("failed to decrypt %s: %v", encryptedPath, decErr)
-		}
-	}
-
-	return content
-}
-
 // detectDeletions compares the old manifest against the new manifest and returns
 // the absolute paths of files that should be deleted (present in old, absent in new).
 func (c *PullCommand) detectDeletions(
@@ -972,102 +881,6 @@ func (c *PullCommand) loadEncryptPatterns(repoPath string) *entities.EncryptPatt
 func checksumBytes(data []byte) string {
 	h := sha256.Sum256(data)
 	return fmt.Sprintf("sha256:%x", h)
-}
-
-// collectIncomingPersonalFiles reads all personal files for a tool from the sync
-// repo (which may include files pushed by other devices). Returns a map of
-// relative path -> file content.
-func (c *PullCommand) collectIncomingPersonalFiles(
-	repoPath, toolName string,
-	encryptPatterns *entities.EncryptPatterns,
-	config *entities.Config,
-) map[string][]byte {
-	personalDir := filepath.Join(repoPath, "personal", toolName)
-	if _, err := os.Stat(personalDir); os.IsNotExist(err) {
-		return nil
-	}
-
-	incoming := make(map[string][]byte)
-	_ = filepath.Walk(personalDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		relPath, err := filepath.Rel(personalDir, path)
-		if err != nil {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		// Skip .age files; they are handled via the decrypt path.
-		if strings.HasSuffix(relPath, ".age") {
-			return nil
-		}
-
-		content, readErr := os.ReadFile(path) //nolint:gosec // paths are from trusted tool directories
-		if readErr != nil {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		// Decrypt if needed.
-		if encryptPatterns.Matches(relPath) && config.Encryption.Identity != "" {
-			encryptedPath := path + ".age"
-			encrypted, encErr := os.ReadFile(encryptedPath) //nolint:gosec // paths are from trusted tool directories
-			if encErr == nil {
-				identityPath := ExpandHome(config.Encryption.Identity)
-				decrypted, decErr := c.encryptionService.Decrypt(encrypted, identityPath)
-				if decErr == nil {
-					content = decrypted
-				}
-			}
-		}
-
-		incoming[relPath] = content
-		return nil
-	})
-
-	return incoming
-}
-
-// resolveConflicts prompts the user to resolve each conflict interactively.
-// When force is true, the remote version wins automatically. Returns the list of
-// conflicts that were resolved in favor of the remote version (so the caller can
-// update pending files).
-func (c *PullCommand) resolveConflicts(
-	toolDir string,
-	conflicts []entities.Conflict,
-	force bool,
-) []entities.Conflict {
-	var remoteWins []entities.Conflict
-
-	for _, conflict := range conflicts {
-		if force {
-			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "remote"); err != nil {
-				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
-			} else {
-				remoteWins = append(remoteWins, conflict)
-			}
-			continue
-		}
-
-		choice := c.promptService.PromptConflictResolution(conflict.Path, conflict.RemoteDevice)
-
-		switch choice {
-		case "local":
-			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "local"); err != nil {
-				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
-			}
-		case "remote":
-			if err := c.conflictDetector.ResolveConflict(toolDir, conflict, "remote"); err != nil {
-				logger.Warnf("failed to resolve conflict for %s: %v", conflict.Path, err)
-			} else {
-				remoteWins = append(remoteWins, conflict)
-			}
-		case actionSkip:
-			fmt.Fprintf(os.Stdout, "  Skipped conflict for %s (conflict file preserved)\n", conflict.Path)
-		}
-	}
-
-	return remoteWins
 }
 
 // ExpandHome resolves a path that starts with ~/ to the user's home directory.

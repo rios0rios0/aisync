@@ -332,7 +332,44 @@ func TestIsSyncable(t *testing.T) {
 			expected: true,
 		},
 
+		{
+			name:     "should allow codex skills",
+			toolName: "codex",
+			relPath:  "skills/fix-ci/SKILL.md",
+			expected: true,
+		},
+		{
+			name:     "should allow codex custom agents",
+			toolName: "codex",
+			relPath:  "agents/architect.toml",
+			expected: true,
+		},
+		{
+			name:     "should allow codex AGENTS.md",
+			toolName: "codex",
+			relPath:  "AGENTS.md",
+			expected: true,
+		},
+		{
+			name:     "should allow codex hooks",
+			toolName: "codex",
+			relPath:  "hooks.json",
+			expected: true,
+		},
+
 		// Codex — negative
+		{
+			name:     "should deny codex bundled system skills",
+			toolName: "codex",
+			relPath:  "skills/.system/skill-creator/SKILL.md",
+			expected: false,
+		},
+		{
+			name:     "should deny codex config.toml by default",
+			toolName: "codex",
+			relPath:  "config.toml",
+			expected: false,
+		},
 		{
 			name:     "should deny codex sessions",
 			toolName: "codex",
@@ -343,6 +380,46 @@ func TestIsSyncable(t *testing.T) {
 			name:     "should deny codex cache",
 			toolName: "codex",
 			relPath:  "cache/data.json",
+			expected: false,
+		},
+
+		// Tool-managed caches inside allowlisted directories
+		{
+			name:     "should deny claude account-synced skills",
+			toolName: "claude",
+			relPath:  "skills/synced/523758e9_7b578fbc/pptx/SKILL.md",
+			expected: false,
+		},
+		{
+			name:     "should deny claude trashed skills",
+			toolName: "claude",
+			relPath:  "skills/.trash/old-skill/SKILL.md",
+			expected: false,
+		},
+		{
+			name:     "should still allow a claude skill whose name merely contains synced",
+			toolName: "claude",
+			relPath:  "skills/synced-notes/SKILL.md",
+			expected: true,
+		},
+		{
+			name:           "should allow a denied path when extra_allowlist opts it back in",
+			toolName:       "claude",
+			relPath:        "skills/synced/org/skill/SKILL.md",
+			extraAllowlist: []string{"skills/synced/**"},
+			expected:       true,
+		},
+
+		{
+			name:     "should deny .gitkeep placeholders from the sync repo",
+			toolName: "claude",
+			relPath:  "agents/.gitkeep",
+			expected: false,
+		},
+		{
+			name:     "should deny a .gitkeep placeholder at the tool root",
+			toolName: "codex",
+			relPath:  ".gitkeep",
 			expected: false,
 		},
 

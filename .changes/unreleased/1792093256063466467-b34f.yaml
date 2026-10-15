@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed failed pushes being reported as successful; the command now exits with an error and the next push retries the commit it kept'
+time: '2026-10-15T19:40:56.063430758Z'

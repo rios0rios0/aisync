@@ -1,6 +1,10 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // LipglossFormatter provides colored terminal output using lipgloss.
 // It implements entities.Formatter.
@@ -55,3 +59,20 @@ func (f *LipglossFormatter) FilePath(text string) string { return fileStyle.Rend
 func (f *LipglossFormatter) Success(text string) string  { return successStyle.Render(text) }
 func (f *LipglossFormatter) Warning(text string) string  { return warnStyle.Render(text) }
 func (f *LipglossFormatter) Error(text string) string    { return errorStyle.Render(text) }
+
+// DiffLine colors one unified-diff line: file headers bold, hunk headers
+// cyan, additions green, removals red, context unchanged.
+func (f *LipglossFormatter) DiffLine(line string) string {
+	switch {
+	case strings.HasPrefix(line, "+++ "), strings.HasPrefix(line, "--- "):
+		return boldStyle.Render(line)
+	case strings.HasPrefix(line, "@@"):
+		return fileStyle.Render(line)
+	case strings.HasPrefix(line, "+"):
+		return addedStyle.Render(line)
+	case strings.HasPrefix(line, "-"):
+		return removedStyle.Render(line)
+	default:
+		return line
+	}
+}

@@ -1,0 +1,3 @@
+kind: 'Removed'
+body: 'removed the conflict detector and the `.conflict.<device>` files it wrote next to local files, replaced by the three-way merge'
+time: '2026-10-15T19:40:56.072775506Z'

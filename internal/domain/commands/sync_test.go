@@ -21,19 +21,25 @@ func newTestPullCommand(
 	gitRepo *doubles.MockGitRepository,
 	applyService *doubles.MockApplyService,
 ) *commands.PullCommand {
+	manifestRepo := &doubles.MockManifestRepository{}
+	encryptionService := &doubles.MockEncryptionService{}
+	promptService := &doubles.MockPromptService{ToolAction: "apply", Confirmation: true}
 	return commands.NewPullCommand(
 		configRepo,
 		stateRepo,
 		sourceRepo,
-		&doubles.MockManifestRepository{},
+		manifestRepo,
 		gitRepo,
-		&doubles.MockEncryptionService{},
-		&doubles.MockConflictDetector{},
+		encryptionService,
+		commands.NewPersonalSyncer(
+			manifestRepo, encryptionService, applyService, promptService,
+			&doubles.MockTextDiffer{}, &doubles.MockRepoHistory{},
+		),
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		applyService,
-		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
+		promptService,
 		&doubles.MockBundleService{},
 		&doubles.MockBundleStateRepository{},
 	)
@@ -45,7 +51,7 @@ func newTestPushCommand(
 	stateRepo *doubles.MockStateRepository,
 	gitRepo *doubles.MockGitRepository,
 ) *commands.PushCommand {
-	return commands.NewPushCommand(
+	return newPushCmd(
 		configRepo,
 		stateRepo,
 		gitRepo,
@@ -89,7 +95,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 		syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 
 		// when
-		err := syncCmd.Execute("/tmp/config.yaml", tmpDir, "", false)
+		err := syncCmd.Execute("/tmp/config.yaml", tmpDir, "", commands.SyncOptions{})
 
 		// then
 		require.NoError(t, err)
@@ -98,7 +104,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 		assert.Equal(t, 1, sourceRepo.FetchCalls)
 	})
 
-	t.Run("should skip push phase when dry-run is true", func(t *testing.T) {
+	t.Run("should not commit or push when dry-run is true", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -126,11 +132,11 @@ func TestSyncCommand_Execute(t *testing.T) {
 		syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 
 		// when
-		err := syncCmd.Execute("/tmp/config.yaml", tmpDir, "", true)
+		err := syncCmd.Execute("/tmp/config.yaml", tmpDir, "", commands.SyncOptions{DryRun: true})
 
 		// then
 		require.NoError(t, err)
-		// Push should not open the git repo (only pull does)
+		// The push phase only previews: nothing is committed or pushed
 		assert.Equal(t, 0, gitRepo.CommitAllCalls)
 		assert.Equal(t, 0, gitRepo.PushCalls)
 	})
@@ -150,7 +156,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 		syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
 
 		// when
-		err := syncCmd.Execute("/tmp/config.yaml", "/tmp/repo", "", false)
+		err := syncCmd.Execute("/tmp/config.yaml", "/tmp/repo", "", commands.SyncOptions{})
 
 		// then
 		require.Error(t, err)

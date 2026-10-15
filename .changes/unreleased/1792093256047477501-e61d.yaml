@@ -1,0 +1,3 @@
+kind: 'Added'
+body: 'added a three-way merge for personal files: a change on one device is applied on the others, a deletion propagates when the other copy is unchanged, and a file changed on two devices opens a conflict review that shows when and where each side last changed and a colored diff before you keep this machine''s version, take the repo''s, skip, apply the answer to all, or quit without writing anything'
+time: '2026-10-15T19:40:56.047405606Z'

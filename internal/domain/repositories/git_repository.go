@@ -9,6 +9,10 @@ type GitRepository interface {
 	CommitAll(message string) error
 	Push() error
 	IsClean() (bool, error)
+	// ChangedFiles lists the repo-relative, slash-separated paths of every
+	// uncommitted change in the working tree: modified, added, deleted, and
+	// untracked files.
+	ChangedFiles() ([]string, error)
 	HasRemote() bool
 	AddRemote(name, url string) error
 	SetConfig(key, value string) error

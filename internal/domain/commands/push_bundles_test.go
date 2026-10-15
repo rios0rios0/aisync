@@ -35,7 +35,7 @@ func newPushCommandWithBundles(
 	configRepo *doubles.MockConfigRepository,
 	bundleSvc *doubles.MockBundleService,
 ) *commands.PushCommand {
-	return commands.NewPushCommand(
+	return newPushCmd(
 		configRepo,
 		&doubles.MockStateRepository{},
 		&doubles.MockGitRepository{},

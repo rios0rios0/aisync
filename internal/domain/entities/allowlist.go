@@ -9,6 +9,10 @@ const (
 	allowInstructions  = "instructions/**"
 	allowSettings      = "settings.json"
 	allowSettingsLocal = "settings.local.json"
+	allowAgents        = "agents/**"
+
+	toolClaude = "claude"
+	toolCodex  = "codex"
 )
 
 // ToolAllowlists defines, per AI tool, the tool-relative glob patterns that
@@ -37,9 +41,9 @@ const (
 // patching this file.
 var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-in per-tool allowlist; extend here when adding Tier-1 tool coverage
 	// Claude Code (~/.claude/)
-	"claude": {
+	toolClaude: {
 		allowRules,
-		"agents/**",
+		allowAgents,
 		"commands/**",
 		"hooks/**",
 		"hooks.json",
@@ -72,11 +76,37 @@ var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-
 		"prompts/**",
 	},
 	// OpenAI Codex CLI (~/.codex/)
-	"codex": {
+	toolCodex: {
 		allowRules,
 		allowInstructions,
 		allowMemories,
 		"default.rules",
+		allowSkills,
+		allowAgents,
+		"prompts/**",
+		"hooks/**",
+		"hooks.json",
+		"AGENTS.md",
+	},
+}
+
+// CommonDenylist holds paths no tool ever owns: .gitkeep files exist only so
+// git keeps an empty directory in the sync repo, and copying them into a tool
+// directory would be noise.
+var CommonDenylist = []string{".gitkeep", "**/.gitkeep"} //nolint:gochecknoglobals // compiled-in denylist
+
+// ToolDenylists holds paths inside an allowlisted directory that are managed
+// by the tool itself rather than written by the user, so syncing them would
+// copy caches between devices (and, for account- or organization-provided
+// skills, publish someone else's content). A path matching an entry here
+// is never synced, unless tools.<name>.extra_allowlist opts it back in.
+var ToolDenylists = map[string][]string{ //nolint:gochecknoglobals // compiled-in per-tool denylist
+	toolClaude: {
+		"skills/synced/**", // skills Claude Code downloads from the signed-in claude.ai account and organizations
+		"skills/.trash/**", // skills removed through Claude Code, kept for undo
+	},
+	toolCodex: {
+		"skills/.system/**", // skills bundled with and updated by the Codex CLI
 	},
 }
 
@@ -107,7 +137,9 @@ var DefaultAllowlist = []string{ //nolint:gochecknoglobals // compiled-in fallba
 //     the compiled-in list regardless of whether the tool is known.
 //
 // It returns false otherwise. False is the safe default — unknown paths are
-// never synced until someone explicitly opts in.
+// never synced until someone explicitly opts in. Paths in [ToolDenylists]
+// are tool-managed caches and return false even when the compiled-in
+// allowlist covers their directory; an explicit extraAllowlist entry wins.
 //
 // relPath must be tool-relative (e.g. "rules/golang.md", not
 // "/home/alice/.claude/rules/golang.md"). The caller is responsible for
@@ -116,15 +148,19 @@ var DefaultAllowlist = []string{ //nolint:gochecknoglobals // compiled-in fallba
 func IsSyncable(toolName, relPath string, extraAllowlist []string) bool {
 	normalized := strings.ReplaceAll(relPath, "\\", "/")
 
+	if len(extraAllowlist) > 0 && matchesAnchoredPattern(normalized, extraAllowlist) {
+		return true
+	}
+	if matchesAnchoredPattern(normalized, ToolDenylists[toolName]) ||
+		matchesAnchoredPattern(normalized, CommonDenylist) {
+		return false
+	}
+
 	if patterns, ok := ToolAllowlists[toolName]; ok {
 		if matchesAnchoredPattern(normalized, patterns) {
 			return true
 		}
 	} else if matchesAnchoredPattern(normalized, DefaultAllowlist) {
-		return true
-	}
-
-	if len(extraAllowlist) > 0 && matchesAnchoredPattern(normalized, extraAllowlist) {
 		return true
 	}
 

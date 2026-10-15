@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"os/exec"
@@ -15,18 +16,24 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
-// DiffViewer displays diff results interactively (e.g., bubbletea viewport).
+// DiffViewer pages long diff output interactively (e.g., a bubbletea viewport).
 type DiffViewer interface {
-	Show(result *entities.DiffResult, f entities.Formatter) error
+	// ShowText pages content, or returns an error without showing anything
+	// when the caller should print it instead (no terminal, or it fits).
+	ShowText(content string) error
 }
 
-// DiffCommand previews changes without applying them.
+// DiffCommand previews changes without applying them: files arriving from
+// external sources, and every personal file that differs between this device
+// and the sync repo, with a unified diff for each, like `chezmoi diff`.
 type DiffCommand struct {
-	configRepo  repositories.ConfigRepository
-	sourceRepo  repositories.SourceRepository
-	diffService repositories.DiffService
-	formatter   entities.Formatter
-	viewer      DiffViewer
+	configRepo     repositories.ConfigRepository
+	sourceRepo     repositories.SourceRepository
+	diffService    repositories.DiffService
+	personalSyncer *PersonalSyncer
+	differ         repositories.TextDiffer
+	formatter      entities.Formatter
+	viewer         DiffViewer
 }
 
 // NewDiffCommand creates a new DiffCommand.
@@ -34,26 +41,30 @@ func NewDiffCommand(
 	configRepo repositories.ConfigRepository,
 	sourceRepo repositories.SourceRepository,
 	diffService repositories.DiffService,
+	personalSyncer *PersonalSyncer,
+	differ repositories.TextDiffer,
 	formatter entities.Formatter,
 	viewer DiffViewer,
 ) *DiffCommand {
 	return &DiffCommand{
-		configRepo:  configRepo,
-		sourceRepo:  sourceRepo,
-		diffService: diffService,
-		formatter:   formatter,
-		viewer:      viewer,
+		configRepo:     configRepo,
+		sourceRepo:     sourceRepo,
+		diffService:    diffService,
+		personalSyncer: personalSyncer,
+		differ:         differ,
+		formatter:      formatter,
+		viewer:         viewer,
 	}
 }
 
 // DiffOptions holds the flags for the diff command.
 type DiffOptions struct {
 	SourceFilter string
-	Personal     bool
-	Shared       bool
-	Summary      bool
-	Reverse      bool
-	Tool         string
+	Personal     bool   // only personal files
+	Shared       bool   // only files from external sources
+	Summary      bool   // file names only, no content diff
+	Reverse      bool   // only what a push would send (and conflicts)
+	Tool         string // external diff tool to open each changed file pair with
 }
 
 // Execute computes and displays the diff.
@@ -63,45 +74,50 @@ func (c *DiffCommand) Execute(configPath, repoPath string, opts DiffOptions) err
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	result := c.computeDiff(config, repoPath, opts)
+	var shared []entities.FileChange
+	if !opts.Personal && !opts.Reverse {
+		shared = c.fetchSharedChanges(config, repoPath, opts.SourceFilter)
+	}
+	var personal []PersonalChange
+	if !opts.Shared {
+		personal = c.personalChanges(config, repoPath, opts.Reverse)
+	}
 
-	if !result.HasChanges() {
+	if len(shared) == 0 && len(personal) == 0 {
 		fmt.Fprintln(os.Stdout, "No changes detected.")
 		return nil
 	}
-
 	if opts.Reverse {
-		fmt.Fprintln(os.Stdout, "(reverse: showing what would be pushed)")
+		fmt.Fprintln(os.Stdout, "(reverse: showing only what a push would send, plus conflicts)")
 	}
 
-	c.renderOutput(result, opts)
+	if opts.Tool != "" {
+		c.openInTool(shared, personal, opts.Tool)
+		return nil
+	}
+
+	var b strings.Builder
+	c.render(&b, shared, personal, opts)
+	if opts.Summary || c.viewer == nil || c.viewer.ShowText(b.String()) != nil {
+		fmt.Fprint(os.Stdout, b.String())
+	}
 	return nil
 }
 
-// computeDiff gathers all change data based on the diff options.
-func (c *DiffCommand) computeDiff(config *entities.Config, repoPath string, opts DiffOptions) *entities.DiffResult {
-	result := &entities.DiffResult{}
-
-	if opts.Reverse {
-		local, diffErr := c.diffService.ComputeLocalDiff(config, repoPath)
-		if diffErr == nil {
-			result.LocalUncommitted = local
-		}
-		return result
+// personalChanges lists the personal files that differ; in reverse mode only
+// those a push would send, plus conflicts.
+func (c *DiffCommand) personalChanges(config *entities.Config, repoPath string, reverse bool) []PersonalChange {
+	changes := c.personalSyncer.Changes(config, repoPath)
+	if !reverse {
+		return changes
 	}
-
-	if !opts.Personal {
-		result.SharedChanges = c.fetchSharedChanges(config, repoPath, opts.SourceFilter)
-	}
-	if !opts.Shared {
-		if personal, err := c.diffService.ComputePersonalDiff(config, repoPath); err == nil {
-			result.PersonalChanges = personal
-		}
-		if local, err := c.diffService.ComputeLocalDiff(config, repoPath); err == nil {
-			result.LocalUncommitted = local
+	outgoing := changes[:0]
+	for _, change := range changes {
+		if change.Entry.Action.IsOutgoing() || change.Entry.Action == entities.SyncActionConflict {
+			outgoing = append(outgoing, change)
 		}
 	}
-	return result
+	return outgoing
 }
 
 // fetchSharedChanges fetches files from external sources and computes the shared diff.
@@ -125,69 +141,78 @@ func (c *DiffCommand) fetchSharedChanges(config *entities.Config, repoPath, sour
 	return shared
 }
 
-// renderOutput displays the diff result using the appropriate renderer.
-func (c *DiffCommand) renderOutput(result *entities.DiffResult, opts DiffOptions) {
-	if opts.Summary {
-		printSummary(result, c.formatter)
+// render writes both sections: external sources, then personal files with
+// when each side last changed and, unless summarizing, the colored diff.
+func (c *DiffCommand) render(w io.Writer, shared []entities.FileChange, personal []PersonalChange, opts DiffOptions) {
+	f := c.formatter
+	if len(shared) > 0 {
+		fmt.Fprintln(w, f.Bold("External sources:"))
+		for _, change := range shared {
+			writeChange(w, change, f)
+		}
+		fmt.Fprintln(w)
+	}
+
+	if len(personal) == 0 {
 		return
 	}
-	if c.viewer != nil && opts.Tool == "" {
-		if err := c.viewer.Show(result, c.formatter); err == nil {
-			return
+	fmt.Fprintln(w, f.Bold("Personal files (this device compared with the sync repo):"))
+	for _, change := range personal {
+		label, description := describeEntry(change.Entry)
+		fmt.Fprintf(w, "  %-8s %s  %s\n", label, f.FilePath(change.Tool+"/"+change.Entry.Path), description)
+		if opts.Summary {
+			continue
 		}
-	}
-	printDetailed(result, opts.Tool, c.formatter)
-}
-
-func printSummary(result *entities.DiffResult, f entities.Formatter) {
-	if len(result.SharedChanges) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("External sources:"))
-		for _, ch := range result.SharedChanges {
-			fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
-		}
-	}
-	if len(result.PersonalChanges) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("Personal (from other devices):"))
-		for _, ch := range result.PersonalChanges {
-			fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
-		}
-	}
-	if len(result.LocalUncommitted) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("Local uncommitted changes:"))
-		for _, ch := range result.LocalUncommitted {
-			fmt.Fprintf(os.Stdout, "  %s %s\n", ch.Direction, ch.Path)
-		}
+		fmt.Fprintf(w, "           %s\n", f.Subtle(describeTimestamps(entities.ConflictDetail{
+			LocalModified:  change.LocalModified,
+			RemoteModified: change.RemoteModified,
+			RemoteSummary:  change.RemoteSummary,
+		})))
+		fmt.Fprint(w, c.unifiedDiff(change))
+		fmt.Fprintln(w)
 	}
 }
 
-func printDetailed(result *entities.DiffResult, tool string, f entities.Formatter) {
-	if len(result.SharedChanges) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("External sources:"))
-		for _, ch := range result.SharedChanges {
-			printChange(ch, f)
-			launchExternalTool(tool, ch)
-		}
-		fmt.Fprintln(os.Stdout)
+// unifiedDiff renders the change as a colored unified diff oriented the way
+// the change would travel: incoming changes read as this device becoming the
+// repo version, outgoing changes and conflicts as the repo becoming this
+// device's version.
+func (c *DiffCommand) unifiedDiff(change PersonalChange) string {
+	name := change.Tool + "/" + change.Entry.Path
+	from, to := change.RemoteContent, change.LocalContent
+	fromLabel, toLabel := "repo: "+name, "local: "+name
+	if change.Entry.Action.IsIncoming() {
+		from, to = change.LocalContent, change.RemoteContent
+		fromLabel, toLabel = "local: "+name, "repo: "+name
 	}
-	if len(result.PersonalChanges) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("Personal (from other devices):"))
-		for _, ch := range result.PersonalChanges {
-			printChange(ch, f)
-			launchExternalTool(tool, ch)
-		}
-		fmt.Fprintln(os.Stdout)
+
+	if isBinary(from) || isBinary(to) {
+		return "           (binary content, no text diff)\n"
 	}
-	if len(result.LocalUncommitted) > 0 {
-		fmt.Fprintln(os.Stdout, f.Bold("Local uncommitted changes:"))
-		for _, ch := range result.LocalUncommitted {
-			printChange(ch, f)
-			launchExternalTool(tool, ch)
-		}
-		fmt.Fprintln(os.Stdout)
+	return entities.ColorizeDiff(c.differ.Unified(fromLabel, toLabel, from, to), c.formatter)
+}
+
+// openInTool prints each change and opens the pairs that exist on both sides
+// in the external diff tool.
+func (c *DiffCommand) openInTool(shared []entities.FileChange, personal []PersonalChange, tool string) {
+	for _, change := range shared {
+		writeChange(os.Stdout, change, c.formatter)
+		launchExternalTool(tool, change)
+	}
+	for _, change := range personal {
+		label, description := describeEntry(change.Entry)
+		fmt.Fprintf(os.Stdout, "  %-8s %s/%s  %s\n", label, change.Tool, change.Entry.Path, description)
+		launchExternalTool(tool, entities.FileChange{
+			Path:          change.Entry.Path,
+			Direction:     entities.ChangeModified,
+			LocalContent:  change.LocalContent,
+			RemoteContent: change.RemoteContent,
+		})
 	}
 }
 
-func printChange(ch entities.FileChange, f entities.Formatter) {
+// writeChange prints one external-source change with its details.
+func writeChange(w io.Writer, ch entities.FileChange, f entities.Formatter) {
 	var details []string
 
 	details = append(details, fmt.Sprintf("source: %s", ch.Source))
@@ -203,18 +228,6 @@ func printChange(ch entities.FileChange, f entities.Formatter) {
 	case entities.ChangeModified:
 		details = append(details, fmt.Sprintf("local: %s -> remote: %s (%+d B)",
 			formatSize(ch.LocalSize), formatSize(ch.RemoteSize), ch.SizeDelta()))
-		if ch.HasClockSkew() {
-			details = append(
-				details,
-				"clock skew detected -- timestamps match but content differs, manual review recommended",
-			)
-		} else if !ch.LocalTimestamp.IsZero() && !ch.RemoteTimestamp.IsZero() {
-			if ch.IsRemoteNewer() {
-				details = append(details, "remote is newer")
-			} else {
-				details = append(details, "local is newer")
-			}
-		}
 	case entities.ChangeRemoved:
 		details = append(details, "removed upstream")
 	}
@@ -223,8 +236,8 @@ func printChange(ch entities.FileChange, f entities.Formatter) {
 		details = append(details, "encrypted")
 	}
 
-	fmt.Fprintf(os.Stdout, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
-	fmt.Fprintf(os.Stdout, "      %s\n", f.Subtle(strings.Join(details, " | ")))
+	fmt.Fprintf(w, "  %s %s\n", f.DiffSymbol(string(ch.Direction)), f.FilePath(ch.Path))
+	fmt.Fprintf(w, "      %s\n", f.Subtle(strings.Join(details, " | ")))
 }
 
 const bytesPerKB = 1024

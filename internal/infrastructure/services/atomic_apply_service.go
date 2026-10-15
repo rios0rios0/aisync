@@ -38,8 +38,23 @@ func NewAtomicApplyService(journalRepo repositories.JournalRepository, basePath 
 
 // Stage writes all files to a staging directory and creates a journal with
 // pending operations. The files map keys are final target paths and values
-// are the file contents.
+// are the file contents. Text files are staged with LF line endings.
 func (s *AtomicApplyService) Stage(files map[string][]byte) (*entities.Journal, error) {
+	return s.stage(files, normalizeLineEndings)
+}
+
+// StageVerbatim stages files byte for byte, for content that must round-trip
+// unchanged.
+func (s *AtomicApplyService) StageVerbatim(files map[string][]byte) (*entities.Journal, error) {
+	return s.stage(files, func(content []byte) []byte { return content })
+}
+
+// stage writes every file, passed through transform, to a new staging
+// directory and records the pending moves in a journal.
+func (s *AtomicApplyService) stage(
+	files map[string][]byte,
+	transform func([]byte) []byte,
+) (*entities.Journal, error) {
 	stagingDir := filepath.Join(s.basePath, "staging", strconv.FormatInt(time.Now().UnixNano(), 10))
 	if err := os.MkdirAll(stagingDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create staging directory: %w", err)
@@ -60,7 +75,7 @@ func (s *AtomicApplyService) Stage(files map[string][]byte) (*entities.Journal, 
 			return nil, fmt.Errorf("failed to create staging subdirectory for %s: %w", relPath, err)
 		}
 
-		normalized := normalizeLineEndings(content)
+		normalized := transform(content)
 		if err := os.WriteFile(stagingPath, normalized, 0600); err != nil {
 			return nil, fmt.Errorf("failed to write staged file %s: %w", stagingPath, err)
 		}

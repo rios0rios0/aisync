@@ -23,18 +23,22 @@ func newPullCmd(
 	manifestRepo *doubles.MockManifestRepository,
 	gitRepo *doubles.MockGitRepository,
 	encryptionService *doubles.MockEncryptionService,
-	conflictDetector *doubles.MockConflictDetector,
+	promptService *doubles.MockPromptService,
 	hooksMerger *doubles.MockMerger,
 	settingsMerger *doubles.MockMerger,
 	sectionMerger *doubles.MockMerger,
 	applyService *doubles.MockApplyService,
 ) *commands.PullCommand {
+	personalSyncer := commands.NewPersonalSyncer(
+		manifestRepo, encryptionService, applyService, promptService,
+		&doubles.MockTextDiffer{}, &doubles.MockRepoHistory{},
+	)
 	return commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo,
 		manifestRepo, gitRepo, encryptionService,
-		conflictDetector, hooksMerger, settingsMerger,
+		personalSyncer, hooksMerger, settingsMerger,
 		sectionMerger, applyService,
-		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true, ConflictResolution: "remote"},
+		promptService,
 		&doubles.MockBundleService{},
 		&doubles.MockBundleStateRepository{},
 	)
@@ -47,7 +51,7 @@ func defaultPullDeps() (
 	*doubles.MockManifestRepository,
 	*doubles.MockGitRepository,
 	*doubles.MockEncryptionService,
-	*doubles.MockConflictDetector,
+	*doubles.MockPromptService,
 	*doubles.MockMerger,
 	*doubles.MockMerger,
 	*doubles.MockMerger,
@@ -59,7 +63,7 @@ func defaultPullDeps() (
 		&doubles.MockManifestRepository{},
 		&doubles.MockGitRepository{},
 		&doubles.MockEncryptionService{},
-		&doubles.MockConflictDetector{},
+		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
@@ -69,6 +73,8 @@ func defaultPullDeps() (
 // --- Execute tests ---
 
 func TestPullCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should complete successfully when sources return files", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
@@ -1014,64 +1020,84 @@ func TestPullCommand_Execute(t *testing.T) {
 		assert.Equal(t, unchangedContent, content)
 	})
 
-	t.Run("should detect conflict when incoming personal differs from local", func(t *testing.T) {
+	t.Run("should keep the local file when a personal conflict is forced without a preference", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(toolDir, 0700))
-
-		// Create local file
-		require.NoError(t, os.WriteFile(
-			filepath.Join(toolDir, "custom.md"),
-			[]byte("local version"),
-			0600,
-		))
-
-		// Create incoming personal file
-		personalDir := filepath.Join(tmpDir, "personal", "claude")
+		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "agents"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "agents", "custom.md"), []byte("local version"), 0600))
+		personalDir := filepath.Join(tmpDir, "personal", "claude", "agents")
 		require.NoError(t, os.MkdirAll(personalDir, 0700))
-		require.NoError(t, os.WriteFile(
-			filepath.Join(personalDir, "custom.md"),
-			[]byte("remote version"),
-			0600,
-		))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "custom.md"), []byte("remote version"), 0600))
 
 		oldManifest := entities.NewManifest("0.1.0", "host")
-		oldManifest.SetFile("custom.md", "personal", "personal", "old-checksum")
+		oldManifest.SetFile("agents/custom.md", "personal", "personal", "sha256:last-synced")
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
-
+			encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
 		configRepo.Config = &entities.Config{
-			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
-			Tools: map[string]entities.Tool{
-				"claude": {Path: toolDir, Enabled: true},
-			},
-			Encryption: entities.EncryptionConfig{Identity: "/tmp/key.txt"},
+			Tools: map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
 		}
 		stateRepo.State = entities.NewState("test-device")
 		stateRepo.ExistsVal = true
-		sourceRepo.Result = &repositories.FetchResult{
-			Files: map[string][]byte{
-				"shared/claude/rules/test.md": []byte("# Shared"),
-			},
-			ETag: "etag-1",
-		}
-		gitRepo.HasRemoteVal = false
 		manifestRepo.ExistsVal = true
 		manifestRepo.Manifest = oldManifest
-		conflictDet.Conflicts = []entities.Conflict{
-			{Path: "custom.md", RemoteDevice: "other-device", RemoteContent: []byte("remote version")},
-		}
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc)
 
-		// when - force mode auto-resolves conflicts
+		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
 
 		// then
 		require.NoError(t, err)
+		assert.Equal(t, 0, prompt.ConflictCalls, "--force must not prompt")
+		assert.Equal(t, 0, applySvc.StageCalls, "a skipped conflict must not be overwritten")
+		content, readErr := os.ReadFile(filepath.Join(toolDir, "agents", "custom.md"))
+		require.NoError(t, readErr)
+		assert.Equal(t, "local version", string(content))
+	})
+
+	t.Run("should take the repo version of a personal conflict when preferring remote", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		toolDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "agents"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "agents", "custom.md"), []byte("local version"), 0600))
+		personalDir := filepath.Join(tmpDir, "personal", "claude", "agents")
+		require.NoError(t, os.MkdirAll(personalDir, 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "custom.md"), []byte("remote version"), 0600))
+
+		oldManifest := entities.NewManifest("0.1.0", "host")
+		oldManifest.SetFile("agents/custom.md", "personal", "personal", "sha256:last-synced")
+
+		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
+			encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+		configRepo.Config = &entities.Config{
+			Tools: map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
+		}
+		stateRepo.State = entities.NewState("test-device")
+		stateRepo.ExistsVal = true
+		manifestRepo.ExistsVal = true
+		manifestRepo.Manifest = oldManifest
+		applySvc.WriteOnApply = true
+
+		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
+			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{
+			Force:      true,
+			Preference: entities.PreferRemote,
+		})
+
+		// then
+		require.NoError(t, err)
+		content, readErr := os.ReadFile(filepath.Join(toolDir, "agents", "custom.md"))
+		require.NoError(t, readErr)
+		assert.Equal(t, "remote version", string(content))
 	})
 
 	t.Run("should handle git pull with open and has remote", func(t *testing.T) {

@@ -50,20 +50,3 @@ func (c *FileChange) HasClockSkew() bool {
 	}
 	return diff <= time.Second && c.LocalChecksum != c.RemoteChecksum
 }
-
-// DiffResult holds the complete set of detected changes grouped by category.
-type DiffResult struct {
-	SharedChanges    []FileChange
-	PersonalChanges  []FileChange
-	LocalUncommitted []FileChange
-}
-
-// HasChanges returns true if any changes were detected.
-func (d *DiffResult) HasChanges() bool {
-	return len(d.SharedChanges) > 0 || len(d.PersonalChanges) > 0 || len(d.LocalUncommitted) > 0
-}
-
-// TotalCount returns the total number of detected changes.
-func (d *DiffResult) TotalCount() int {
-	return len(d.SharedChanges) + len(d.PersonalChanges) + len(d.LocalUncommitted)
-}

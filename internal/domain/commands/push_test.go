@@ -14,6 +14,28 @@ import (
 	"github.com/rios0rios0/aisync/test/doubles"
 )
 
+// newPushCmd wires a PushCommand whose PersonalSyncer shares the given
+// manifest and encryption doubles, keeping the argument order the push tests
+// were written against.
+func newPushCmd(
+	configRepo repositories.ConfigRepository,
+	stateRepo repositories.StateRepository,
+	gitRepo repositories.GitRepository,
+	encryptionService repositories.EncryptionService,
+	manifestRepo repositories.ManifestRepository,
+	secretScanner repositories.SecretScanner,
+	ndaChecker repositories.NDAContentChecker,
+	bundleService repositories.BundleService,
+) *commands.PushCommand {
+	personalSyncer := commands.NewPersonalSyncer(
+		manifestRepo, encryptionService, &doubles.MockApplyService{}, &doubles.MockPromptService{},
+		&doubles.MockTextDiffer{}, &doubles.MockRepoHistory{},
+	)
+	return commands.NewPushCommand(
+		configRepo, stateRepo, gitRepo, secretScanner, ndaChecker, bundleService, personalSyncer,
+	)
+}
+
 func TestPushCommand_Execute(t *testing.T) {
 	t.Run("should commit and push when there are personal files", func(t *testing.T) {
 		// given
@@ -46,7 +68,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		}
 		secretScanner := &doubles.MockSecretScanner{Findings: nil}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -68,7 +90,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		assert.Equal(t, 1, gitRepo.PushCalls)
 	})
 
-	t.Run("should skip commit and push when repo is clean", func(t *testing.T) {
+	t.Run("should skip the commit but still push when the repo is clean", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -85,7 +107,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   true,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -103,13 +125,13 @@ func TestPushCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, 0, gitRepo.CommitAllCalls)
-		assert.Equal(t, 0, gitRepo.PushCalls)
+		assert.Equal(t, 1, gitRepo.PushCalls, "an up-to-date push is a no-op that retries an earlier failed push")
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewPushCommand(configRepo, nil, nil, nil, nil, nil, nil, nil)
+		cmd := newPushCmd(configRepo, nil, nil, nil, nil, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", "", commands.PushOptions{})
@@ -136,7 +158,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   false,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -170,7 +192,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		gitRepo := &doubles.MockGitRepository{}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, nil, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -187,7 +209,6 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 0, gitRepo.OpenCalls)
 		assert.Equal(t, 0, gitRepo.CommitAllCalls)
 		assert.Equal(t, 0, gitRepo.PushCalls)
 	})
@@ -213,8 +234,9 @@ func TestPushCommand_Execute(t *testing.T) {
 			ExistsVal: true,
 		}
 		gitRepo := &doubles.MockGitRepository{
-			HasRemoteVal: true,
-			IsCleanVal:   false,
+			HasRemoteVal:    true,
+			IsCleanVal:      false,
+			ChangedFilesVal: []string{"personal/claude/secrets.md"},
 		}
 		secretScanner := &doubles.MockSecretScanner{
 			Findings: []repositories.SecretFinding{
@@ -222,7 +244,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			},
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -266,7 +288,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			},
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -304,7 +326,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   false,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -335,7 +357,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		gitRepo := &doubles.MockGitRepository{OpenErr: assert.AnError}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, nil, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -369,7 +391,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		}
 		gitRepo := &doubles.MockGitRepository{IsCleanErr: assert.AnError}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -434,7 +456,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			EncryptedData: []byte("ENCRYPTED-DATA"),
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			encryptionService,
 			&doubles.MockManifestRepository{},
@@ -519,7 +541,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			EncryptedData: []byte("ENCRYPTED-DATA"),
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			encryptionService,
 			&doubles.MockManifestRepository{},
@@ -601,8 +623,9 @@ func TestPushCommand_Execute(t *testing.T) {
 			ExistsVal: true,
 		}
 		gitRepo := &doubles.MockGitRepository{
-			HasRemoteVal: true,
-			IsCleanVal:   false,
+			HasRemoteVal:    true,
+			IsCleanVal:      false,
+			ChangedFilesVal: []string{"personal/claude/memories/user.md"},
 		}
 		encryptionService := &doubles.MockEncryptionService{}
 		// Scanner returns a finding so the push must fail — proving that
@@ -618,7 +641,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			},
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			encryptionService,
 			&doubles.MockManifestRepository{},
@@ -663,7 +686,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   true,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -700,7 +723,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			CommitErr:    assert.AnError,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -737,7 +760,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   false,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -801,7 +824,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			Manifest:  manifest,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			manifestRepo,
@@ -849,7 +872,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		gitRepo := &doubles.MockGitRepository{}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, nil, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -866,7 +889,8 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 0, gitRepo.OpenCalls)
+		assert.Equal(t, 0, gitRepo.CommitAllCalls, "a dry run never commits")
+		assert.Equal(t, 0, gitRepo.PushCalls, "a dry run never pushes")
 	})
 
 	t.Run("should skip files matching ignore patterns", func(t *testing.T) {
@@ -905,7 +929,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   false,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -949,12 +973,13 @@ func TestPushCommand_Execute(t *testing.T) {
 			ExistsVal: true,
 		}
 		gitRepo := &doubles.MockGitRepository{
-			HasRemoteVal: true,
-			IsCleanVal:   false,
+			HasRemoteVal:    true,
+			IsCleanVal:      false,
+			ChangedFilesVal: []string{"personal/claude/safe.md"},
 		}
 		secretScanner := &doubles.MockSecretScanner{Findings: nil}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1006,7 +1031,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   true, // nothing changed
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1048,7 +1073,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		}
 		secretScanner := &doubles.MockSecretScanner{Findings: nil}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1069,7 +1094,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		assert.Equal(t, 0, secretScanner.ScanCalls)
 	})
 
-	t.Run("should handle push failure gracefully and still succeed", func(t *testing.T) {
+	t.Run("should return an error and keep the local commit when the push to the remote fails", func(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1087,7 +1112,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			PushErr:      assert.AnError, // push fails
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1103,9 +1128,11 @@ func TestPushCommand_Execute(t *testing.T) {
 		)
 
 		// then
-		require.NoError(t, err) // push failure is non-fatal
-		assert.Equal(t, 1, gitRepo.CommitAllCalls)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "could not push")
+		assert.Equal(t, 1, gitRepo.CommitAllCalls, "the commit is kept so the next push retries it")
 		assert.Equal(t, 1, gitRepo.PushCalls)
+		assert.Equal(t, 0, stateRepo.SaveCalls, "a failed push must not be recorded as the last push")
 	})
 
 	t.Run("should update state with existing state after push", func(t *testing.T) {
@@ -1125,7 +1152,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			IsCleanVal:   false,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1176,7 +1203,7 @@ func TestPushCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		gitRepo := &doubles.MockGitRepository{}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, nil, gitRepo,
 			&doubles.MockEncryptionService{},
 			&doubles.MockManifestRepository{},
@@ -1193,7 +1220,8 @@ func TestPushCommand_Execute(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 0, gitRepo.OpenCalls)
+		assert.Equal(t, 0, gitRepo.CommitAllCalls, "a dry run never commits")
+		assert.Equal(t, 0, gitRepo.PushCalls, "a dry run never pushes")
 	})
 
 	t.Run("should load existing manifest to determine shared files", func(t *testing.T) {
@@ -1229,7 +1257,7 @@ func TestPushCommand_Execute(t *testing.T) {
 			Manifest:  manifest,
 		}
 
-		cmd := commands.NewPushCommand(
+		cmd := newPushCmd(
 			configRepo, stateRepo, gitRepo,
 			&doubles.MockEncryptionService{},
 			manifestRepo,
@@ -1247,5 +1275,102 @@ func TestPushCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, manifestRepo.LoadCalls, 1)
+	})
+}
+
+func TestPushCommand_LegacyRepoFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should report files outside the allowlist but not .gitkeep placeholders", func(t *testing.T) {
+		t.Parallel()
+		// given
+		repoPath := t.TempDir()
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "rules", ".gitkeep"), "")
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "rules", "go.md"), "rule")
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "projects", "old.jsonl"), "transcript")
+		cmd := newPushCmd(nil, nil, nil, nil, nil, nil, nil, nil)
+
+		// when
+		hits := commands.ExposeLegacyHits(cmd, repoPath, "claude", nil)
+
+		// then
+		assert.Equal(t, []string{"personal/claude/projects/old.jsonl"}, hits)
+	})
+}
+
+func TestPushCommand_EncryptInPlace(t *testing.T) {
+	t.Parallel()
+
+	newFixture := func(t *testing.T, clean bool) (*commands.PushCommand, *doubles.MockGitRepository, string) {
+		t.Helper()
+		repoPath := filepath.Join(t.TempDir(), "repo")
+		writeFile(t, filepath.Join(repoPath, ".aisyncencrypt"), "personal/**\n")
+		writeFile(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc"), "rule")
+		config := &entities.Config{
+			Tools:      map[string]entities.Tool{},
+			Encryption: entities.EncryptionConfig{Recipients: []string{"age1recipient"}},
+		}
+		gitRepo := &doubles.MockGitRepository{HasRemoteVal: true, IsCleanVal: clean}
+		cmd := newPushCmd(
+			&doubles.MockConfigRepository{Config: config},
+			&doubles.MockStateRepository{State: entities.NewState("test-device"), ExistsVal: true},
+			gitRepo,
+			&doubles.MockEncryptionService{EncryptedData: []byte("ciphertext")},
+			&doubles.MockManifestRepository{},
+			&doubles.MockSecretScanner{},
+			&doubles.MockNDAContentChecker{},
+			&doubles.MockBundleService{},
+		)
+		return cmd, gitRepo, repoPath
+	}
+
+	t.Run("should commit files encrypted in place on their own with the encryption-only trailer", func(t *testing.T) {
+		t.Parallel()
+		// given
+		cmd, gitRepo, repoPath := newFixture(t, true)
+
+		// when
+		err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "", commands.PushOptions{})
+
+		// then
+		require.NoError(t, err)
+		assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc.age"))
+		assert.Equal(t, 1, gitRepo.CommitAllCalls)
+		assert.Contains(t, gitRepo.CommitMsg, "encrypted 1 personal file(s) in place")
+		assert.Contains(t, gitRepo.CommitMsg, "\n\nAisync-Change: encryption-only")
+		assert.Equal(t, 1, gitRepo.PushCalls)
+	})
+
+	t.Run(
+		"should leave files encrypted in place to the main commit when other changes are pending",
+		func(t *testing.T) {
+			t.Parallel()
+			// given
+			cmd, gitRepo, repoPath := newFixture(t, false)
+
+			// when
+			err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "main commit", commands.PushOptions{})
+
+			// then
+			require.NoError(t, err)
+			assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc.age"))
+			assert.Equal(t, 1, gitRepo.CommitAllCalls)
+			assert.Equal(t, "main commit", gitRepo.CommitMsg)
+		},
+	)
+
+	t.Run("should change nothing in a dry run", func(t *testing.T) {
+		t.Parallel()
+		// given
+		cmd, gitRepo, repoPath := newFixture(t, true)
+
+		// when
+		err := cmd.Execute(filepath.Join(repoPath, "config.yaml"), repoPath, "", commands.PushOptions{DryRun: true})
+
+		// then
+		require.NoError(t, err)
+		assert.FileExists(t, filepath.Join(repoPath, "personal", "cursor", "rules", "go.mdc"))
+		assert.Equal(t, 0, gitRepo.CommitAllCalls)
+		assert.Equal(t, 0, gitRepo.PushCalls)
 	})
 }

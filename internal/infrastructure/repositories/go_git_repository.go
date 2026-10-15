@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,7 +14,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	logger "github.com/sirupsen/logrus"
 )
 
 const (
@@ -157,8 +158,9 @@ func (r *GoGitRepository) CommitAll(message string) error {
 	return nil
 }
 
-// Push pushes committed changes to the remote origin. If the remote is unreachable,
-// it logs a warning and returns nil to support offline workflows.
+// Push pushes committed changes to the remote origin. A failure is returned
+// rather than swallowed: the commit stays local and the caller reports that
+// the next push retries it, instead of claiming the push succeeded.
 func (r *GoGitRepository) Push() error {
 	if r.repo == nil {
 		return errors.New("repository not opened; call Open or Clone first")
@@ -175,11 +177,32 @@ func (r *GoGitRepository) Push() error {
 		return nil
 	}
 	if err != nil {
-		logger.Warnf("push failed (offline or unreachable remote): %v", err)
-		return nil
+		return fmt.Errorf("failed to push: %w", err)
 	}
 
 	return nil
+}
+
+// ChangedFiles lists every path with an uncommitted change in the worktree,
+// untracked files included.
+func (r *GoGitRepository) ChangedFiles() ([]string, error) {
+	if r.worktree == nil {
+		return nil, errors.New("repository not opened; call Open or Clone first")
+	}
+
+	status, err := r.worktree.Status()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get worktree status: %w", err)
+	}
+
+	changed := make([]string, 0, len(status))
+	for path, fileStatus := range status {
+		if fileStatus.Staging != git.Unmodified || fileStatus.Worktree != git.Unmodified {
+			changed = append(changed, filepath.ToSlash(path))
+		}
+	}
+	sort.Strings(changed)
+	return changed, nil
 }
 
 // IsClean returns true if the worktree has no modifications.

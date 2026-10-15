@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	services "github.com/rios0rios0/aisync/internal/infrastructure/services"
 )
@@ -242,6 +243,43 @@ func TestRegexSecretScanner_Scan_ShouldDetectConnectionString(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "should have detected Connection String")
+}
+
+func TestRegexSecretScanner_Scan_ConnectionStringPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should not flag a connection string made only of variable references", func(t *testing.T) {
+		t.Parallel()
+		// given
+		files := map[string][]byte{
+			"rules/yaml.md": []byte("connection_string: \"${DATABASE_HOST}:${DATABASE_PORT}\"\n" +
+				"connectionString: '{{ db_url }}'\n" +
+				"connection_string = \"$DB_HOST/$DB_NAME\"\n"),
+		}
+		scanner := services.NewRegexSecretScanner()
+
+		// when
+		findings := scanner.Scan(files)
+
+		// then
+		assert.Empty(t, findings)
+	})
+
+	t.Run("should still flag a connection string that mixes variables with literal values", func(t *testing.T) {
+		t.Parallel()
+		// given
+		files := map[string][]byte{
+			"db.env": []byte(`connection_string = "Server=${DB_HOST};User=admin;Password=s3cret"`),
+		}
+		scanner := services.NewRegexSecretScanner()
+
+		// when
+		findings := scanner.Scan(files)
+
+		// then
+		require.Len(t, findings, 1)
+		assert.Equal(t, "Connection String", findings[0].Description)
+	})
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectHardcodedPassword(t *testing.T) {

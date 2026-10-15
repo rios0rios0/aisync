@@ -102,6 +102,17 @@ local-only preservation) and `replace` (overwrite unconditionally). Cross-device
 deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
 removing. See `CLAUDE.md` § Bundle Sync for full details.
 
+### Three-Way Personal Sync
+
+Personal files are reconciled by `PersonalSyncer`
+(`internal/domain/commands/personal_sync.go`) for `pull`, `push`, `sync`,
+and `diff`. Each tool's `.aisync-manifest.json` records the checksum every
+path had when this device last synced it; `entities.Reconcile` compares local,
+repo, and that base to decide push, pull, delete on either side, or conflict.
+Conflicts are resolved before anything is written (prompt with diff and
+timestamps, or `--prefer local|remote|newer`); without a terminal they are
+skipped, never overwritten. See `CLAUDE.md` § Three-Way Personal Sync.
+
 ### Age Identity Provisioning
 
 The `aisync key` group (`internal/domain/commands/key.go`) manages the age
@@ -180,10 +191,10 @@ Test description patterns by layer:
   ciphertext only when BOTH `encryptPatterns.Matches(...)` and
   `len(config.Encryption.Recipients) > 0` are true. Both content scanners
   (secret + NDA) must mirror that gate so files written as plaintext
-  (empty recipients) are still scanned. See `PushCommand.copyPersonalFile`
-  and `PushCommand.collectUnencryptedFiles` /
-  `PushCommand.runSecretScan` / `PushCommand.runNDAScan` in
-  `internal/domain/commands/push.go`.
+  (empty recipients) are still scanned. See `PersonalSyncer.repoContent`
+  in `internal/domain/commands/personal_sync.go` and
+  `PushCommand.collectPendingPlaintext` / `PushCommand.runSecretScan` /
+  `PushCommand.runNDAScan` in `internal/domain/commands/push.go`.
 - **Four-layer push protection stack.** Every push runs four orthogonal
   gates that each catch a different leak class. They compose, they do not
   overlap. **Never delete or weaken any layer without an explicit
@@ -194,8 +205,11 @@ Test description patterns by layer:
      to basename matching.
   2. **`.aisyncignore`** — gitignore-syntax additional exclusions.
   3. **`.aisyncencrypt` + age** — paths matching the patterns are
-     written as ciphertext to the configured recipients.
-  4. **Content scanners** —
+     written as ciphertext to the configured recipients; plaintext copies
+     already committed are encrypted in place on the next push or sync.
+  4. **Content scanners** — run on every uncommitted plaintext file under
+     `personal/` (exactly what the commit would publish), so a finding in a
+     file that is already committed does not block unrelated pushes —
      - `RegexSecretScanner` (15 credential-format regexes), bypass
        `--skip-secret-scan`.
      - `CompositeNDAChecker` (explicit list at
@@ -204,9 +218,9 @@ Test description patterns by layer:
      Findings are tagged with the source (`user`,
      `auto-derived:<origin>`, `heuristic:<name>`) so the user knows
      which knob fixes each hit.
-- **NDA scanner stays in the dry-run path.** `executeDryRun` runs the
-  same secret + NDA scanners against the would-be-pushed file contents
-  that `commitAndPush` runs in the real-push path. `--dry-run` must
+- **NDA scanner stays in the dry-run path.** A push dry run runs the
+  same secret + NDA scanners against the plaintext the PersonalSyncer
+  would write that `commitAndPush` runs in the real-push path. `--dry-run` must
   preview the actual blocks, not just enumerate paths — that is the
   whole point of `--dry-run`.
 - **Domain layer never imports infrastructure.** `PushCommand` depends

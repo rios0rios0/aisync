@@ -18,7 +18,8 @@ Sync AI coding assistant configurations across devices. Pull shared rules from c
 - **Shared/personal split**: Enforced namespaces — shared rules from sources, personal rules across devices
 - **Age encryption**: Memories, MCP configs, and bundle contents encrypted at rest with HMAC-keyed filenames (closes the SHA-256 confirmation oracle on bundle names) and power-of-2 size-bucket padding (defeats traffic analysis on the public-clone view)
 - **File watching**: Real-time change detection with fsnotify + polling fallback for Termux
-- **Diff preview**: See what would change before applying, with recency detection
+- **Three-way sync**: A change on one device is applied on the others, a deletion propagates, and a file changed on two devices opens a conflict review with a colored diff and when and where each side last changed
+- **Diff preview**: `aisync diff` shows a unified diff for every file that differs between this device and the sync repo, like `chezmoi diff`
 - **Secret scanning**: 15 regex patterns block accidental credential leaks before push
 - **Atomic apply**: Two-phase commit with journal prevents partial updates
 - **Self-update**: Single binary, updates from GitHub Releases via `aisync self-update`
@@ -53,7 +54,14 @@ aisync init rios0rios0
 
 # Or with a full URL
 aisync init --remote-url git@github.com:rios0rios0/aifiles.git --key ~/.config/aisync/key.txt
+
+# Then preview before anything is written locally
+aisync diff
 ```
+
+Every device must use the same age identity: import the original key with `--key` (or `aisync key import-from-op` when it lives in 1Password) instead of generating a new one, or the encrypted files in the repo cannot be read.
+
+If your SSH keys live in an agent (1Password, Windows `ssh.exe`, a hardware key) rather than in `~/.ssh/id_*` files, pass `--use-system-git` so git uses your SSH configuration, and set `sync.use_system_git: true` in `config.yaml` to make it the default for that repo.
 
 ### Upgrade scaffolding on an existing repo
 
@@ -77,17 +85,37 @@ Like chezmoi expects a `dotfiles` repo, aisync expects an `aifiles` repo:
 | Local clone | `~/.local/share/chezmoi/` | `~/.config/aisync/repo/` |
 | Shorthand | `chezmoi init <user>` | `aisync init <user>` |
 
-The `aifiles` repo **can** be public — bundle contents (memories, project history, MCP configs, local settings) are age-encrypted, bundle filenames are HMAC-derived from the device's identity (so guessed project names can't be confirmed against the public-clone view), and bundle ciphertext is padded to fixed power-of-2 size buckets (so file sizes don't profile per-project activity). What still rides as plaintext: rules, agents, commands, hooks, scripts, and skills under `personal/<tool>/` — review those before flipping visibility.
+The `aifiles` repo **can** be public — bundle contents (memories, project history, MCP configs, local settings) are age-encrypted, bundle filenames are HMAC-derived from the device's identity (so guessed project names can't be confirmed against the public-clone view), and bundle ciphertext is padded to fixed power-of-2 size buckets (so file sizes don't profile per-project activity). What still rides as plaintext: rules, agents, commands, hooks, scripts, and skills under `personal/<tool>/` — review those before flipping visibility, or add `personal/**` to `.aisyncencrypt` to store every personal file encrypted. Plaintext files already in the repo that match a pattern are encrypted in place on the next push or sync.
 
 ## Usage
 
 ### Daily Workflow
 
 ```bash
-aisync sync          # Pull shared rules + push personal changes
+aisync diff          # See what differs from the sync repo, as unified diffs
+aisync sync          # Pull shared rules, then reconcile personal files both ways and push
 aisync watch         # Monitor for changes in real-time
 aisync watch --auto-push  # Auto-push after 60s debounce
 ```
+
+### How Personal Files Are Merged
+
+Each device records, per file, the content it last synced (in the tool's `.aisync-manifest.json`). Comparing both sides with that record is what tells "changed here" from "changed there":
+
+| Situation | What happens |
+|-----------|--------------|
+| Changed (or new) on this device only | Sent to the repo |
+| Changed (or new) in the repo only | Applied on this device |
+| Deleted on one side, unchanged on the other | Deleted on the other side too |
+| Changed on both sides, or deleted on one and changed on the other | **Conflict**: you decide |
+
+For each conflict, aisync shows when this device's copy last changed and when (and in which commit) the repo copy did, which side is newer, and lets you open the diff before choosing: keep this machine's version, take the repo's, skip it until the next sync, apply your answer to all remaining conflicts, or quit without changing anything. Nothing is written until every conflict has an answer.
+
+Without a terminal (scripts, `watch`), conflicts are skipped and reported, never overwritten. To resolve them unattended, pass `--prefer local`, `--prefer remote`, or `--prefer newer` to `sync`, `push`, or `pull`.
+
+A device's first sync has no record yet, so every file that differs is a conflict. Run `aisync diff` (or `aisync sync --dry-run`) first, then `aisync sync` and answer each one, or `aisync sync --prefer local` to publish this device's versions.
+
+`push` sends only outgoing changes and `pull` applies only incoming ones; `sync` does both in a single pass, so each conflict is asked about once.
 
 ### Source Management
 
@@ -136,8 +164,14 @@ aisync device list
 ### Advanced Options
 
 ```bash
-# Use system git instead of built-in go-git (for Git LFS, SSH edge cases)
+# Use system git instead of built-in go-git (SSH agents, credential helpers, Git LFS)
 aisync pull --use-system-git
+# ...or make it permanent for this repo in config.yaml:
+#   sync:
+#     use_system_git: true
+
+# Resolve personal-file conflicts without prompting
+aisync sync --prefer newer
 
 # Add source from a specific subdirectory
 aisync source add mytools --source-repo org/repo --branch main --path tools/claude

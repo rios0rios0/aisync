@@ -1,0 +1,3 @@
+kind: 'Changed'
+body: 'changed personal-file scanning to read through the tool directory as an `os.Root`, so a symlink is followed only when it is relative and stays inside the tool directory and can no longer publish a file from elsewhere on the disk'
+time: '2026-10-15T19:40:56.061609088Z'

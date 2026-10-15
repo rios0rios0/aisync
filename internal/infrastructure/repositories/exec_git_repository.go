@@ -116,6 +116,39 @@ func (r *ExecGitRepository) IsClean() (bool, error) {
 	return strings.TrimSpace(out) == "", nil
 }
 
+// ChangedFiles lists every path with an uncommitted change in the worktree,
+// untracked files included. It parses `git status --porcelain=v1 -z`, where
+// each record is "XY <path>" and renames or copies carry the original path
+// in an extra NUL-separated field that is skipped.
+func (r *ExecGitRepository) ChangedFiles() ([]string, error) {
+	cmd := exec.CommandContext( //nolint:gosec // gitPath is validated at construction time via exec.LookPath
+		context.Background(),
+		r.gitPath,
+		"status", "--porcelain=v1", "-z", "--untracked-files=all",
+	)
+	cmd.Dir = r.dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git status failed: %w", err)
+	}
+
+	var changed []string
+	records := strings.Split(string(out), "\x00")
+	for i := 0; i < len(records); i++ {
+		record := records[i]
+		if len(record) < len("XY p") {
+			continue
+		}
+		changed = append(changed, record[3:])
+		if record[0] == 'R' || record[0] == 'C' {
+			i++ // the next field is the original path of the rename or copy
+		}
+	}
+	return changed, nil
+}
+
 // HasRemote returns true if the repository has a remote named "origin".
 func (r *ExecGitRepository) HasRemote() bool {
 	_, err := r.run(r.dir, "remote", "get-url", "origin")

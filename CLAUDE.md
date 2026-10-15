@@ -43,7 +43,8 @@ Clean Architecture with Hexagonal (Ports & Adapters) design. Dependencies always
 ```
 main.go → NewRootCommand(version)
              ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo, JSONBundleStateRepo
-             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, TarAgeBundleSvc, ...
+             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, TarAgeBundleSvc, UnifiedDiffer, ExecGitRepoHistory, ...
+             ├── creates the PersonalSyncer shared by pull, push, sync, and diff
              ├── creates domain commands (injecting interface deps)
              └── registers cobra subcommands → returns root *cobra.Command
 ```
@@ -73,12 +74,24 @@ The `Merger` interface has three implementations, each handling a different sing
 
 The `AtomicApplyService` prevents partial updates to AI tool directories:
 
-1. **Stage** — Write all incoming files to `~/.config/aisync/staging/<timestamp>/`.
+1. **Stage** — Write all incoming files to `~/.config/aisync/staging/<timestamp>/`. `Stage` converts text files to LF line endings (shared files); `StageVerbatim` keeps every byte (personal files and conversations, which must read back exactly as their recorded base).
 2. **Journal** — Record pending operations (source paths, target paths, old/new SHA-256 checksums) in `journal.json`.
 3. **Apply** — Move files from staging to final destinations via `os.Rename()`.
 4. **Clear** — Delete journal after success.
 
 On interruption, the next invocation detects the incomplete journal and resumes from where it left off. The `PullCommand` checks for pending journal recovery before starting a new pull.
+
+### Three-Way Personal Sync
+
+`commands/personal_sync.go` (`PersonalSyncer`) reconciles personal files between each enabled tool directory and `personal/<tool>/` in the sync repo. Pull, push, sync, and diff all go through it; external-source (shared) files keep their own flow in `pull.go`.
+
+- **Base**: the tool's `.aisync-manifest.json` entries with `source: personal` record the checksum each path had when this device last synced it. The manifest is device-local (never synced) and is only rewritten when a base entry changes.
+- **Classification**: `entities.Reconcile(local, remote, base)` (`entities/sync_plan.go`) is a pure decision table returning a `SyncEntry` per path: `push`, `pull`, `delete-repo`, `delete-local`, `forget`, `none`, or `conflict` with a `ConflictReason`. Without a base (first sync), differing copies are `both-added` conflicts and nothing is inferred as deleted.
+- **Phases**: plan every tool → resolve every conflict (a "for all" answer, `--prefer local|remote|newer`, or `PromptService.PromptSyncConflict`) → execute → save bases. Quitting at a prompt returns `ErrSyncAborted` before anything is written. Execution dispatches through the `actionHandlers` map; incoming files go through the atomic apply journal in one batch.
+- **Direction**: `push` runs outgoing actions, `pull` incoming ones, and `sync` both in its push phase (its pull phase passes `SkipPersonal`, so each conflict is asked once). A conflict the user resolves runs in full whatever the direction.
+- **Conflict detail**: local mtime, the last repo commit touching the path under either stored name, skipping commits with the `Aisync-Change: encryption-only` trailer (`RepoHistory`, `git log`), and a unified diff (`TextDiffer`, `services/unified_differ.go` on top of go-diff). The huh prompt pages long diffs; without a terminal it reads answers from stdin, one line per prompt through a single shared reader, and skips at end of input.
+- **Scope**: the same filter applies to all three sides: the tool allowlist, `.aisyncignore`, and paths owned by external sources. Out-of-scope paths are never touched. Local files are read through an `os.Root`, so a symlink is followed only when it is relative and stays inside the tool directory.
+- **Encryption**: `.age` copies are decrypted for comparison, so an unchanged encrypted file is never rewritten; a copy this device cannot decrypt is left alone on both sides. The owner-execute bit is carried to the repo and restored on pull. Before reconciling, a push or sync also encrypts in place every plaintext file under `personal/` that matches `.aisyncencrypt`, including those of tools not installed on the device, so a pattern added later protects the files already committed (`commands/personal_encryption.go`). When the repo was clean, that change is its own commit with the `Aisync-Change: encryption-only` trailer, which history lookups skip so each file keeps the date of its last real change; otherwise it rides in the scanned main commit.
 
 ### Bundle Sync
 
@@ -122,14 +135,14 @@ Key files:
 
 `aisync push` runs four orthogonal protections on every file. Any layer firing blocks the push. Each layer catches a different leak class — they compose, they don't overlap.
 
-1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`. Replaces the old compiled deny-list — unknown content is now never synced rather than silently leaking when a vendor ships a new runtime directory.
+1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. `ToolDenylists` and `CommonDenylist` exclude tool-managed content inside allowlisted directories (Claude's account-synced `skills/synced/` and `skills/.trash/`, Codex's bundled `skills/.system/`, `.gitkeep` placeholders). Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`, which also overrides the denylists. Replaces the old compiled deny-list — unknown content is now never synced rather than silently leaking when a vendor ships a new runtime directory.
 2. **`.aisyncignore`** — Gitignore-syntax file for additional path exclusions on top of the allowlist. Additive, user-configurable.
 3. **`.aisyncencrypt` + age** — Paths matching the patterns are written as ciphertext using `config.Encryption.Recipients`. Has two independent gates: pattern match AND non-empty recipients. Mismatched gates have previously caused silent plaintext commits.
-4. **Content scanners** — Two scanners run in sequence on the unencrypted file map (the same map the encrypt path produced):
+4. **Content scanners** — Two scanners run in sequence on the plaintext the commit is about to publish: every uncommitted, non-`.age` file under `personal/` (`GitRepository.ChangedFiles`), whichever command wrote it. Files already committed are not rescanned, so an old false positive does not block unrelated pushes:
    - **`RegexSecretScanner`** (`services/secret_scanner.go`) — 15 compiled regexes for credential FORMATS (AWS keys, GitHub tokens, JWTs, private key blocks). Bypassable with `--skip-secret-scan`.
    - **`CompositeNDAChecker`** (`services/nda_content_checker.go`) — Composes three sources of forbidden terms: (a) explicit user list, age-encrypted at `<repo>/.aisync-forbidden.age`, default canonical-form substring matching (lowercase + NFKD-stripped + alphanumeric-only) so `ContosoSecurity` catches every spacing/casing/separator/accent variant from one entry; (b) auto-derived from machine state via `services/auto_deriver.go` + `repositories/exec_git_inspector.go` — extracts terms from `git config --global user.email`, `git remote get-url origin` for repos under `~/Development`/`~/workspace`/etc. to depth 4, the `~/Development/dev.azure.com/<org>/<project>/` directory layout, and `~/.ssh/config` `Host <forge>-<alias>` entries; (c) compile-time heuristic shape checks (`services/nda_scanner.go:heuristicChecks`) — hardcoded home paths, WSL OneDrive paths, ADO org URLs, ssh-host alias patterns. Findings are tagged with the source (`user`, `auto-derived:<origin>`, `heuristic:<name>`) so the user can see exactly which knob fixes each hit. Bypassable with `--skip-nda-scan`. Per-device cache at `~/.cache/aisync/derived-terms.txt` (1h TTL, `0600`, never committed).
 
-`PushCommand.Execute` runs the scanners both in the real-push path (`commitAndPush`) AND the dry-run path (`executeDryRun`) so `--dry-run` previews the actual blocks a real push would trigger.
+`PushCommand.Execute` runs the scanners both in the real-push path (`commitAndPush`) AND the dry-run path (on the plaintext the PersonalSyncer would write) so `--dry-run` previews the actual blocks a real push would trigger. A push first updates the sync repo from its remote so other devices' changes are seen as conflicts, and a failed `git push` is an error (the commit stays local and the next push retries it).
 
 The `aisync nda` command group (`add`, `remove`, `list`, `ignore`) manages the explicit forbidden list and the `nda.auto_derive_exclude` config entry. The `NDACommand` is in the domain layer and depends only on `ConfigRepository` + `ForbiddenTermsRepository`; the heuristic count is injected via constructor (`services.HeuristicCount()`) so the domain layer never imports infrastructure.
 

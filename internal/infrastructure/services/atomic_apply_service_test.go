@@ -517,3 +517,26 @@ func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
 	require.NoError(t, readErr)
 	assert.Equal(t, []byte("# Rule\n\nSome content\n"), stagedContent)
 }
+
+func TestAtomicApplyService_StageVerbatim(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should keep CRLF and mixed line endings byte for byte", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		svc := services.NewAtomicApplyService(newInMemoryJournalRepo(), tmpDir)
+		targetPath := filepath.Join(tmpDir, "target", "LICENSE.txt")
+		content := []byte("Copyright\r\nAll rights\nreserved\r\n")
+
+		// when
+		journal, err := svc.StageVerbatim(map[string][]byte{targetPath: content})
+		require.NoError(t, err)
+		require.NoError(t, svc.Apply(journal))
+
+		// then
+		written, readErr := os.ReadFile(targetPath)
+		require.NoError(t, readErr)
+		assert.Equal(t, content, written)
+	})
+}
