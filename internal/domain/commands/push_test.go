@@ -1277,3 +1277,23 @@ func TestPushCommand_Execute(t *testing.T) {
 		assert.GreaterOrEqual(t, manifestRepo.LoadCalls, 1)
 	})
 }
+
+func TestPushCommand_LegacyRepoFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should report files outside the allowlist but not .gitkeep placeholders", func(t *testing.T) {
+		t.Parallel()
+		// given
+		repoPath := t.TempDir()
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "rules", ".gitkeep"), "")
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "rules", "go.md"), "rule")
+		writeFile(t, filepath.Join(repoPath, "personal", "claude", "projects", "old.jsonl"), "transcript")
+		cmd := newPushCmd(nil, nil, nil, nil, nil, nil, nil, nil)
+
+		// when
+		hits := commands.ExposeLegacyHits(cmd, repoPath, "claude", nil)
+
+		// then
+		assert.Equal(t, []string{"personal/claude/projects/old.jsonl"}, hits)
+	})
+}

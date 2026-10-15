@@ -196,7 +196,8 @@ func (c *PushCommand) collectLegacyHitsForTool(repoPath, toolName string, extra 
 		if filepath.Ext(checkPath) == ageSuffix {
 			checkPath = checkPath[:len(checkPath)-len(ageSuffix)]
 		}
-		if entities.IsSyncable(toolName, checkPath, extra) {
+		// .gitkeep files are the repo's own scaffolding, not obsolete content.
+		if filepath.Base(relPath) == ".gitkeep" || entities.IsSyncable(toolName, checkPath, extra) {
 			return nil
 		}
 		hits = append(hits, legacyHit{
