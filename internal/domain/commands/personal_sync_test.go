@@ -580,3 +580,59 @@ func TestPersonalSyncer_Changes(t *testing.T) {
 		assert.Equal(t, "feat: tuned go rules", change.RemoteSummary)
 	})
 }
+
+func TestPersonalSyncer_ExecutableBit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should publish a change of the executable bit alone", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("hooks/guard.sh", "#!/bin/sh\n")
+		f.writeRepo("hooks/guard.sh", "#!/bin/sh\n")
+		f.writeLocal("hooks/guard.sh", "#!/bin/sh\n")
+		require.NoError(t, os.Chmod(filepath.Join(f.toolDir, "hooks", "guard.sh"), 0o700))
+
+		// when
+		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncBoth})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, report.Pushed)
+		info, statErr := os.Stat(filepath.Join(f.repoPath, "personal", "claude", "hooks", "guard.sh"))
+		require.NoError(t, statErr)
+		assert.NotZero(t, info.Mode().Perm()&0o100)
+	})
+
+	t.Run("should report a conflict on first sync when only the executable bit differs", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.writeRepo("hooks/guard.sh", "#!/bin/sh\n")
+		f.writeLocal("hooks/guard.sh", "#!/bin/sh\n")
+		require.NoError(t, os.Chmod(filepath.Join(f.toolDir, "hooks", "guard.sh"), 0o700))
+
+		// when
+		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncBoth, NoPrompt: true})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, report.ConflictsSkipped)
+	})
+
+	t.Run("should keep plain content checksums for files that are not executable", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "rule")
+		f.writeRepo("rules/go.md", "rule")
+		f.writeLocal("rules/go.md", "rule")
+
+		// when
+		report, err := f.sync(commands.PersonalSyncOptions{Direction: entities.SyncBoth})
+
+		// then
+		require.NoError(t, err)
+		assert.Zero(t, report.Pushed+report.Pulled+report.ConflictsSkipped, "an existing base still matches")
+	})
+}

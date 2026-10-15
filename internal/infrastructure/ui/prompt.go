@@ -166,7 +166,7 @@ func showConflictDiff(detail entities.ConflictDetail) {
 		fmt.Fprintln(os.Stdout, "  Binary content: no text diff is available.")
 		return
 	case detail.Diff == "":
-		fmt.Fprintln(os.Stdout, "  The two versions have the same text.")
+		fmt.Fprintln(os.Stdout, "  The two versions have the same text; only the executable permission differs.")
 		return
 	}
 
@@ -297,7 +297,7 @@ func showConflictDiffPlain(detail entities.ConflictDetail) {
 	case detail.Binary:
 		fmt.Fprintln(os.Stdout, "  Binary content: no text diff is available.")
 	case detail.Diff == "":
-		fmt.Fprintln(os.Stdout, "  The two versions have the same text.")
+		fmt.Fprintln(os.Stdout, "  The two versions have the same text; only the executable permission differs.")
 	default:
 		fmt.Fprint(os.Stdout, detail.Diff)
 	}

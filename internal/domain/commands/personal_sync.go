@@ -355,11 +355,12 @@ func scanLocalFiles(toolDir string, inScope func(string) bool) map[string]localF
 			logger.Warnf("failed to read %s/%s: %v", toolDir, rel, readErr)
 			return
 		}
+		executable := info.Mode().Perm()&ownerExecuteBit != 0
 		files[rel] = localFile{
 			content:    content,
-			checksum:   checksumBytes(content),
+			checksum:   fileChecksum(content, executable),
 			modTime:    info.ModTime(),
-			executable: info.Mode().Perm()&ownerExecuteBit != 0,
+			executable: executable,
 		}
 	})
 	return files
@@ -412,7 +413,7 @@ func (s *PersonalSyncer) scanRepoFiles(
 		}
 		files[logical] = repoFile{
 			content:    content,
-			checksum:   checksumBytes(content),
+			checksum:   fileChecksum(content, executable),
 			storedPath: stored,
 			executable: executable,
 		}
@@ -929,6 +930,20 @@ func printSyncSummary(report *PersonalSyncReport) {
 		fmt.Fprintln(os.Stdout,
 			"Skipped conflicts are reported again on the next sync; resolve them in a terminal or with --prefer.")
 	}
+}
+
+// executableSuffix marks the checksum of an executable file, so a change of
+// the executable bit alone syncs like a content change (a hook committed
+// without it would otherwise reach other devices unable to run).
+const executableSuffix = "+x"
+
+// fileChecksum identifies a personal file by its content and executable bit.
+// Non-executable files keep the plain content checksum.
+func fileChecksum(content []byte, executable bool) string {
+	if executable {
+		return checksumBytes(content) + executableSuffix
+	}
+	return checksumBytes(content)
 }
 
 // localChecksums projects scanned local files onto their checksums.
