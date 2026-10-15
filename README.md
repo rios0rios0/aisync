@@ -20,6 +20,7 @@ Sync AI coding assistant configurations across devices. Pull shared rules from c
 - **File watching**: Real-time change detection with fsnotify + polling fallback for Termux
 - **Three-way sync**: A change on one device is applied on the others, a deletion propagates, and a file changed on two devices opens a conflict review with a colored diff and when and where each side last changed
 - **Diff preview**: `aisync diff` shows a unified diff for every file that differs between this device and the sync repo, like `chezmoi diff`
+- **Light conversation sync**: Recent conversations (and project memories) travel through a branch that only ever holds the current snapshot, so the repo stays the size of what you sync instead of growing with every session
 - **Secret scanning**: 15 regex patterns block accidental credential leaks before push
 - **Atomic apply**: Two-phase commit with journal prevents partial updates
 - **Self-update**: Single binary, updates from GitHub Releases via `aisync self-update`
@@ -116,6 +117,28 @@ Without a terminal (scripts, `watch`), conflicts are skipped and reported, never
 A device's first sync has no record yet, so every file that differs is a conflict. Run `aisync diff` (or `aisync sync --dry-run`) first, then `aisync sync` and answer each one, or `aisync sync --prefer local` to publish this device's versions.
 
 `push` sends only outgoing changes and `pull` applies only incoming ones; `sync` does both in a single pass, so each conflict is asked about once.
+
+### Syncing Conversations
+
+To resume conversations on another machine, add a `transcripts` block to the tool in `config.yaml`. For Claude Code, this syncs each conversation's main transcript and the project memories, but not subagent logs, tool outputs, todos, or shell snapshots:
+
+```yaml
+tools:
+  claude:
+    path: '~/.claude'
+    enabled: true
+    transcripts:
+      dir: 'projects'            # tool-relative directory holding the conversations
+      logs: ['*/*.jsonl']        # append-only conversation logs
+      files: ['*/memory/**']     # other files, merged like personal files, never expire
+      max_age: '14d'             # conversations idle for longer leave the snapshot
+```
+
+Conversations live on a separate branch (`transcripts`, or `sync.transcripts_branch`) that only ever holds the current snapshot: each sync replaces it with one commit instead of adding history, so the repository stays the size of the conversations in the window. Every file is compressed and age-encrypted, its name is an HMAC of its path (project names never appear), and only conversations that changed are uploaded. Publishing uses `--force-with-lease`; if another device published first, aisync fetches and merges again instead of overwriting it.
+
+Merging works like personal files, with two rules for logs: a conversation continued on one device simply grows, so the copy that contains the other wins without asking; and a conversation untouched on every device for longer than `max_age` leaves the snapshot (it stays on disk wherever it is). Pulled conversations keep their original modification time, so `claude --resume` and Claude Code's own cleanup see their real age.
+
+Conversation sync uses the system `git` binary and needs encryption recipients; it never publishes plaintext.
 
 ### Source Management
 

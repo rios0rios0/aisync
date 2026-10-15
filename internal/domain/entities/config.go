@@ -79,6 +79,18 @@ type SyncConfig struct {
 	// --use-system-git were passed. System git honors the user's SSH config,
 	// agents, and credential helpers, which the built-in go-git does not.
 	UseSystemGit bool `yaml:"use_system_git,omitempty"`
+	// TranscriptsBranch is the branch holding the transcript snapshot;
+	// empty means [DefaultTranscriptsBranch].
+	TranscriptsBranch string `yaml:"transcripts_branch,omitempty"`
+}
+
+// EffectiveTranscriptsBranch returns the configured transcript branch or
+// [DefaultTranscriptsBranch].
+func (s SyncConfig) EffectiveTranscriptsBranch() string {
+	if s.TranscriptsBranch == "" {
+		return DefaultTranscriptsBranch
+	}
+	return s.TranscriptsBranch
 }
 
 // EncryptionConfig holds age encryption settings.

@@ -113,6 +113,15 @@ Conflicts are resolved before anything is written (prompt with diff and
 timestamps, or `--prefer local|remote|newer`); without a terminal they are
 skipped, never overwritten. See `CLAUDE.md` § Three-Way Personal Sync.
 
+### Transcript Sync
+
+Conversations selected by a tool's `transcripts` spec sync through a snapshot
+branch that always holds a single parentless commit
+(`services/git_transcript_service.go`), so git history never grows with
+sessions. Files are gzip+age encrypted under HMAC names, publishes use
+`--force-with-lease`, and `TranscriptSyncer` merges again on
+`ErrSnapshotMoved`. See `CLAUDE.md` § Transcript Sync.
+
 ### Age Identity Provisioning
 
 The `aisync key` group (`internal/domain/commands/key.go`) manages the age
