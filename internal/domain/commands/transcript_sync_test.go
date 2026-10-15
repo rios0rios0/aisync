@@ -123,6 +123,24 @@ func TestTranscriptSyncer_Sync(t *testing.T) {
 		assert.Equal(t, 0, f.service.PublishCalls, "nothing changed in the snapshot, so nothing is published")
 	})
 
+	t.Run("should write a pulled memory file byte for byte, keeping its CRLF line endings", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newTranscriptFixture(t)
+		memoryKey := "claude/-proj/memory/MEMORY.md"
+		f.service.Seed(memoryKey, []byte("- [Rule](rule.md)\r\n"), recently, "desktop")
+
+		// when
+		report, err := f.sync(both)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1, report.Pulled)
+		assert.Equal(t, 1, f.apply.StageVerbatimCalls)
+		content, _ := f.readConversation("-proj/memory/MEMORY.md")
+		assert.Equal(t, "- [Rule](rule.md)\r\n", content)
+	})
+
 	t.Run("should not publish when only pulling", func(t *testing.T) {
 		t.Parallel()
 		// given

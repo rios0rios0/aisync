@@ -587,14 +587,15 @@ func (*TranscriptSyncer) executeTranscriptDeleteLocal(
 	exec.report.DeletedLocal++
 }
 
-// applyTranscriptPulls writes every incoming file in one atomic batch and
-// gives each the modification time it had on the device that published it,
-// so expiry and the tool's own cleanup see the conversation's real age.
+// applyTranscriptPulls writes every incoming file byte for byte in one atomic
+// batch and gives each the modification time it had on the device that
+// published it, so expiry and the tool's own cleanup see the conversation's
+// real age, and the file reads back exactly as its recorded base.
 func (s *TranscriptSyncer) applyTranscriptPulls(exec *transcriptExecution) error {
 	if len(exec.pending) == 0 {
 		return nil
 	}
-	journal, err := s.applyService.Stage(exec.pending)
+	journal, err := s.applyService.StageVerbatim(exec.pending)
 	if err != nil {
 		return fmt.Errorf("failed to stage incoming conversations: %w", err)
 	}
