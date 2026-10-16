@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewJournal_CreatesWithCorrectFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	stagingDir := "/tmp/aisync-staging-abc"
 
@@ -23,6 +25,8 @@ func TestNewJournal_CreatesWithCorrectFields(t *testing.T) {
 }
 
 func TestNewJournal_OperationsStartEmpty(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	j := entities.NewJournal("/tmp/staging")
 
@@ -31,6 +35,8 @@ func TestNewJournal_OperationsStartEmpty(t *testing.T) {
 }
 
 func TestJournal_AddOperation_AppendsPendingOperation(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 
@@ -48,6 +54,8 @@ func TestJournal_AddOperation_AppendsPendingOperation(t *testing.T) {
 }
 
 func TestJournal_AddOperation_MultipleOperations(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 
@@ -64,6 +72,8 @@ func TestJournal_AddOperation_MultipleOperations(t *testing.T) {
 }
 
 func TestJournal_AddOperation_EmptyOldChecksum(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 
@@ -76,6 +86,8 @@ func TestJournal_AddOperation_EmptyOldChecksum(t *testing.T) {
 }
 
 func TestJournal_MarkApplied_SetsStatusToApplied(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -90,6 +102,8 @@ func TestJournal_MarkApplied_SetsStatusToApplied(t *testing.T) {
 }
 
 func TestJournal_MarkApplied_NonExistentTargetIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -102,6 +116,8 @@ func TestJournal_MarkApplied_NonExistentTargetIsNoOp(t *testing.T) {
 }
 
 func TestJournal_MarkApplied_AllOperations(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -117,6 +133,8 @@ func TestJournal_MarkApplied_AllOperations(t *testing.T) {
 }
 
 func TestJournal_IsComplete_ReturnsTrueWhenAllApplied(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -132,6 +150,8 @@ func TestJournal_IsComplete_ReturnsTrueWhenAllApplied(t *testing.T) {
 }
 
 func TestJournal_IsComplete_ReturnsFalseWhenSomePending(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -146,6 +166,8 @@ func TestJournal_IsComplete_ReturnsFalseWhenSomePending(t *testing.T) {
 }
 
 func TestJournal_IsComplete_ReturnsFalseWhenNoneApplied(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")
@@ -158,6 +180,8 @@ func TestJournal_IsComplete_ReturnsFalseWhenNoneApplied(t *testing.T) {
 }
 
 func TestJournal_IsComplete_ReturnsFalseForEmptyOperations(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 
@@ -169,6 +193,8 @@ func TestJournal_IsComplete_ReturnsFalseForEmptyOperations(t *testing.T) {
 }
 
 func TestJournal_IsComplete_SingleOperationApplied(t *testing.T) {
+	t.Parallel()
+
 	// given
 	j := entities.NewJournal("/tmp/staging")
 	j.AddOperation("/tmp/a", "/target/a", "", "aaa")

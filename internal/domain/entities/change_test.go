@@ -10,6 +10,8 @@ import (
 )
 
 func TestFileChange_SizeDelta(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		localSize  int64
@@ -50,6 +52,7 @@ func TestFileChange_SizeDelta(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			change := &entities.FileChange{
 				LocalSize:  tt.localSize,
@@ -66,6 +69,8 @@ func TestFileChange_SizeDelta(t *testing.T) {
 }
 
 func TestFileChange_IsRemoteNewer(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	tests := []struct {
@@ -96,6 +101,7 @@ func TestFileChange_IsRemoteNewer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			change := &entities.FileChange{
 				LocalTimestamp:  tt.localTimestamp,
@@ -112,6 +118,8 @@ func TestFileChange_IsRemoteNewer(t *testing.T) {
 }
 
 func TestFileChange_HasClockSkew(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	tests := []struct {
@@ -183,6 +191,7 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			change := tt.change
 
@@ -196,6 +205,8 @@ func TestFileChange_HasClockSkew(t *testing.T) {
 }
 
 func TestChangeDirection_Constants(t *testing.T) {
+	t.Parallel()
+
 	// given / when / then
 	assert.Equal(t, entities.ChangeAdded, entities.ChangeDirection("+"))
 	assert.Equal(t, entities.ChangeModified, entities.ChangeDirection("~"))

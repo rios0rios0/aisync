@@ -174,7 +174,11 @@ match this pattern, not generate free-form tests.
   (e.g. `TestHooksMerger_Merge_ConcatenatesArrays`), grouping each scenario
   under `t.Run("should ... when ...", func(t *testing.T) { ... })`.
 - **Parallelism:** unit tests call `t.Parallel()` at the top of the parent
-  `Test...` function so all sub-tests run concurrently.
+  `Test...` function and in every sub-test, so all of them run concurrently;
+  `paralleltest` and `tparallel` fail CI otherwise. A test that calls
+  `t.Setenv` cannot be parallel, so such sub-tests live in their own
+  sequential function. Git-backed tests create repositories with
+  `initTempRepo`, which turns off commit signing and global hooks.
 - **Assertions:** `testify/assert` for assertions, `testify/require` for
   fatal preconditions (stop the test if they fail).
 - **Doubles:** use the manual stubs in `test/doubles/mocks.go`. They store

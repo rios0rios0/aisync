@@ -14,7 +14,10 @@ import (
 )
 
 func TestDoctorCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should complete without error when all checks pass", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 
@@ -73,6 +76,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should complete without error when some checks fail", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "nonexistent-repo")
@@ -111,6 +115,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect missing config as failure", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -149,6 +154,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect missing age key as failure", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -188,6 +194,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect no tools as failure", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -227,6 +234,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect missing state as failure", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -261,6 +269,7 @@ func TestDoctorCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect repo without .git as failure", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")

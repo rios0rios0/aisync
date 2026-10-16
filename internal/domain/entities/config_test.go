@@ -11,6 +11,8 @@ import (
 )
 
 func TestConfig_MarshalUnmarshalYAML(t *testing.T) {
+	t.Parallel()
+
 	// given
 	original := entities.Config{
 		Sync: entities.SyncConfig{
@@ -68,6 +70,8 @@ func TestConfig_MarshalUnmarshalYAML(t *testing.T) {
 }
 
 func TestConfig_EmptyHooksExclude_OmittedInYAML(t *testing.T) {
+	t.Parallel()
+
 	// given
 	cfg := entities.Config{
 		Sync: entities.SyncConfig{Remote: "origin"},
@@ -82,6 +86,8 @@ func TestConfig_EmptyHooksExclude_OmittedInYAML(t *testing.T) {
 }
 
 func TestConfig_UnmarshalFromYAML(t *testing.T) {
+	t.Parallel()
+
 	// given
 	raw := `
 sync:
@@ -148,6 +154,8 @@ hooks_exclude:
 }
 
 func TestHooksExcludeEntry_MarshalRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entry := entities.HooksExcludeEntry{
 		Event:   "PreSync",

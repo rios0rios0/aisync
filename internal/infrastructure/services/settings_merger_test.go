@@ -11,6 +11,8 @@ import (
 )
 
 func TestSettingsMerger_Merge_ShouldDeepMergeNestedKeysFromTwoSources(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte(`{
 		"editor": {
@@ -47,6 +49,8 @@ func TestSettingsMerger_Merge_ShouldDeepMergeNestedKeysFromTwoSources(t *testing
 }
 
 func TestSettingsMerger_Merge_ShouldLetPersonalWinOnCollision(t *testing.T) {
+	t.Parallel()
+
 	// given
 	shared := []byte(`{
 		"editor": {
@@ -74,6 +78,8 @@ func TestSettingsMerger_Merge_ShouldLetPersonalWinOnCollision(t *testing.T) {
 }
 
 func TestSettingsMerger_Merge_ShouldMergeArraysByUnionWithUniqueElementsOnly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte(`{
 		"plugins": ["pluginA", "pluginB"]
@@ -100,6 +106,8 @@ func TestSettingsMerger_Merge_ShouldMergeArraysByUnionWithUniqueElementsOnly(t *
 }
 
 func TestSettingsMerger_Merge_ShouldReturnEmptyObjectWhenInputsAreEmpty(t *testing.T) {
+	t.Parallel()
+
 	// given
 	merger := services.NewSettingsMerger()
 
@@ -115,6 +123,8 @@ func TestSettingsMerger_Merge_ShouldReturnEmptyObjectWhenInputsAreEmpty(t *testi
 }
 
 func TestSettingsMerger_Merge_ShouldMergeSingleSourceWithPersonal(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"theme": "dark",
@@ -145,6 +155,8 @@ func TestSettingsMerger_Merge_ShouldMergeSingleSourceWithPersonal(t *testing.T) 
 }
 
 func TestSettingsMerger_Merge_ShouldReturnErrorWhenSharedSourceIsMalformed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	malformed := []byte(`{invalid json`)
 	merger := services.NewSettingsMerger()
@@ -158,6 +170,8 @@ func TestSettingsMerger_Merge_ShouldReturnErrorWhenSharedSourceIsMalformed(t *te
 }
 
 func TestSettingsMerger_Merge_ShouldReturnErrorWhenPersonalIsMalformed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	valid := []byte(`{"key": "value"}`)
 	malformed := []byte(`{broken`)
@@ -172,6 +186,8 @@ func TestSettingsMerger_Merge_ShouldReturnErrorWhenPersonalIsMalformed(t *testin
 }
 
 func TestSettingsMerger_Merge_ShouldDeepMergeThreeLevelsDeep(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte(`{
 		"editor": {
@@ -215,6 +231,8 @@ func TestSettingsMerger_Merge_ShouldDeepMergeThreeLevelsDeep(t *testing.T) {
 }
 
 func TestSettingsMerger_Merge_ShouldMergeEmptyArrays(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte(`{
 		"plugins": [],
@@ -245,6 +263,8 @@ func TestSettingsMerger_Merge_ShouldMergeEmptyArrays(t *testing.T) {
 }
 
 func TestSettingsMerger_Merge_ShouldHandleNilPersonal(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"theme": "dark",

@@ -15,7 +15,10 @@ import (
 )
 
 func TestWatchCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewWatchCommand(configRepo, nil, nil)
@@ -29,6 +32,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when no enabled tool directories are found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -47,6 +51,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when all tools are disabled", func(t *testing.T) {
+		t.Parallel()
 		// given
 		config := &entities.Config{
 			Tools: map[string]entities.Tool{
@@ -66,6 +71,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when watch service fails to start", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")
@@ -92,6 +98,7 @@ func TestWatchCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should load ignore patterns from both config and file", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")

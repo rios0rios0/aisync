@@ -12,6 +12,8 @@ import (
 )
 
 func TestHooksMerger_Merge_ShouldConcatenateArraysWhenTwoSourcesShareSameEventKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte(`{
 		"hooks": {
@@ -44,6 +46,8 @@ func TestHooksMerger_Merge_ShouldConcatenateArraysWhenTwoSourcesShareSameEventKe
 }
 
 func TestHooksMerger_Merge_ShouldDeduplicateWhenSameHookAppearsInTwoSources(t *testing.T) {
+	t.Parallel()
+
 	// given
 	hook := `{
 		"hooks": {
@@ -71,6 +75,8 @@ func TestHooksMerger_Merge_ShouldDeduplicateWhenSameHookAppearsInTwoSources(t *t
 }
 
 func TestHooksMerger_Merge_ShouldPlacePersonalHooksLast(t *testing.T) {
+	t.Parallel()
+
 	// given
 	shared := []byte(`{
 		"hooks": {
@@ -108,6 +114,8 @@ func TestHooksMerger_Merge_ShouldPlacePersonalHooksLast(t *testing.T) {
 }
 
 func TestHooksMerger_Merge_ShouldRemoveExcludedHook(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"hooks": {
@@ -140,6 +148,8 @@ func TestHooksMerger_Merge_ShouldRemoveExcludedHook(t *testing.T) {
 }
 
 func TestHooksMerger_Merge_ShouldReturnEmptyHooksWhenInputsAreEmpty(t *testing.T) {
+	t.Parallel()
+
 	// given
 	merger := services.NewHooksMerger(nil)
 
@@ -157,6 +167,8 @@ func TestHooksMerger_Merge_ShouldReturnEmptyHooksWhenInputsAreEmpty(t *testing.T
 }
 
 func TestHooksMerger_Merge_ShouldReturnErrorWhenJSONIsMalformed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	malformed := []byte(`{not valid json}`)
 	merger := services.NewHooksMerger(nil)
@@ -170,6 +182,8 @@ func TestHooksMerger_Merge_ShouldReturnErrorWhenJSONIsMalformed(t *testing.T) {
 }
 
 func TestHooksMerger_Merge_ShouldReturnErrorWhenPersonalJSONIsMalformed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	valid := []byte(`{"hooks": {}}`)
 	malformed := []byte(`{not valid}`)
@@ -184,6 +198,8 @@ func TestHooksMerger_Merge_ShouldReturnErrorWhenPersonalJSONIsMalformed(t *testi
 }
 
 func TestHooksMerger_Merge_ShouldMergePersonalOnlyWhenNoSharedSources(t *testing.T) {
+	t.Parallel()
+
 	// given
 	personal := []byte(`{
 		"hooks": {
@@ -212,6 +228,8 @@ func TestHooksMerger_Merge_ShouldMergePersonalOnlyWhenNoSharedSources(t *testing
 }
 
 func TestHooksMerger_Merge_ShouldHandleMultipleEventKeysInOneSource(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"hooks": {
@@ -251,6 +269,8 @@ func TestHooksMerger_Merge_ShouldHandleMultipleEventKeysInOneSource(t *testing.T
 }
 
 func TestHooksMerger_Merge_ShouldSkipNonArrayHookEntries(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"hooks": {
@@ -274,6 +294,8 @@ func TestHooksMerger_Merge_ShouldSkipNonArrayHookEntries(t *testing.T) {
 }
 
 func TestHooksMerger_Merge_ShouldHandleSourceWithoutHooksKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{"version": "1.0"}`)
 	merger := services.NewHooksMerger(nil)
@@ -292,6 +314,8 @@ func TestHooksMerger_Merge_ShouldHandleSourceWithoutHooksKey(t *testing.T) {
 }
 
 func TestHooksMerger_Merge_ShouldExcludeByEventOnly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"hooks": {
@@ -327,6 +351,8 @@ func TestHooksMerger_Merge_ShouldExcludeByEventOnly(t *testing.T) {
 }
 
 func TestHooksMerger_SetExcludes_ShouldUpdateExcludeRules(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source := []byte(`{
 		"hooks": {

@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewManifest_CreatesWithCorrectFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	version := "1.2.3"
 	device := "laptop"
@@ -26,6 +28,8 @@ func TestNewManifest_CreatesWithCorrectFields(t *testing.T) {
 }
 
 func TestNewManifest_FilesMapStartsEmpty(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	m := entities.NewManifest("0.0.1", "workstation")
 
@@ -34,6 +38,8 @@ func TestNewManifest_FilesMapStartsEmpty(t *testing.T) {
 }
 
 func TestManifest_SetFile_AddsFileToManifest(t *testing.T) {
+	t.Parallel()
+
 	// given
 	m := entities.NewManifest("1.0.0", "dev")
 
@@ -50,6 +56,8 @@ func TestManifest_SetFile_AddsFileToManifest(t *testing.T) {
 }
 
 func TestManifest_SetFile_OverwritesExistingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	m := entities.NewManifest("1.0.0", "dev")
 	m.SetFile("rules/test.md", "guide", "shared", "abc123")
@@ -66,6 +74,8 @@ func TestManifest_SetFile_OverwritesExistingFile(t *testing.T) {
 }
 
 func TestManifest_SetFile_MultipleFiles(t *testing.T) {
+	t.Parallel()
+
 	// given
 	m := entities.NewManifest("1.0.0", "dev")
 
@@ -79,6 +89,8 @@ func TestManifest_SetFile_MultipleFiles(t *testing.T) {
 }
 
 func TestManifest_RemoveFile_DeletesExistingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	m := entities.NewManifest("1.0.0", "dev")
 	m.SetFile("rules/test.md", "guide", "shared", "abc123")
@@ -96,6 +108,8 @@ func TestManifest_RemoveFile_DeletesExistingFile(t *testing.T) {
 }
 
 func TestManifest_RemoveFile_NonExistentFileIsNoOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	m := entities.NewManifest("1.0.0", "dev")
 	m.SetFile("rules/test.md", "guide", "shared", "abc123")

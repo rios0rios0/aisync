@@ -9,6 +9,8 @@ import (
 )
 
 func TestParseEncryptPatterns_SkipsCommentsAndBlanks(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte(`# This is a comment
 personal/*/memories/**
@@ -28,6 +30,8 @@ secrets/*.key
 }
 
 func TestParseEncryptPatterns_EmptyContent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte("")
 
@@ -39,6 +43,8 @@ func TestParseEncryptPatterns_EmptyContent(t *testing.T) {
 }
 
 func TestParseEncryptPatterns_OnlyComments(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte(`# comment 1
 # comment 2
@@ -52,6 +58,8 @@ func TestParseEncryptPatterns_OnlyComments(t *testing.T) {
 }
 
 func TestParseEncryptPatterns_OnlyBlankLines(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte("\n\n\n")
 
@@ -63,6 +71,8 @@ func TestParseEncryptPatterns_OnlyBlankLines(t *testing.T) {
 }
 
 func TestParseEncryptPatterns_TrimsWhitespace(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte("  personal/*.md  \n\t secrets/*.key \t\n")
 
@@ -76,6 +86,8 @@ func TestParseEncryptPatterns_TrimsWhitespace(t *testing.T) {
 }
 
 func TestParseEncryptPatterns_StripsTrailingActionKeywords(t *testing.T) {
+	t.Parallel()
+
 	// given — gitattributes-style rows where the line carries an action
 	// keyword after the pattern. Without tokenization the whole line would
 	// be stored as the glob and never match any real path.
@@ -92,6 +104,8 @@ func TestParseEncryptPatterns_StripsTrailingActionKeywords(t *testing.T) {
 }
 
 func TestEncryptPatterns_Matches(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		patterns    []string
@@ -216,6 +230,7 @@ func TestEncryptPatterns_Matches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			p := &entities.EncryptPatterns{Patterns: tt.patterns}
 

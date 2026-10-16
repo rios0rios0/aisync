@@ -368,6 +368,8 @@ Host random.example.com
 // level because t.Setenv panics inside parallel tests, and EmailDomain
 // shells out to `git config --global user.email` whose source file is
 // controlled via `GIT_CONFIG_GLOBAL` (set per sub-test).
+//
+//nolint:paralleltest // every sub-test sets GIT_CONFIG_GLOBAL with t.Setenv through writeGlobalGitConfig
 func TestExecGitInspector_EmailDomain(t *testing.T) {
 	// writeGlobalGitConfig writes a synthetic global gitconfig file
 	// for the current sub-test and points `git config --global` at it

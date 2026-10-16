@@ -14,6 +14,8 @@ import (
 )
 
 func TestJSONStateRepository_SaveThenLoad(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -57,6 +59,8 @@ func TestJSONStateRepository_SaveThenLoad(t *testing.T) {
 }
 
 func TestJSONStateRepository_StateFileLocation(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -75,6 +79,8 @@ func TestJSONStateRepository_StateFileLocation(t *testing.T) {
 }
 
 func TestJSONStateRepository_Load_MissingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -89,6 +95,8 @@ func TestJSONStateRepository_Load_MissingFile(t *testing.T) {
 }
 
 func TestJSONStateRepository_Exists_WithFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -107,6 +115,8 @@ func TestJSONStateRepository_Exists_WithFile(t *testing.T) {
 }
 
 func TestJSONStateRepository_Exists_WithoutFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -119,6 +129,8 @@ func TestJSONStateRepository_Exists_WithoutFile(t *testing.T) {
 }
 
 func TestJSONStateRepository_PreservesAllFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -176,6 +188,8 @@ func TestJSONStateRepository_PreservesAllFields(t *testing.T) {
 }
 
 func TestJSONStateRepository_Save_ShouldCreateAisyncDirectory(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -202,6 +216,8 @@ func TestJSONStateRepository_Save_ShouldCreateAisyncDirectory(t *testing.T) {
 }
 
 func TestJSONStateRepository_Load_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()
@@ -219,6 +235,8 @@ func TestJSONStateRepository_Load_InvalidJSON(t *testing.T) {
 }
 
 func TestJSONStateRepository_SaveThenLoad_WithEmptyDevicesList(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONStateRepository()
 	repoPath := t.TempDir()

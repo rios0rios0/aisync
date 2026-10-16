@@ -9,6 +9,8 @@ import (
 )
 
 func TestDefaultTools_ReturnsAtLeast31Tools(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -17,6 +19,8 @@ func TestDefaultTools_ReturnsAtLeast31Tools(t *testing.T) {
 }
 
 func TestDefaultTools_ClaudeIsEnabledByDefault(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -28,6 +32,8 @@ func TestDefaultTools_ClaudeIsEnabledByDefault(t *testing.T) {
 }
 
 func TestDefaultTools_CursorIsEnabledByDefault(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -39,6 +45,8 @@ func TestDefaultTools_CursorIsEnabledByDefault(t *testing.T) {
 }
 
 func TestDefaultTools_CopilotIsEnabledByDefault(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -50,6 +58,8 @@ func TestDefaultTools_CopilotIsEnabledByDefault(t *testing.T) {
 }
 
 func TestDefaultTools_CodexIsEnabledByDefault(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -61,6 +71,8 @@ func TestDefaultTools_CodexIsEnabledByDefault(t *testing.T) {
 }
 
 func TestDefaultTools_DisabledToolsByDefault(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		expectedPath string
@@ -97,6 +109,7 @@ func TestDefaultTools_DisabledToolsByDefault(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given / when
 			tool, ok := tools[tt.name]
 
@@ -109,6 +122,8 @@ func TestDefaultTools_DisabledToolsByDefault(t *testing.T) {
 }
 
 func TestDefaultTools_AllToolsHaveNonEmptyPath(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 
@@ -119,6 +134,8 @@ func TestDefaultTools_AllToolsHaveNonEmptyPath(t *testing.T) {
 }
 
 func TestDefaultTools_ExactlyFourEnabled(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	tools := entities.DefaultTools()
 

@@ -13,6 +13,8 @@ import (
 )
 
 func TestAgeEncryptionService_GenerateKey_ShouldCreateFileAndReturnPublicKeyStartingWithAge1(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "keys", "identity.txt")
@@ -35,6 +37,8 @@ func TestAgeEncryptionService_GenerateKey_ShouldCreateFileAndReturnPublicKeyStar
 }
 
 func TestAgeEncryptionService_EncryptDecrypt_ShouldRoundtripSuccessfully(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	identityPath := filepath.Join(tmpDir, "identity.txt")
@@ -58,6 +62,8 @@ func TestAgeEncryptionService_EncryptDecrypt_ShouldRoundtripSuccessfully(t *test
 }
 
 func TestAgeEncryptionService_ImportKey_ShouldValidateIdentityFormat(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	sourcePath := filepath.Join(tmpDir, "source-identity.txt")
@@ -79,6 +85,8 @@ func TestAgeEncryptionService_ImportKey_ShouldValidateIdentityFormat(t *testing.
 }
 
 func TestAgeEncryptionService_ImportKey_ShouldFailWhenSourceHasInvalidIdentity(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	sourcePath := filepath.Join(tmpDir, "invalid-identity.txt")
@@ -97,6 +105,8 @@ func TestAgeEncryptionService_ImportKey_ShouldFailWhenSourceHasInvalidIdentity(t
 }
 
 func TestAgeEncryptionService_ExportPublicKey_ShouldReturnCorrectKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	identityPath := filepath.Join(tmpDir, "identity.txt")
@@ -115,6 +125,8 @@ func TestAgeEncryptionService_ExportPublicKey_ShouldReturnCorrectKey(t *testing.
 }
 
 func TestAgeEncryptionService_Decrypt_ShouldFailWithWrongKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	svc := services.NewAgeEncryptionService()
@@ -142,6 +154,8 @@ func TestAgeEncryptionService_Decrypt_ShouldFailWithWrongKey(t *testing.T) {
 }
 
 func TestAgeEncryptionService_Encrypt_ShouldFailWithNoRecipients(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewAgeEncryptionService()
 
@@ -154,6 +168,8 @@ func TestAgeEncryptionService_Encrypt_ShouldFailWithNoRecipients(t *testing.T) {
 }
 
 func TestAgeEncryptionService_Encrypt_ShouldFailWithInvalidRecipient(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewAgeEncryptionService()
 
@@ -166,6 +182,8 @@ func TestAgeEncryptionService_Encrypt_ShouldFailWithInvalidRecipient(t *testing.
 }
 
 func TestAgeEncryptionService_ExportPublicKey_ShouldFailWhenFileDoesNotExist(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewAgeEncryptionService()
 
@@ -178,6 +196,8 @@ func TestAgeEncryptionService_ExportPublicKey_ShouldFailWhenFileDoesNotExist(t *
 }
 
 func TestAgeEncryptionService_ImportKey_ShouldFailWhenSourceDoesNotExist(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewAgeEncryptionService()
 	destPath := filepath.Join(t.TempDir(), "dest", "identity.txt")
@@ -191,6 +211,8 @@ func TestAgeEncryptionService_ImportKey_ShouldFailWhenSourceDoesNotExist(t *test
 }
 
 func TestAgeEncryptionService_Decrypt_ShouldFailWhenIdentityFileDoesNotExist(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewAgeEncryptionService()
 
@@ -203,6 +225,8 @@ func TestAgeEncryptionService_Decrypt_ShouldFailWhenIdentityFileDoesNotExist(t *
 }
 
 func TestAgeEncryptionService_Decrypt_ShouldFailWhenIdentityFileIsInvalid(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	identityPath := filepath.Join(tmpDir, "invalid.txt")
@@ -218,6 +242,8 @@ func TestAgeEncryptionService_Decrypt_ShouldFailWhenIdentityFileIsInvalid(t *tes
 }
 
 func TestAgeEncryptionService_ExportPublicKey_ShouldFailWhenFileContainsInvalidIdentity(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	identityPath := filepath.Join(tmpDir, "invalid.txt")
@@ -233,6 +259,8 @@ func TestAgeEncryptionService_ExportPublicKey_ShouldFailWhenFileContainsInvalidI
 }
 
 func TestAgeEncryptionService_Encrypt_ShouldSucceedWithMultipleRecipients(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	svc := services.NewAgeEncryptionService()

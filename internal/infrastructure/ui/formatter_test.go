@@ -9,6 +9,8 @@ import (
 )
 
 func TestLipglossFormatter_StatusTag_ShouldReturnPassWhenTrue(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -21,6 +23,8 @@ func TestLipglossFormatter_StatusTag_ShouldReturnPassWhenTrue(t *testing.T) {
 }
 
 func TestLipglossFormatter_StatusTag_ShouldReturnFailWhenFalse(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -33,6 +37,8 @@ func TestLipglossFormatter_StatusTag_ShouldReturnFailWhenFalse(t *testing.T) {
 }
 
 func TestLipglossFormatter_StatusTag_ShouldReturnDifferentStringsForTrueAndFalse(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -45,6 +51,8 @@ func TestLipglossFormatter_StatusTag_ShouldReturnDifferentStringsForTrueAndFalse
 }
 
 func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledPlusForAdded(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -57,6 +65,8 @@ func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledPlusForAdded(t *testing.
 }
 
 func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledTildeForModified(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -69,6 +79,8 @@ func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledTildeForModified(t *test
 }
 
 func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledMinusForRemoved(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -81,6 +93,8 @@ func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledMinusForRemoved(t *testi
 }
 
 func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledEqualsForUnchanged(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -93,6 +107,8 @@ func TestLipglossFormatter_DiffSymbol_ShouldReturnStyledEqualsForUnchanged(t *te
 }
 
 func TestLipglossFormatter_DiffSymbol_ShouldReturnUnknownDirectionAsIs(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -104,6 +120,8 @@ func TestLipglossFormatter_DiffSymbol_ShouldReturnUnknownDirectionAsIs(t *testin
 }
 
 func TestLipglossFormatter_Bold_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -116,6 +134,8 @@ func TestLipglossFormatter_Bold_ShouldReturnNonEmptyString(t *testing.T) {
 }
 
 func TestLipglossFormatter_Subtle_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -128,6 +148,8 @@ func TestLipglossFormatter_Subtle_ShouldReturnNonEmptyString(t *testing.T) {
 }
 
 func TestLipglossFormatter_FilePath_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -140,6 +162,8 @@ func TestLipglossFormatter_FilePath_ShouldReturnNonEmptyString(t *testing.T) {
 }
 
 func TestLipglossFormatter_Success_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -152,6 +176,8 @@ func TestLipglossFormatter_Success_ShouldReturnNonEmptyString(t *testing.T) {
 }
 
 func TestLipglossFormatter_Warning_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 
@@ -164,6 +190,8 @@ func TestLipglossFormatter_Warning_ShouldReturnNonEmptyString(t *testing.T) {
 }
 
 func TestLipglossFormatter_Error_ShouldReturnNonEmptyString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := ui.NewLipglossFormatter()
 

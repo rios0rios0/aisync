@@ -26,13 +26,26 @@ func initTempRepo(t *testing.T) (*repositories.ExecGitRepository, string) {
 	repo := skipIfNoGit(t)
 	dir := t.TempDir()
 	require.NoError(t, repo.Init(dir))
-	// Configure git user for commits
-	_ = exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run()
-	_ = exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()
+	// Commit as a fixed test identity, and keep the developer's global git
+	// setup out of the way: commit signing can need an agent (1Password
+	// refuses requests under parallel load) and global hooks can call out to
+	// services. Repository-local config overrides the global one.
+	for _, setting := range [][2]string{
+		{"user.email", "test@test.com"},
+		{"user.name", "Test"},
+		{"commit.gpgsign", "false"},
+		{"tag.gpgsign", "false"},
+		{"core.hooksPath", os.DevNull},
+	} {
+		out, err := exec.Command("git", "-C", dir, "config", setting[0], setting[1]).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
 	return repo, dir
 }
 
 func TestExecGitRepository_NewExecGitRepository_ShouldSucceedWhenGitOnPath(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	repo, err := repositories.NewExecGitRepository()
 
@@ -44,6 +57,8 @@ func TestExecGitRepository_NewExecGitRepository_ShouldSucceedWhenGitOnPath(t *te
 }
 
 func TestExecGitRepository_Init_ShouldCreateGitDirAndSetHEADToMain(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := skipIfNoGit(t)
 	dir := t.TempDir()
@@ -63,6 +78,8 @@ func TestExecGitRepository_Init_ShouldCreateGitDirAndSetHEADToMain(t *testing.T)
 }
 
 func TestExecGitRepository_Open_ShouldSucceedAfterInit(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, dir := initTempRepo(t)
 
@@ -74,6 +91,8 @@ func TestExecGitRepository_Open_ShouldSucceedAfterInit(t *testing.T) {
 }
 
 func TestExecGitRepository_Open_ShouldFailForNonGitDir(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := skipIfNoGit(t)
 	dir := t.TempDir()
@@ -87,6 +106,8 @@ func TestExecGitRepository_Open_ShouldFailForNonGitDir(t *testing.T) {
 }
 
 func TestExecGitRepository_IsClean_ShouldReturnTrueForFreshRepo(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, _ := initTempRepo(t)
 
@@ -99,6 +120,8 @@ func TestExecGitRepository_IsClean_ShouldReturnTrueForFreshRepo(t *testing.T) {
 }
 
 func TestExecGitRepository_IsClean_ShouldReturnFalseWithUnstagedChanges(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, dir := initTempRepo(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0600))
@@ -112,6 +135,8 @@ func TestExecGitRepository_IsClean_ShouldReturnFalseWithUnstagedChanges(t *testi
 }
 
 func TestExecGitRepository_CommitAll_ShouldMakeRepoClean(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, dir := initTempRepo(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello"), 0600))
@@ -130,6 +155,8 @@ func TestExecGitRepository_CommitAll_ShouldMakeRepoClean(t *testing.T) {
 }
 
 func TestExecGitRepository_HasRemote_ShouldReturnFalseForLocalOnly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, _ := initTempRepo(t)
 
@@ -141,6 +168,8 @@ func TestExecGitRepository_HasRemote_ShouldReturnFalseForLocalOnly(t *testing.T)
 }
 
 func TestExecGitRepository_AddRemote_ShouldMakeHasRemoteTrue(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, _ := initTempRepo(t)
 
@@ -153,6 +182,8 @@ func TestExecGitRepository_AddRemote_ShouldMakeHasRemoteTrue(t *testing.T) {
 }
 
 func TestExecGitRepository_SetConfig_ShouldSetValue(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo, dir := initTempRepo(t)
 
@@ -168,6 +199,8 @@ func TestExecGitRepository_SetConfig_ShouldSetValue(t *testing.T) {
 }
 
 func TestExecGitRepository_Clone_ShouldCloneFromLocalRepo(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := skipIfNoGit(t)
 

@@ -9,6 +9,8 @@ import (
 )
 
 func TestParseIgnorePatterns_SkipsCommentsAndBlanks(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte(`# Temporary files
 *.tmp
@@ -28,6 +30,8 @@ func TestParseIgnorePatterns_SkipsCommentsAndBlanks(t *testing.T) {
 }
 
 func TestParseIgnorePatterns_EmptyContent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte("")
 
@@ -39,6 +43,8 @@ func TestParseIgnorePatterns_EmptyContent(t *testing.T) {
 }
 
 func TestParseIgnorePatterns_OnlyComments(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := []byte("# just comments\n# nothing else\n")
 
@@ -50,6 +56,8 @@ func TestParseIgnorePatterns_OnlyComments(t *testing.T) {
 }
 
 func TestIgnorePatterns_Matches(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		patterns    []string
@@ -96,6 +104,7 @@ func TestIgnorePatterns_Matches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			p := &entities.IgnorePatterns{Patterns: tt.patterns}
 

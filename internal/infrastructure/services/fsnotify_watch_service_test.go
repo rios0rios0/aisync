@@ -17,6 +17,8 @@ import (
 )
 
 func TestMapOp_ShouldReturnCreateForCreateOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	op := fsnotify.Create
 
@@ -28,6 +30,8 @@ func TestMapOp_ShouldReturnCreateForCreateOp(t *testing.T) {
 }
 
 func TestMapOp_ShouldReturnWriteForWriteOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	op := fsnotify.Write
 
@@ -39,6 +43,8 @@ func TestMapOp_ShouldReturnWriteForWriteOp(t *testing.T) {
 }
 
 func TestMapOp_ShouldReturnRemoveForRemoveOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	op := fsnotify.Remove
 
@@ -50,6 +56,8 @@ func TestMapOp_ShouldReturnRemoveForRemoveOp(t *testing.T) {
 }
 
 func TestMapOp_ShouldReturnRenameForRenameOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	op := fsnotify.Rename
 
@@ -61,6 +69,8 @@ func TestMapOp_ShouldReturnRenameForRenameOp(t *testing.T) {
 }
 
 func TestMapOp_ShouldReturnUnknownForChmodOp(t *testing.T) {
+	t.Parallel()
+
 	// given
 	op := fsnotify.Chmod
 
@@ -72,6 +82,8 @@ func TestMapOp_ShouldReturnUnknownForChmodOp(t *testing.T) {
 }
 
 func TestNewPollingWatchService_ShouldCreateWithInterval(t *testing.T) {
+	t.Parallel()
+
 	// given
 	interval := 5 * time.Second
 
@@ -86,6 +98,8 @@ func TestNewPollingWatchService_ShouldCreateWithInterval(t *testing.T) {
 }
 
 func TestPollingWatchService_SetIgnorePatterns_ShouldStorePatterns(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewPollingWatchService(1 * time.Second)
 	patterns := entities.ParseIgnorePatterns([]byte("*.tmp\n*.log"))
@@ -98,6 +112,8 @@ func TestPollingWatchService_SetIgnorePatterns_ShouldStorePatterns(t *testing.T)
 }
 
 func TestPollingWatchService_Stop_ShouldBeIdempotent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewPollingWatchService(1 * time.Second)
 
@@ -110,6 +126,8 @@ func TestPollingWatchService_Stop_ShouldBeIdempotent(t *testing.T) {
 }
 
 func TestNewFSNotifyWatchService_ShouldCreateWithStopChannel(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	svc := services.NewFSNotifyWatchService()
 
@@ -119,6 +137,8 @@ func TestNewFSNotifyWatchService_ShouldCreateWithStopChannel(t *testing.T) {
 }
 
 func TestFSNotifyWatchService_SetIgnorePatterns_ShouldStorePatterns(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewFSNotifyWatchService()
 	patterns := entities.ParseIgnorePatterns([]byte("*.bak\n.DS_Store"))
@@ -131,6 +151,8 @@ func TestFSNotifyWatchService_SetIgnorePatterns_ShouldStorePatterns(t *testing.T
 }
 
 func TestFSNotifyWatchService_Stop_ShouldBeIdempotent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	svc := services.NewFSNotifyWatchService()
 
@@ -143,6 +165,8 @@ func TestFSNotifyWatchService_Stop_ShouldBeIdempotent(t *testing.T) {
 }
 
 func TestPollingWatchService_ScanDir_ShouldPopulateState(t *testing.T) {
+	t.Parallel()
+
 	// given — files live under rules/ so they match the default allowlist.
 	tmpDir := t.TempDir()
 	assert.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
@@ -159,6 +183,8 @@ func TestPollingWatchService_ScanDir_ShouldPopulateState(t *testing.T) {
 }
 
 func TestPollingWatchService_PollDir_ShouldDetectNewFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
@@ -187,6 +213,8 @@ func TestPollingWatchService_PollDir_ShouldDetectNewFile(t *testing.T) {
 }
 
 func TestPollingWatchService_PollDir_ShouldDetectRemovedFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
@@ -219,6 +247,8 @@ func TestPollingWatchService_PollDir_ShouldDetectRemovedFile(t *testing.T) {
 }
 
 func TestPollingWatchService_PollDir_ShouldDetectModifiedFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
@@ -252,6 +282,8 @@ func TestPollingWatchService_PollDir_ShouldDetectModifiedFile(t *testing.T) {
 }
 
 func TestPollingWatchService_Watch_ShouldStartAndStop(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	assert.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "rules"), 0700))
