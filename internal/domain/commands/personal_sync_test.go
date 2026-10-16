@@ -92,7 +92,12 @@ func (f *syncFixture) syncer() *commands.PersonalSyncer {
 }
 
 func (f *syncFixture) sync(opts commands.PersonalSyncOptions) (*commands.PersonalSyncReport, error) {
-	return f.syncer().Sync(f.config, f.repoPath, opts)
+	report, err := f.syncer().Sync(f.config, f.repoPath, opts)
+	if err == nil && report != nil {
+		// In tests, assume commit/push succeeds, so commit manifests immediately.
+		report.CommitManifests()
+	}
+	return report, err
 }
 
 // savedBase returns the checksum the saved manifest records for rel.

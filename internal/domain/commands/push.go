@@ -141,6 +141,12 @@ func (c *PushCommand) Execute(configPath, repoPath, commitMsg string, opts PushO
 	if err = c.commitAndPush(repoPath, commitMsg, opts, config); err != nil {
 		return err
 	}
+
+	// Only save manifests after the commit/push succeeded. This prevents
+	// recording a base checksum for content that never reached the remote,
+	// which would hide real conflicts on the next sync.
+	report.CommitManifests()
+
 	if err = c.syncTranscripts(config, repoPath, syncOpts); err != nil {
 		return fmt.Errorf("personal files were pushed, but conversations were not: %w", err)
 	}

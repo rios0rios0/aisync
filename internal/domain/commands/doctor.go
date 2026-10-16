@@ -200,5 +200,10 @@ func (c *DoctorCommand) checkGitConnectivity(configPath, repoPath string) (strin
 	if !c.gitRepo.HasRemote() {
 		return "remote configured in config but not in git", false
 	}
+
+	// Actually try to fetch to verify SSH keys and network connectivity.
+	if fetchErr := c.gitRepo.Fetch(); fetchErr != nil {
+		return fmt.Sprintf("fetch failed: %v (check SSH keys and network)", fetchErr), false
+	}
 	return config.Sync.Remote, true
 }

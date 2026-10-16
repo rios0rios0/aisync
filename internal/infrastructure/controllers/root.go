@@ -56,6 +56,7 @@ type gitRepoProxy struct {
 func (p *gitRepoProxy) Clone(url, dir, branch string) error { return p.impl.Clone(url, dir, branch) }
 func (p *gitRepoProxy) Init(dir string) error               { return p.impl.Init(dir) }
 func (p *gitRepoProxy) Open(dir string) error               { return p.impl.Open(dir) }
+func (p *gitRepoProxy) Fetch() error                        { return p.impl.Fetch() }
 func (p *gitRepoProxy) Pull() error                         { return p.impl.Pull() }
 func (p *gitRepoProxy) CommitAll(message string) error      { return p.impl.CommitAll(message) }
 func (p *gitRepoProxy) Push() error                         { return p.impl.Push() }

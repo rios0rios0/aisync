@@ -286,7 +286,8 @@ func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, rep
 }
 
 // isFilePending checks whether a local file is new or differs from its sync repo
-// counterpart.
+// counterpart. Files stored as .age in the repo are matched against their
+// plaintext name; their encrypted content is compared via the manifest checksum.
 func (c *StatusCommand) isFilePending(
 	path, toolDir, personalDir, toolName string,
 	extraAllowlist []string,
@@ -316,15 +317,41 @@ func (c *StatusCommand) isFilePending(
 		return false
 	}
 
+	// Try the plaintext path first, then the .age encrypted variant.
 	repoFilePath := filepath.Join(personalDir, relPath)
 	repoContent, repoErr := os.ReadFile(repoFilePath)
 	if repoErr != nil {
-		return true
+		return c.isFilePendingEncrypted(repoFilePath, relPath, localContent, manifest)
 	}
 
 	localSum := sha256.Sum256(localContent)
 	repoSum := sha256.Sum256(repoContent)
 	return localSum != repoSum
+}
+
+// isFilePendingEncrypted checks whether a local file differs from its .age
+// encrypted counterpart in the sync repo. Since decryption requires the
+// identity (unavailable here), comparison uses the manifest checksum.
+func (*StatusCommand) isFilePendingEncrypted(
+	repoFilePath, relPath string,
+	localContent []byte,
+	manifest *entities.Manifest,
+) bool {
+	ageFilePath := repoFilePath + ".age"
+	if _, statErr := os.Stat(ageFilePath); statErr != nil {
+		// No .age file exists either; file is pending (new local file).
+		return true
+	}
+	// .age file exists; compare via manifest if available.
+	if manifest == nil {
+		return false // No manifest entry; cannot determine, assume in sync.
+	}
+	entry, exists := manifest.Files[relPath]
+	if !exists {
+		return false // No manifest entry; cannot determine, assume in sync.
+	}
+	localSum := fmt.Sprintf("%x", sha256.Sum256(localContent))
+	return localSum != entry.Checksum
 }
 
 // printIncomingHint prints a hint about incoming changes from other devices.

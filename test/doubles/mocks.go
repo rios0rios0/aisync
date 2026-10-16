@@ -183,6 +183,8 @@ type MockGitRepository struct {
 	InitErr          error
 	OpenDir          string
 	OpenErr          error
+	FetchErr         error
+	FetchCalls       int
 	PullErr          error
 	CommitMsg        string
 	CommitErr        error
@@ -245,6 +247,11 @@ func (m *MockGitRepository) Open(dir string) error {
 
 func (m *MockGitRepository) ChangedFiles() ([]string, error) {
 	return m.ChangedFilesVal, m.ChangedFilesErr
+}
+
+func (m *MockGitRepository) Fetch() error {
+	m.FetchCalls++
+	return m.FetchErr
 }
 
 func (m *MockGitRepository) Pull() error {
