@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -367,19 +368,33 @@ func (r *GoGitRepository) SetConfig(key, value string) error {
 	return nil
 }
 
+// trySSHAgent attempts to connect to the SSH agent via SSH_AUTH_SOCK and
+// returns the auth method if successful. The socket path is read from the
+// environment, which is trusted since it originates from the user's shell.
+func trySSHAgent() (ssh.AuthMethod, bool) {
+	sock := os.Getenv("SSH_AUTH_SOCK")
+	if sock == "" {
+		return nil, false
+	}
+	dialer := &net.Dialer{}
+
+	conn, err := dialer.DialContext(context.Background(), "unix", sock)
+	if err != nil {
+		return nil, false
+	}
+	agentClient := agent.NewClient(conn)
+	return &ssh.PublicKeysCallback{
+		User:     "git",
+		Callback: agentClient.Signers,
+	}, true
+}
+
 // sshAuthFromAgent creates SSH auth using the SSH agent first (via
 // SSH_AUTH_SOCK), falling back to common key files when the agent is
 // unavailable. This lets passphrase-protected keys work without prompting.
 func sshAuthFromAgent() (ssh.AuthMethod, error) {
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		conn, err := net.Dial("unix", sock)
-		if err == nil {
-			agentClient := agent.NewClient(conn)
-			return &ssh.PublicKeysCallback{
-				User: "git",
-				Callback: agentClient.Signers,
-			}, nil
-		}
+	if auth, ok := trySSHAgent(); ok {
+		return auth, nil
 	}
 
 	home, err := os.UserHomeDir()
@@ -406,5 +421,7 @@ func sshAuthFromAgent() (ssh.AuthMethod, error) {
 		return auth, nil
 	}
 
-	return nil, errors.New("no SSH agent (SSH_AUTH_SOCK) and no key file found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)")
+	return nil, errors.New(
+		"no SSH agent (SSH_AUTH_SOCK) and no key file found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)",
+	)
 }

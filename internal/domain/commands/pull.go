@@ -181,8 +181,8 @@ func (c *PullCommand) syncPersonal(config *entities.Config, repoPath string, opt
 	if c.transcriptSyncer == nil {
 		return nil
 	}
-	if _, err := c.transcriptSyncer.Sync(config, repoPath, syncOpts); err != nil {
-		return fmt.Errorf("conversations: %w", err)
+	if _, syncErr := c.transcriptSyncer.Sync(config, repoPath, syncOpts); syncErr != nil {
+		return fmt.Errorf("conversations: %w", syncErr)
 	}
 	return nil
 }
