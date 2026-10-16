@@ -219,7 +219,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		assert.Equal(t, "guide", sourceRepo.FetchedSources[0].Name)
 	})
 
-	t.Run("should warn and continue when git pull fails", func(t *testing.T) {
+	t.Run("should fail when git pull fails and remote is configured", func(t *testing.T) {
 		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
@@ -244,9 +244,40 @@ func TestPullCommand_Execute(t *testing.T) {
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
 
-		// then
-		require.NoError(t, err)
+		// then - git pull failure with remote configured is now fatal to prevent
+		// pushing against stale data
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "git pull failed")
 		assert.Equal(t, 1, gitRepo.PullCalls)
+	})
+
+	t.Run("should warn and continue when no remote is configured", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
+			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+
+		configRepo.Config = &entities.Config{
+			Sources: []entities.Source{
+				{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"},
+			},
+			Tools: map[string]entities.Tool{},
+		}
+		stateRepo.State = entities.NewState("test-device")
+		stateRepo.ExistsVal = true
+		sourceRepo.Result = nil
+		gitRepo.HasRemoteVal = false
+
+		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
+
+		// then - no remote, so pull is skipped (Pull() never called)
+		require.NoError(t, err)
+		assert.Equal(t, 0, gitRepo.PullCalls)
 	})
 
 	t.Run("should store ETag in state when source returns one", func(t *testing.T) {

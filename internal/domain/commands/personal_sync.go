@@ -61,6 +61,24 @@ type PersonalSyncReport struct {
 	// Plaintext maps every repo-relative path this run wrote, or in a dry
 	// run would write, without encryption to its content.
 	Plaintext map[string][]byte
+	// dirtyPlans holds plans whose manifest changed and must be saved after
+	// the commit/push succeeds. Callers must call CommitManifests.
+	dirtyPlans []*toolPlan
+	// syncer is kept so CommitManifests can save manifests.
+	syncer *PersonalSyncer
+}
+
+// CommitManifests persists every dirty manifest. Call this only after the
+// git commit and push succeed, so a failed push doesn't record the base as
+// synced (which would hide real conflicts on the next run).
+func (r *PersonalSyncReport) CommitManifests() {
+	if r == nil || r.syncer == nil {
+		return
+	}
+	for _, plan := range r.dirtyPlans {
+		r.syncer.saveManifest(plan)
+	}
+	r.dirtyPlans = nil
 }
 
 // PersonalChange is one difference between a tool directory and the sync
@@ -158,7 +176,8 @@ func (p *toolPlan) removeBase(rel string) {
 }
 
 // Sync plans every enabled tool, resolves the conflicts, and then executes
-// the plan (or prints it, in a dry run).
+// the plan (or prints it, in a dry run). Callers must call
+// report.CommitManifests() after the git commit/push succeeds.
 func (s *PersonalSyncer) Sync(
 	config *entities.Config,
 	repoPath string,
@@ -170,7 +189,7 @@ func (s *PersonalSyncer) Sync(
 	}
 
 	encryptPatterns := readEncryptPatterns(repoPath)
-	report := &PersonalSyncReport{Plaintext: make(map[string][]byte)}
+	report := &PersonalSyncReport{Plaintext: make(map[string][]byte), syncer: s}
 	for _, plan := range plans {
 		state := &executionState{
 			plan:    plan,
@@ -185,6 +204,9 @@ func (s *PersonalSyncer) Sync(
 		}
 		if err := s.executeTool(state, opts); err != nil {
 			return report, fmt.Errorf("failed to sync %s: %w", plan.name, err)
+		}
+		if plan.dirty {
+			report.dirtyPlans = append(report.dirtyPlans, plan)
 		}
 	}
 
@@ -569,7 +591,8 @@ var actionHandlers = map[entities.SyncAction]actionHandler{
 }
 
 // executeTool applies one tool's plan to both sides and records the new base
-// for every path that ended up in sync.
+// for every path that ended up in sync. The manifest is NOT saved here;
+// callers collect dirty plans and call CommitManifests after commit/push.
 func (s *PersonalSyncer) executeTool(state *executionState, opts PersonalSyncOptions) error {
 	for _, entry := range state.plan.entries {
 		handler, writes := actionHandlers[entry.Action]
@@ -585,9 +608,7 @@ func (s *PersonalSyncer) executeTool(state *executionState, opts PersonalSyncOpt
 		}
 	}
 
-	err := s.applyPulls(state)
-	s.saveManifest(state.plan)
-	return err
+	return s.applyPulls(state)
 }
 
 // recordNonWriting handles the actions that leave both sides untouched.

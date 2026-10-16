@@ -5,6 +5,9 @@ type GitRepository interface {
 	Clone(url, dir, branch string) error
 	Init(dir string) error
 	Open(dir string) error
+	// Fetch downloads objects from the remote without merging, for
+	// connectivity checks and branch comparison.
+	Fetch() error
 	Pull() error
 	CommitAll(message string) error
 	Push() error

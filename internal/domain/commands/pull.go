@@ -109,8 +109,14 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	c.applyHooksExclude(config)
 
 	// Step 1: Pull personal changes from the sync repo (other devices).
-	if pullErr := c.pullGitRepo(repoPath); pullErr != nil {
-		logger.Warnf("git pull skipped: %v", pullErr)
+	// A failed git pull is fatal when a remote is configured: proceeding
+	// with stale data would let the push half overwrite remote changes.
+	hasRemote, pullErr := c.pullGitRepo(repoPath)
+	if pullErr != nil {
+		if hasRemote {
+			return fmt.Errorf("git pull failed (not updating timestamps): %w", pullErr)
+		}
+		logger.Warnf("git pull skipped (no remote): %v", pullErr)
 	}
 
 	// Step 2: Recover any incomplete atomic apply from a previous run.
@@ -166,9 +172,12 @@ func (c *PullCommand) syncPersonal(config *entities.Config, repoPath string, opt
 		NoPrompt:   opts.Force,
 		DryRun:     opts.DryRun,
 	}
-	if _, err := c.personalSyncer.Sync(config, repoPath, syncOpts); err != nil {
+	report, err := c.personalSyncer.Sync(config, repoPath, syncOpts)
+	if err != nil {
 		return err
 	}
+	// For incoming-only sync, save manifests immediately (no push to wait for).
+	report.CommitManifests()
 	if c.transcriptSyncer == nil {
 		return nil
 	}
@@ -277,21 +286,23 @@ func (c *PullCommand) finalizeState(state *entities.State, repoPath string) {
 }
 
 // pullGitRepo opens the sync repo and pulls the latest changes from remote.
-func (c *PullCommand) pullGitRepo(repoPath string) error {
+// Returns (hasRemote, error) so the caller can distinguish "no remote" from
+// a real failure.
+func (c *PullCommand) pullGitRepo(repoPath string) (bool, error) {
 	if err := c.gitRepo.Open(repoPath); err != nil {
-		return fmt.Errorf("failed to open git repo: %w", err)
+		return false, fmt.Errorf("failed to open git repo: %w", err)
 	}
 
 	if !c.gitRepo.HasRemote() {
-		return errors.New("no remote configured")
+		return false, errors.New("no remote configured")
 	}
 
 	if err := c.gitRepo.Pull(); err != nil {
-		return fmt.Errorf("git pull failed: %w", err)
+		return true, fmt.Errorf("git pull failed: %w", err)
 	}
 
 	logger.Info("pulled latest changes from sync repo")
-	return nil
+	return true, nil
 }
 
 // loadOrCreateState loads the existing state or creates a new one.

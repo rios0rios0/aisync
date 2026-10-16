@@ -3,6 +3,7 @@ package repositories
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 const (
@@ -106,6 +108,43 @@ func (r *GoGitRepository) Open(dir string) error {
 	r.repo = repo
 	r.worktree = worktree
 
+	return nil
+}
+
+// Fetch downloads objects from the remote without merging.
+func (r *GoGitRepository) Fetch() error {
+	if r.repo == nil {
+		return errors.New("repository not opened; call Open or Clone first")
+	}
+
+	opts := &git.FetchOptions{
+		RemoteName: "origin",
+	}
+
+	remote, err := r.repo.Remote("origin")
+	if err != nil {
+		return fmt.Errorf("no origin remote: %w", err)
+	}
+
+	remoteURL := ""
+	if len(remote.Config().URLs) > 0 {
+		remoteURL = remote.Config().URLs[0]
+	}
+	if strings.HasPrefix(remoteURL, "git@") {
+		auth, authErr := sshAuthFromAgent()
+		if authErr != nil {
+			return authErr
+		}
+		opts.Auth = auth
+	}
+
+	err = r.repo.Fetch(opts)
+	if errors.Is(err, git.NoErrAlreadyUpToDate) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to fetch: %w", err)
+	}
 	return nil
 }
 
@@ -328,15 +367,26 @@ func (r *GoGitRepository) SetConfig(key, value string) error {
 	return nil
 }
 
-// sshAuthFromAgent creates SSH public keys auth using the SSH agent or the default
-// identity file (~/.ssh/id_rsa, ~/.ssh/id_ed25519, etc.).
-func sshAuthFromAgent() (*ssh.PublicKeys, error) {
+// sshAuthFromAgent creates SSH auth using the SSH agent first (via
+// SSH_AUTH_SOCK), falling back to common key files when the agent is
+// unavailable. This lets passphrase-protected keys work without prompting.
+func sshAuthFromAgent() (ssh.AuthMethod, error) {
+	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
+		conn, err := net.Dial("unix", sock)
+		if err == nil {
+			agentClient := agent.NewClient(conn)
+			return &ssh.PublicKeysCallback{
+				User: "git",
+				Callback: agentClient.Signers,
+			}, nil
+		}
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine home directory: %w", err)
 	}
 
-	// Try common SSH key file names in preference order.
 	keyFiles := []string{
 		home + "/.ssh/id_ed25519",
 		home + "/.ssh/id_rsa",
@@ -356,5 +406,5 @@ func sshAuthFromAgent() (*ssh.PublicKeys, error) {
 		return auth, nil
 	}
 
-	return nil, errors.New("no SSH key found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)")
+	return nil, errors.New("no SSH agent (SSH_AUTH_SOCK) and no key file found in ~/.ssh/ (tried id_ed25519, id_rsa, id_ecdsa)")
 }

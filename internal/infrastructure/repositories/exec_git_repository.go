@@ -67,6 +67,15 @@ func (r *ExecGitRepository) Open(dir string) error {
 	return nil
 }
 
+// Fetch downloads objects from the remote without merging.
+func (r *ExecGitRepository) Fetch() error {
+	_, err := r.run(r.dir, "fetch", "origin")
+	if err != nil {
+		return fmt.Errorf("git fetch failed: %w", err)
+	}
+	return nil
+}
+
 // Pull fetches and merges from the remote origin.
 func (r *ExecGitRepository) Pull() error {
 	_, err := r.run(r.dir, "pull", "origin")
