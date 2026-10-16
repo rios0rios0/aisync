@@ -76,6 +76,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	t.Parallel()
 
 	t.Run("should complete successfully when sources return files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -111,6 +112,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should print message and return nil when no sources configured", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo, stateRepo, _, manifestRepo, gitRepo,
 			encSvc, _, _, _, _, applySvc := defaultPullDeps()
@@ -136,6 +138,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewPullCommand(configRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -149,6 +152,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should print up-to-date message when all sources return nil (304)", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -178,6 +182,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should filter sources when source filter is provided", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -215,6 +220,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should warn and continue when git pull fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -244,6 +250,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should store ETag in state when source returns one", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		state := entities.NewState("test-device")
@@ -279,6 +286,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should create new state when state does not exist", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -306,6 +314,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should warn and continue when fetch source fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -334,6 +343,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should apply files to tool directory when tool is enabled", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -374,6 +384,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip disabled tools", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -410,6 +421,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should write fetched files to sync repo shared directory", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -446,6 +458,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should recover from incomplete apply on startup", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -474,6 +487,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should invoke hooks merger when source returns hooks.json", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -513,6 +527,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should invoke settings merger when source returns settings.json", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -551,6 +566,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should invoke section merger when source returns CLAUDE.md", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -589,6 +605,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should detect deletions when file in old manifest is missing from new set", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -636,6 +653,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should apply personal-only file from sync repo to tool dir", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -678,6 +696,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should run dry-run mode without applying files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -716,6 +735,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should warn when two sources provide same file (last wins)", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -751,6 +771,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should save manifest after applying tool files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -788,6 +809,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when staging fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -826,6 +848,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle personal file override over shared file", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -872,6 +895,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should verify file checksums and detect force-push scenario", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate a file in the sync repo so verifyFileChecksums finds it
@@ -920,6 +944,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should decrypt encrypted personal file when matching encrypt patterns", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -974,6 +999,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip files matching unchanged checksum when writing to sync repo", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		unchangedContent := []byte("# Unchanged content")
@@ -1101,6 +1127,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle git pull with open and has remote", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1131,6 +1158,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should warn when git open fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1160,6 +1188,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should not skip ETag verification when no previous ETag exists", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate file
@@ -1202,6 +1231,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle ETag changed normally without warning", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "shared/claude/rules"), 0700))
@@ -1245,6 +1275,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should abort when non-force non-dry-run and stdin is closed", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -1285,6 +1316,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should read encrypted personal file that shadows shared file", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -1339,6 +1371,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip personal .age files and apply personal-only non-encrypted files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -1383,6 +1416,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle dry-run mode showing new modified and unchanged files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -1428,6 +1462,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should create new state when existing state load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
@@ -1456,6 +1491,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should write new file and update changed file in sync repo", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		// Pre-populate with old content
@@ -1506,6 +1542,7 @@ func TestPullCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle unencrypted personal file read when no encrypt patterns", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude-home")
@@ -1555,7 +1592,10 @@ func TestPullCommand_Execute(t *testing.T) {
 // --- ExpandHome (public helper) ---
 
 func TestExpandHome(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should expand tilde prefix to home directory", func(t *testing.T) {
+		t.Parallel()
 		// given
 		home, _ := os.UserHomeDir()
 
@@ -1567,6 +1607,7 @@ func TestExpandHome(t *testing.T) {
 	})
 
 	t.Run("should return path unchanged when no tilde prefix", func(t *testing.T) {
+		t.Parallel()
 		// when
 		result := commands.ExpandHome("/absolute/path")
 

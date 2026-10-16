@@ -10,6 +10,8 @@ import (
 )
 
 func TestRegexSecretScanner_Scan_ShouldDetectAWSAccessKeyID(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"config.yaml": []byte("aws_key: AKIAIOSFODNN7EXAMPLE"), //gitleaks:allow
@@ -26,6 +28,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectAWSAccessKeyID(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectGitHubPAT(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"env.sh": []byte("export TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"), //gitleaks:allow
@@ -41,6 +45,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectGitHubPAT(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectAnthropicAPIKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	key := "sk-ant-" + generateRepeatedString("abcdefABCDEF0123456789-_", 90)
 	files := map[string][]byte{
@@ -65,6 +71,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectAnthropicAPIKey(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectOpenAIAPIKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	key := "sk-" + generateRepeatedString("abcdefABCDEF0123456789", 48)
 	files := map[string][]byte{
@@ -89,6 +97,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectOpenAIAPIKey(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectPrivateKeyHeader(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"key.pem": []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJ..."), //gitleaks:allow
@@ -104,6 +114,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectPrivateKeyHeader(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectAgeSecretKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	ageKey := "AGE-SECRET-KEY-" + generateRepeatedString("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 59)
 	files := map[string][]byte{
@@ -120,6 +132,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectAgeSecretKey(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectJWTToken(t *testing.T) {
+	t.Parallel()
+
 	// given
 	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" //gitleaks:allow
 	files := map[string][]byte{
@@ -136,6 +150,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectJWTToken(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectSlackToken(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"slack.env": []byte("SLACK_TOKEN=xoxb-1234567890-abcdefghij"), //gitleaks:allow
@@ -151,6 +167,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectSlackToken(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldReturnNoFindingsForCleanFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"readme.md":   []byte("# My Project\nThis is a clean readme file."),
@@ -167,6 +185,8 @@ func TestRegexSecretScanner_Scan_ShouldReturnNoFindingsForCleanFile(t *testing.T
 }
 
 func TestRegexSecretScanner_Scan_ShouldReturnCorrectLineNumbers(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := "line one\nline two\nAKIAIOSFODNN7EXAMPLE\nline four\n" //gitleaks:allow
 	files := map[string][]byte{
@@ -183,6 +203,8 @@ func TestRegexSecretScanner_Scan_ShouldReturnCorrectLineNumbers(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectMultipleFindingsInSameFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	content := "key1: AKIAIOSFODNN7EXAMPLE\n" + //gitleaks:allow
 		"-----BEGIN RSA PRIVATE KEY-----\n" + //gitleaks:allow
@@ -208,6 +230,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectMultipleFindingsInSameFile(t *testi
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectGoogleAPIKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"config.json": []byte(`{"api_key": "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"}`), //gitleaks:allow
@@ -223,6 +247,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectGoogleAPIKey(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectConnectionString(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"db.env": []byte(`connection_string = 'Server=db;Database=app;User=admin;Password=s3cret'`),
@@ -283,6 +309,8 @@ func TestRegexSecretScanner_Scan_ConnectionStringPlaceholders(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectHardcodedPassword(t *testing.T) {
+	t.Parallel()
+
 	// given
 	files := map[string][]byte{
 		"settings.py": []byte(`password = "mysuperSecretPass123"`),
@@ -306,6 +334,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectHardcodedPassword(t *testing.T) {
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectMultipleDifferentSecretTypesInOneFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	googleKey := "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"                                                //gitleaks:allow
 	jwt := "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" //gitleaks:allow
@@ -335,6 +365,8 @@ func TestRegexSecretScanner_Scan_ShouldDetectMultipleDifferentSecretTypesInOneFi
 }
 
 func TestRegexSecretScanner_Scan_ShouldDetectAWSSecretAccessKey(t *testing.T) {
+	t.Parallel()
+
 	// given
 	secretKey := generateRepeatedString("abcdefABCDEF0123456789/+=", 40)
 	files := map[string][]byte{

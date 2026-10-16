@@ -14,6 +14,8 @@ import (
 )
 
 func TestJSONJournalRepository_SaveThenLoad(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -59,6 +61,8 @@ func TestJSONJournalRepository_SaveThenLoad(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Exists_WithFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -78,6 +82,8 @@ func TestJSONJournalRepository_Exists_WithFile(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Exists_WithoutFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -90,6 +96,8 @@ func TestJSONJournalRepository_Exists_WithoutFile(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Clear_RemovesJournalFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -131,6 +139,8 @@ func TestJSONJournalRepository_Clear_RemovesJournalFile(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Clear_NoFileNoError(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -143,6 +153,8 @@ func TestJSONJournalRepository_Clear_NoFileNoError(t *testing.T) {
 }
 
 func TestJSONJournalRepository_PreservesAllFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -187,6 +199,8 @@ func TestJSONJournalRepository_PreservesAllFields(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Clear_ShouldNotErrorWhenStagingDirDoesNotExist(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -216,6 +230,8 @@ func TestJSONJournalRepository_Clear_ShouldNotErrorWhenStagingDirDoesNotExist(t 
 }
 
 func TestJSONJournalRepository_SaveThenLoad_WithEmptyOperations(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -239,6 +255,8 @@ func TestJSONJournalRepository_SaveThenLoad_WithEmptyOperations(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Load_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -256,6 +274,8 @@ func TestJSONJournalRepository_Load_InvalidJSON(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Load_MissingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -270,6 +290,8 @@ func TestJSONJournalRepository_Load_MissingFile(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Clear_WithEmptyStagingDir(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -291,6 +313,8 @@ func TestJSONJournalRepository_Clear_WithEmptyStagingDir(t *testing.T) {
 }
 
 func TestJSONJournalRepository_Save_ShouldCreateDirectoryIfMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := filepath.Join(t.TempDir(), "nested", "deep", "journal")
 	repo := repositories.NewJSONJournalRepository(basePath)
@@ -309,6 +333,8 @@ func TestJSONJournalRepository_Save_ShouldCreateDirectoryIfMissing(t *testing.T)
 }
 
 func TestJSONJournalRepository_Clear_WithCorruptJournalFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	basePath := t.TempDir()
 	repo := repositories.NewJSONJournalRepository(basePath)

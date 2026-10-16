@@ -11,6 +11,8 @@ import (
 )
 
 func TestSectionMerger_Merge_ShouldConcatenateSharedAndPersonalWithSeparator(t *testing.T) {
+	t.Parallel()
+
 	// given
 	shared := []byte("# Shared Rules\nRule one.")
 	personal := []byte("# My Personal Notes\nPersonal content here.")
@@ -34,6 +36,8 @@ func TestSectionMerger_Merge_ShouldConcatenateSharedAndPersonalWithSeparator(t *
 }
 
 func TestSectionMerger_Merge_ShouldReplaceOnlySharedSectionOnResync(t *testing.T) {
+	t.Parallel()
+
 	// given
 	oldShared := []byte("# Old Shared Content")
 	personalWithSep := []byte("# Old Shared Content\n\n" + services.DefaultSeparator + "\n\nMy personal stuff")
@@ -56,6 +60,8 @@ func TestSectionMerger_Merge_ShouldReplaceOnlySharedSectionOnResync(t *testing.T
 }
 
 func TestSectionMerger_Merge_ShouldReturnOnlySharedWhenNoPersonal(t *testing.T) {
+	t.Parallel()
+
 	// given
 	shared := []byte("# Shared Only\nContent here.")
 	merger := services.NewSectionMerger()
@@ -71,6 +77,8 @@ func TestSectionMerger_Merge_ShouldReturnOnlySharedWhenNoPersonal(t *testing.T) 
 }
 
 func TestSectionMerger_Merge_ShouldReturnPersonalBelowSeparatorWhenNoShared(t *testing.T) {
+	t.Parallel()
+
 	// given
 	personal := []byte("# Personal Only\nMy content.")
 	merger := services.NewSectionMerger()
@@ -88,6 +96,8 @@ func TestSectionMerger_Merge_ShouldReturnPersonalBelowSeparatorWhenNoShared(t *t
 }
 
 func TestSectionMerger_Merge_ShouldPreserveSeparatorExactly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	shared := []byte("Shared content")
 	personal := []byte("Personal content")
@@ -103,6 +113,8 @@ func TestSectionMerger_Merge_ShouldPreserveSeparatorExactly(t *testing.T) {
 }
 
 func TestSectionMerger_Merge_ShouldConcatenateMultipleSharedSources(t *testing.T) {
+	t.Parallel()
+
 	// given
 	source1 := []byte("# Source 1")
 	source2 := []byte("# Source 2")
@@ -119,6 +131,8 @@ func TestSectionMerger_Merge_ShouldConcatenateMultipleSharedSources(t *testing.T
 }
 
 func TestSectionMerger_Merge_ShouldReturnEmptyWhenBothInputsAreEmpty(t *testing.T) {
+	t.Parallel()
+
 	// given
 	merger := services.NewSectionMerger()
 
@@ -131,6 +145,8 @@ func TestSectionMerger_Merge_ShouldReturnEmptyWhenBothInputsAreEmpty(t *testing.
 }
 
 func TestSectionMerger_String_ShouldReturnDescriptionWithSeparator(t *testing.T) {
+	t.Parallel()
+
 	// given
 	merger := services.NewSectionMerger()
 
@@ -143,6 +159,8 @@ func TestSectionMerger_String_ShouldReturnDescriptionWithSeparator(t *testing.T)
 }
 
 func TestSectionMerger_Merge_ShouldDiscardPersonalWhenOnlySeparatorAndWhitespace(t *testing.T) {
+	t.Parallel()
+
 	// given
 	personal := []byte("# Old Shared\n\n" + services.DefaultSeparator + "\n\n")
 	merger := services.NewSectionMerger()

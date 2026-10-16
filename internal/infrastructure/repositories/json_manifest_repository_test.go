@@ -14,6 +14,8 @@ import (
 )
 
 func TestJSONManifestRepository_SaveThenLoad(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -52,6 +54,8 @@ func TestJSONManifestRepository_SaveThenLoad(t *testing.T) {
 }
 
 func TestJSONManifestRepository_ManifestFileName(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -73,6 +77,8 @@ func TestJSONManifestRepository_ManifestFileName(t *testing.T) {
 }
 
 func TestJSONManifestRepository_Load_MissingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -87,6 +93,8 @@ func TestJSONManifestRepository_Load_MissingFile(t *testing.T) {
 }
 
 func TestJSONManifestRepository_Exists_WithFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -108,6 +116,8 @@ func TestJSONManifestRepository_Exists_WithFile(t *testing.T) {
 }
 
 func TestJSONManifestRepository_Exists_WithoutFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -120,6 +130,8 @@ func TestJSONManifestRepository_Exists_WithoutFile(t *testing.T) {
 }
 
 func TestJSONManifestRepository_PreservesAllFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -158,6 +170,8 @@ func TestJSONManifestRepository_PreservesAllFields(t *testing.T) {
 }
 
 func TestJSONManifestRepository_Save_ShouldCreateToolDirectoryIfMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := filepath.Join(t.TempDir(), "nested", "tool", "dir")
@@ -178,6 +192,8 @@ func TestJSONManifestRepository_Save_ShouldCreateToolDirectoryIfMissing(t *testi
 }
 
 func TestJSONManifestRepository_Load_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()
@@ -194,6 +210,8 @@ func TestJSONManifestRepository_Load_InvalidJSON(t *testing.T) {
 }
 
 func TestJSONManifestRepository_Save_EmptyFilesMap(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewJSONManifestRepository()
 	toolDir := t.TempDir()

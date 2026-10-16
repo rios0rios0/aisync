@@ -12,7 +12,10 @@ import (
 )
 
 func TestKeyCommand_Generate(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should call GenerateKey and update config recipients", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -40,6 +43,7 @@ func TestKeyCommand_Generate(t *testing.T) {
 	})
 
 	t.Run("should not duplicate recipient when key already exists", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -64,7 +68,10 @@ func TestKeyCommand_Generate(t *testing.T) {
 }
 
 func TestKeyCommand_Export(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should call ExportPublicKey and return no error", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -88,6 +95,7 @@ func TestKeyCommand_Export(t *testing.T) {
 	})
 
 	t.Run("should return error when ExportPublicKey fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -111,7 +119,10 @@ func TestKeyCommand_Export(t *testing.T) {
 }
 
 func TestKeyCommand_AddRecipient(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should append public key to config recipients", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -134,6 +145,7 @@ func TestKeyCommand_AddRecipient(t *testing.T) {
 	})
 
 	t.Run("should not duplicate existing recipient", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -154,7 +166,10 @@ func TestKeyCommand_AddRecipient(t *testing.T) {
 }
 
 func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewKeyCommand(configRepo, nil, nil)
@@ -168,6 +183,7 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("should return error when GenerateKey fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -190,6 +206,7 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("should return error when config save fails after generate", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -215,7 +232,10 @@ func TestKeyCommand_Generate_ErrorCases(t *testing.T) {
 }
 
 func TestKeyCommand_Export_ErrorCases(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewKeyCommand(configRepo, nil, nil)
@@ -230,7 +250,10 @@ func TestKeyCommand_Export_ErrorCases(t *testing.T) {
 }
 
 func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewKeyCommand(configRepo, nil, nil)
@@ -244,6 +267,7 @@ func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
 	})
 
 	t.Run("should return error when config save fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -265,7 +289,10 @@ func TestKeyCommand_AddRecipient_ErrorCases(t *testing.T) {
 }
 
 func TestKeyCommand_Import(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should call ImportKey and update config with exported public key", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -294,6 +321,7 @@ func TestKeyCommand_Import(t *testing.T) {
 	})
 
 	t.Run("should return error when ImportKey fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -317,7 +345,10 @@ func TestKeyCommand_Import(t *testing.T) {
 }
 
 func TestKeyCommand_ImportFromOp(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should fetch identity from 1Password and update config recipients", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -357,6 +388,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should default item name to aisync.age when Op.Item is empty", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -382,6 +414,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when 1Password integration is disabled", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -401,6 +434,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when Op block is missing", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -418,6 +452,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when GetIdentity fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -439,6 +474,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when ImportKeyContent fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -461,6 +497,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when ExportPublicKey fails after import", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -483,6 +520,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when config save fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -506,6 +544,7 @@ func TestKeyCommand_ImportFromOp(t *testing.T) {
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewKeyCommand(configRepo, nil, nil)

@@ -15,7 +15,10 @@ import (
 )
 
 func TestMigrateCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should migrate personal files from tool directory to sync repo", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -58,6 +61,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should classify file as shared when checksum matches source content", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -107,6 +111,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			LoadErr: assert.AnError,
@@ -122,6 +127,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should print no files message when tools have no files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		config := &entities.Config{
 			Sources: []entities.Source{},
@@ -141,6 +147,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip disabled tools during migration", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -170,6 +177,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should handle mixed shared and personal files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -223,6 +231,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip tool directory that does not exist", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -248,6 +257,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should continue when source fetch fails during checksum build", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")

@@ -15,7 +15,10 @@ import (
 )
 
 func TestStatusCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return no error when state and config are valid", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -55,6 +58,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return no error when state does not exist", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -78,6 +82,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := commands.NewStatusCommand(configRepo, nil, nil)
@@ -91,6 +96,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show encryption enabled when identity file exists", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		identityPath := filepath.Join(tmpDir, "key.txt")
@@ -120,6 +126,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show tool status with managed files when manifest exists", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		toolDir := filepath.Join(tmpDir, "claude")
@@ -156,6 +163,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show source freshness as stale when last pull is old", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -191,6 +199,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show never fetched when source has no etag", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -219,6 +228,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show incoming hint when push is newer than pull", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -249,6 +259,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should count pending local changes when local file differs from sync repo", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -284,6 +295,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip shared files from manifest in pending count", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")

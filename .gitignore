@@ -21,3 +21,5 @@ coverage.xml
 cobertura.xml
 junit.xml
 reports/
+# CodeQL database `make sast` builds in the repo root; an interrupted scan leaves it behind
+.codeql-db/

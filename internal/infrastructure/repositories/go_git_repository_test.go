@@ -13,6 +13,8 @@ import (
 )
 
 func TestGoGitRepository_Init_CreatesGitDir(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -27,6 +29,8 @@ func TestGoGitRepository_Init_CreatesGitDir(t *testing.T) {
 }
 
 func TestGoGitRepository_Open_AfterInit(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
@@ -43,6 +47,8 @@ func TestGoGitRepository_Open_AfterInit(t *testing.T) {
 }
 
 func TestGoGitRepository_Open_NonExistentDir(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 	dir := filepath.Join(t.TempDir(), "nonexistent")
@@ -56,6 +62,8 @@ func TestGoGitRepository_Open_NonExistentDir(t *testing.T) {
 }
 
 func TestGoGitRepository_IsClean_FreshRepo(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -71,6 +79,8 @@ func TestGoGitRepository_IsClean_FreshRepo(t *testing.T) {
 }
 
 func TestGoGitRepository_IsClean_WithUnstagedChanges(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -89,6 +99,8 @@ func TestGoGitRepository_IsClean_WithUnstagedChanges(t *testing.T) {
 }
 
 func TestGoGitRepository_CommitAll(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -111,6 +123,8 @@ func TestGoGitRepository_CommitAll(t *testing.T) {
 }
 
 func TestGoGitRepository_CommitAll_MultipleFiles(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -138,6 +152,8 @@ func TestGoGitRepository_CommitAll_MultipleFiles(t *testing.T) {
 }
 
 func TestGoGitRepository_HasRemote_LocalOnly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -152,6 +168,8 @@ func TestGoGitRepository_HasRemote_LocalOnly(t *testing.T) {
 }
 
 func TestGoGitRepository_HasRemote_AfterAddRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -169,6 +187,8 @@ func TestGoGitRepository_HasRemote_AfterAddRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_HasRemote_NilRepo(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -180,6 +200,8 @@ func TestGoGitRepository_HasRemote_NilRepo(t *testing.T) {
 }
 
 func TestGoGitRepository_IsClean_NotOpened(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -192,6 +214,8 @@ func TestGoGitRepository_IsClean_NotOpened(t *testing.T) {
 }
 
 func TestGoGitRepository_CommitAll_NotOpened(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -204,6 +228,8 @@ func TestGoGitRepository_CommitAll_NotOpened(t *testing.T) {
 }
 
 func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
+	t.Parallel()
+
 	// given
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
@@ -232,6 +258,8 @@ func TestGoGitRepository_Clone_FromLocalBareRepo(t *testing.T) {
 }
 
 func TestGoGitRepository_Pull_NotOpened(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -244,6 +272,8 @@ func TestGoGitRepository_Pull_NotOpened(t *testing.T) {
 }
 
 func TestGoGitRepository_Init_SetsHEADToMain(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -263,6 +293,8 @@ func TestGoGitRepository_Init_SetsHEADToMain(t *testing.T) {
 }
 
 func TestGoGitRepository_AddRemote_NotOpened(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -275,6 +307,8 @@ func TestGoGitRepository_AddRemote_NotOpened(t *testing.T) {
 }
 
 func TestGoGitRepository_Push_NotOpened(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 
@@ -287,6 +321,8 @@ func TestGoGitRepository_Push_NotOpened(t *testing.T) {
 }
 
 func TestGoGitRepository_Pull_AlreadyUpToDate(t *testing.T) {
+	t.Parallel()
+
 	// given
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
@@ -310,6 +346,8 @@ func TestGoGitRepository_Pull_AlreadyUpToDate(t *testing.T) {
 }
 
 func TestGoGitRepository_AddRemote_DuplicateName(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -328,6 +366,8 @@ func TestGoGitRepository_AddRemote_DuplicateName(t *testing.T) {
 }
 
 func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -348,6 +388,8 @@ func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
@@ -382,6 +424,8 @@ func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	// Seed a working repo, then mirror it into a bare repo that can accept
 	// pushes to main (a non-bare remote refuses pushes to its checked-out branch).
@@ -426,6 +470,8 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
@@ -465,6 +511,8 @@ func TestGoGitRepository_Open_ThenIsCleanAndCommit(t *testing.T) {
 }
 
 func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
+	t.Parallel()
+
 	// given -- use a local file path as the clone URL (go-git supports this)
 	bareDir := t.TempDir()
 	bareRepo := repositories.NewGoGitRepository()
@@ -504,6 +552,8 @@ func TestGoGitRepository_Clone_HTTPSUrl(t *testing.T) {
 }
 
 func TestGoGitRepository_Init_ShouldFailWhenAlreadyInit(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -520,6 +570,8 @@ func TestGoGitRepository_Init_ShouldFailWhenAlreadyInit(t *testing.T) {
 }
 
 func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()
@@ -542,6 +594,8 @@ func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_Clone_ShouldFailWithInvalidURL(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewGoGitRepository()
 	dir := filepath.Join(t.TempDir(), "clone-target")
@@ -555,6 +609,8 @@ func TestGoGitRepository_Clone_ShouldFailWithInvalidURL(t *testing.T) {
 }
 
 func TestGoGitRepository_Open_BareRepoShouldFail(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	// Manually create a bare repo using go-git
@@ -572,6 +628,8 @@ func TestGoGitRepository_Open_BareRepoShouldFail(t *testing.T) {
 }
 
 func TestGoGitRepository_Open_ExistingWithRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	initRepo := repositories.NewGoGitRepository()
@@ -597,6 +655,8 @@ func TestGoGitRepository_Open_ExistingWithRemote(t *testing.T) {
 }
 
 func TestGoGitRepository_Init_ThenAddRemoteThenHasRemote(t *testing.T) {
+	t.Parallel()
+
 	// given
 	dir := t.TempDir()
 	repo := repositories.NewGoGitRepository()

@@ -13,6 +13,8 @@ import (
 )
 
 func TestFSToolDetector_DetectInstalled_ShouldSetEnabledTrueWhenDirExists(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	claudeDir := filepath.Join(tmpDir, "claude")
@@ -35,6 +37,8 @@ func TestFSToolDetector_DetectInstalled_ShouldSetEnabledTrueWhenDirExists(t *tes
 }
 
 func TestFSToolDetector_DetectInstalled_ShouldSetEnabledFalseWhenDirIsMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	defaults := map[string]entities.Tool{
@@ -52,6 +56,8 @@ func TestFSToolDetector_DetectInstalled_ShouldSetEnabledFalseWhenDirIsMissing(t 
 }
 
 func TestFSToolDetector_DetectInstalled_ShouldHandleMixedExistingAndMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	existingDir := filepath.Join(tmpDir, "claude")
@@ -72,6 +78,8 @@ func TestFSToolDetector_DetectInstalled_ShouldHandleMixedExistingAndMissing(t *t
 }
 
 func TestFSToolDetector_DetectInstalled_ShouldPreserveOriginalPaths(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	claudeDir := filepath.Join(tmpDir, "claude")
@@ -90,6 +98,8 @@ func TestFSToolDetector_DetectInstalled_ShouldPreserveOriginalPaths(t *testing.T
 }
 
 func TestFSToolDetector_DetectInstalled_ShouldReturnEmptyMapWhenNoToolsProvided(t *testing.T) {
+	t.Parallel()
+
 	// given
 	defaults := map[string]entities.Tool{}
 	detector := services.NewFSToolDetector()
@@ -102,6 +112,8 @@ func TestFSToolDetector_DetectInstalled_ShouldReturnEmptyMapWhenNoToolsProvided(
 }
 
 func TestFSToolDetector_DetectInstalled_ShouldExpandHomePath(t *testing.T) {
+	t.Parallel()
+
 	// given
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)

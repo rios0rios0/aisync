@@ -37,7 +37,10 @@ func newPushCmd(
 }
 
 func TestPushCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should commit and push when there are personal files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -91,6 +94,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip the commit but still push when the repo is clean", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -129,6 +133,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when config load fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
 		cmd := newPushCmd(configRepo, nil, nil, nil, nil, nil, nil, nil)
@@ -142,6 +147,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip push when no remote is configured", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -180,6 +186,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should run in dry-run mode without modifying repo", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -214,6 +221,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when secret scan finds secrets", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -267,6 +275,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should succeed when skip secret scan is true despite secrets", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -310,6 +319,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should generate default commit message when none provided", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -348,6 +358,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when git open fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -378,6 +389,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when git is clean check fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -412,6 +424,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should encrypt files matching encrypt patterns during push", func(t *testing.T) {
+		t.Parallel()
 		// given — a file under memories/ (allowlisted) that matches a
 		// memories/** encrypt pattern. The old test used `creds.secret` at
 		// the claude root, but under the allowlist that path no longer
@@ -482,6 +495,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should encrypt files matching repo-relative personal/<tool>/ patterns", func(t *testing.T) {
+		t.Parallel()
 		// given — regression for a bug where .aisyncencrypt patterns like
 		// "personal/*/memories/**" never matched because the push command
 		// matched against tool-relative paths (e.g. "memories/foo.md") instead
@@ -584,6 +598,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should still scan pattern-matched files when recipients is empty", func(t *testing.T) {
+		t.Parallel()
 		// given — regression for a secret-scanner bypass. When an encrypt
 		// pattern matches but config.Encryption.Recipients is empty (e.g.
 		// a cloned repo with no imported age key), copyPersonalFile falls
@@ -666,6 +681,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip tool directory that does not exist", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -706,6 +722,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when commit fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -744,6 +761,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should update state LastPush after successful push", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -783,6 +801,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should not copy shared file from manifest to personal directory", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -854,6 +873,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should list personal files in dry-run mode with tools present", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -894,6 +914,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip files matching ignore patterns", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -957,6 +978,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should scan unencrypted files for secrets and pass when clean", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1001,6 +1023,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should not copy unchanged file to personal directory", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1052,6 +1075,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should skip .age files during secret scan", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1095,6 +1119,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return an error and keep the local commit when the push to the remote fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1136,6 +1161,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should update state with existing state after push", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1175,6 +1201,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should show encrypted files in dry-run mode", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")
@@ -1225,6 +1252,7 @@ func TestPushCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should load existing manifest to determine shared files", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		repoPath := filepath.Join(tmpDir, "repo")

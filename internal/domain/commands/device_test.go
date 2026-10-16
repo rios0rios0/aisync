@@ -12,7 +12,10 @@ import (
 )
 
 func TestDeviceCommand_List(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return no error when devices are registered", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{
@@ -33,6 +36,7 @@ func TestDeviceCommand_List(t *testing.T) {
 	})
 
 	t.Run("should return no error when no devices are registered", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{
@@ -50,7 +54,10 @@ func TestDeviceCommand_List(t *testing.T) {
 }
 
 func TestDeviceCommand_Rename(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should rename device when name matches", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{
@@ -72,6 +79,7 @@ func TestDeviceCommand_Rename(t *testing.T) {
 	})
 
 	t.Run("should return error when device is not found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{
@@ -93,7 +101,10 @@ func TestDeviceCommand_Rename(t *testing.T) {
 }
 
 func TestDeviceCommand_Remove(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should remove device when name matches", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{
@@ -117,6 +128,7 @@ func TestDeviceCommand_Remove(t *testing.T) {
 	})
 
 	t.Run("should return error when device is not found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		stateRepo := &doubles.MockStateRepository{
 			State: &entities.State{

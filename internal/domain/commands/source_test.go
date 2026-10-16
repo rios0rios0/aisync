@@ -13,7 +13,10 @@ import (
 )
 
 func TestSourceCommand_Add(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should add new source to config when name is unique", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -40,6 +43,7 @@ func TestSourceCommand_Add(t *testing.T) {
 	})
 
 	t.Run("should return error when source name already exists", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -66,7 +70,10 @@ func TestSourceCommand_Add(t *testing.T) {
 }
 
 func TestSourceCommand_Remove(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should remove source from config when name matches", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -90,6 +97,7 @@ func TestSourceCommand_Remove(t *testing.T) {
 	})
 
 	t.Run("should return error when source name is not found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -111,7 +119,10 @@ func TestSourceCommand_Remove(t *testing.T) {
 }
 
 func TestSourceCommand_List(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should return no error when sources are configured", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -136,6 +147,7 @@ func TestSourceCommand_List(t *testing.T) {
 	})
 
 	t.Run("should return no error when no sources are configured", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -153,7 +165,10 @@ func TestSourceCommand_List(t *testing.T) {
 }
 
 func TestSourceCommand_Pin(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should update ref in config when source is found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -175,6 +190,7 @@ func TestSourceCommand_Pin(t *testing.T) {
 	})
 
 	t.Run("should return error when source is not found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -193,7 +209,10 @@ func TestSourceCommand_Pin(t *testing.T) {
 }
 
 func TestSourceCommand_Update(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should fetch and write files when source is found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo := &doubles.MockConfigRepository{
@@ -222,6 +241,7 @@ func TestSourceCommand_Update(t *testing.T) {
 	})
 
 	t.Run("should return error when named source is not found", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -244,6 +264,7 @@ func TestSourceCommand_Update(t *testing.T) {
 	})
 
 	t.Run("should return error when source repository is nil", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			Config: &entities.Config{
@@ -261,6 +282,7 @@ func TestSourceCommand_Update(t *testing.T) {
 	})
 
 	t.Run("should complete without error when two sources map to same target", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		configRepo := &doubles.MockConfigRepository{

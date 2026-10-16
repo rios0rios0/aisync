@@ -21,6 +21,8 @@ func newTestConfig(toolPath string) *entities.Config {
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldDetectNewFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
@@ -47,6 +49,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectNewFile(t *testing.T) {
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldDetectModifiedFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
@@ -75,6 +79,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldDetectModifiedFile(t *testing.T) 
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldSkipUnchangedFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
@@ -101,6 +107,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipUnchangedFile(t *testing.T) {
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldSkipDisabledTools(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "cursor")
@@ -128,6 +136,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipDisabledTools(t *testing.T) {
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldReturnEmptyWhenNoIncomingFiles(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
@@ -147,6 +157,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldReturnEmptyWhenNoIncomingFiles(t 
 }
 
 func TestFSDiffService_ComputeSharedDiff_ShouldSkipDeniedPaths(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	toolDir := filepath.Join(tmpDir, "claude")
@@ -176,6 +188,8 @@ func TestFSDiffService_ComputeSharedDiff_ShouldSkipDeniedPaths(t *testing.T) {
 }
 
 func TestExpandHomePath_ShouldExpandTildePrefix(t *testing.T) {
+	t.Parallel()
+
 	// given
 	path := "~/some/path"
 
@@ -189,6 +203,8 @@ func TestExpandHomePath_ShouldExpandTildePrefix(t *testing.T) {
 }
 
 func TestExpandHomePath_ShouldReturnAbsolutePathUnchanged(t *testing.T) {
+	t.Parallel()
+
 	// given
 	path := "/absolute/path/to/tool"
 
@@ -200,6 +216,8 @@ func TestExpandHomePath_ShouldReturnAbsolutePathUnchanged(t *testing.T) {
 }
 
 func TestSourceFromIncoming_ShouldReturnToolName(t *testing.T) {
+	t.Parallel()
+
 	// given
 	relPath := "shared/claude/rules/arch.md"
 
@@ -211,6 +229,8 @@ func TestSourceFromIncoming_ShouldReturnToolName(t *testing.T) {
 }
 
 func TestSourceFromIncoming_ShouldReturnUnknownForSingleSegment(t *testing.T) {
+	t.Parallel()
+
 	// given
 	relPath := "orphan"
 
@@ -222,6 +242,8 @@ func TestSourceFromIncoming_ShouldReturnUnknownForSingleSegment(t *testing.T) {
 }
 
 func TestChecksumData_ShouldReturnConsistentHash(t *testing.T) {
+	t.Parallel()
+
 	// given
 	data := []byte("test data")
 

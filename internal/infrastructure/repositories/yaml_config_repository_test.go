@@ -13,6 +13,8 @@ import (
 )
 
 func TestYAMLConfigRepository_SaveThenLoad(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -67,6 +69,8 @@ func TestYAMLConfigRepository_SaveThenLoad(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Load_InvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -83,6 +87,8 @@ func TestYAMLConfigRepository_Load_InvalidYAML(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Load_MissingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
@@ -97,6 +103,8 @@ func TestYAMLConfigRepository_Load_MissingFile(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Exists_ExistingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -111,6 +119,8 @@ func TestYAMLConfigRepository_Exists_ExistingFile(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Exists_MissingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "nonexistent.yaml")
@@ -123,6 +133,8 @@ func TestYAMLConfigRepository_Exists_MissingFile(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_AllConfigFieldsSurviveRoundtrip(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -192,6 +204,8 @@ func TestYAMLConfigRepository_AllConfigFieldsSurviveRoundtrip(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Save_ShouldCreateParentDirectories(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	nestedPath := filepath.Join(t.TempDir(), "nested", "deep", "config.yaml")
@@ -218,6 +232,8 @@ func TestYAMLConfigRepository_Save_ShouldCreateParentDirectories(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Save_ShouldEmitSingleQuotedStringValues(t *testing.T) {
+	t.Parallel()
+
 	// given — a config containing a mix of string, boolean, and integer-like
 	// fields. The YAML rule requires single-quoted string values, unquoted
 	// booleans/numbers, and unquoted map keys.
@@ -287,6 +303,8 @@ func TestYAMLConfigRepository_Save_ShouldEmitSingleQuotedStringValues(t *testing
 }
 
 func TestYAMLConfigRepository_Save_QuotedStringRoundtripsCleanly(t *testing.T) {
+	t.Parallel()
+
 	// given — single-quoted output must round-trip back to the same Config
 	// so the new style does not silently change observed values.
 	repo := repositories.NewYAMLConfigRepository()
@@ -327,6 +345,8 @@ func TestYAMLConfigRepository_Save_QuotedStringRoundtripsCleanly(t *testing.T) {
 }
 
 func TestYAMLConfigRepository_Load_PartialConfigWithMissingOptionalFields(t *testing.T) {
+	t.Parallel()
+
 	// given
 	repo := repositories.NewYAMLConfigRepository()
 	path := filepath.Join(t.TempDir(), "config.yaml")

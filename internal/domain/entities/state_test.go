@@ -13,6 +13,8 @@ import (
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 func TestNewState_GeneratesValidUUID(t *testing.T) {
+	t.Parallel()
+
 	// given
 	deviceName := "test-laptop"
 
@@ -26,6 +28,8 @@ func TestNewState_GeneratesValidUUID(t *testing.T) {
 }
 
 func TestNewState_SetsPlatformAndOS(t *testing.T) {
+	t.Parallel()
+
 	// given
 	deviceName := "my-workstation"
 
@@ -39,6 +43,8 @@ func TestNewState_SetsPlatformAndOS(t *testing.T) {
 }
 
 func TestNewState_SetsDeviceName(t *testing.T) {
+	t.Parallel()
+
 	// given
 	deviceName := "prod-server"
 
@@ -50,6 +56,8 @@ func TestNewState_SetsDeviceName(t *testing.T) {
 }
 
 func TestNewState_SetsLastSync(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	state := entities.NewState("device")
 
@@ -58,6 +66,8 @@ func TestNewState_SetsLastSync(t *testing.T) {
 }
 
 func TestNewState_InitializesSourceETags(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	state := entities.NewState("device")
 
@@ -67,6 +77,8 @@ func TestNewState_InitializesSourceETags(t *testing.T) {
 }
 
 func TestNewState_LastPullAndPushAreZero(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	state := entities.NewState("device")
 
@@ -76,6 +88,8 @@ func TestNewState_LastPullAndPushAreZero(t *testing.T) {
 }
 
 func TestNewState_GeneratesUniqueUUIDs(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	state1 := entities.NewState("device1")
 	state2 := entities.NewState("device2")
@@ -86,6 +100,8 @@ func TestNewState_GeneratesUniqueUUIDs(t *testing.T) {
 }
 
 func TestState_FindDevice_ExistingDevice(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("laptop")
 
@@ -98,6 +114,8 @@ func TestState_FindDevice_ExistingDevice(t *testing.T) {
 }
 
 func TestState_FindDevice_NonExistentDevice(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("laptop")
 
@@ -109,6 +127,8 @@ func TestState_FindDevice_NonExistentDevice(t *testing.T) {
 }
 
 func TestState_FindDevice_MultipleDevices(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("laptop")
 	state.Devices = append(state.Devices, entities.Device{
@@ -126,6 +146,8 @@ func TestState_FindDevice_MultipleDevices(t *testing.T) {
 }
 
 func TestState_FindDevice_EmptyName(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("laptop")
 
@@ -137,6 +159,8 @@ func TestState_FindDevice_EmptyName(t *testing.T) {
 }
 
 func TestState_SetETag_StoresValue(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("device")
 
@@ -148,6 +172,8 @@ func TestState_SetETag_StoresValue(t *testing.T) {
 }
 
 func TestState_SetETag_OverwritesExisting(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("device")
 	state.SetETag("source1", "old-etag")
@@ -160,6 +186,8 @@ func TestState_SetETag_OverwritesExisting(t *testing.T) {
 }
 
 func TestState_SetETag_InitializesNilMap(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := &entities.State{SourceETags: nil}
 
@@ -172,6 +200,8 @@ func TestState_SetETag_InitializesNilMap(t *testing.T) {
 }
 
 func TestState_GetETag_ReturnsStoredValue(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("device")
 	state.SetETag("guide", "etag-xyz")
@@ -184,6 +214,8 @@ func TestState_GetETag_ReturnsStoredValue(t *testing.T) {
 }
 
 func TestState_GetETag_ReturnsEmptyForMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := entities.NewState("device")
 
@@ -195,6 +227,8 @@ func TestState_GetETag_ReturnsEmptyForMissing(t *testing.T) {
 }
 
 func TestState_GetETag_ReturnsEmptyForNilMap(t *testing.T) {
+	t.Parallel()
+
 	// given
 	state := &entities.State{SourceETags: nil}
 

@@ -65,7 +65,10 @@ func newTestPushCommand(
 }
 
 func TestSyncCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	t.Run("should call pull then push when not dry-run", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -106,6 +109,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should not commit or push when dry-run is true", func(t *testing.T) {
+		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
 		config := &entities.Config{
@@ -143,6 +147,7 @@ func TestSyncCommand_Execute(t *testing.T) {
 	})
 
 	t.Run("should return error when pull phase fails", func(t *testing.T) {
+		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{
 			LoadErr: errors.New("config not found"),

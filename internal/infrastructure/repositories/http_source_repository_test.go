@@ -46,6 +46,8 @@ func buildTarGz(t *testing.T, fileMap map[string]string) []byte {
 }
 
 func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/claude/rules/architecture.md": "# Architecture\nClean arch rules",
@@ -121,6 +123,8 @@ func TestHTTPSourceRepository_Fetch_ExtractsFiles(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_NotModified(t *testing.T) {
+	t.Parallel()
+
 	// given
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("If-None-Match") == "\"cached-etag\"" {
@@ -154,6 +158,8 @@ func TestHTTPSourceRepository_Fetch_NotModified(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_NonOKStatus(t *testing.T) {
+	t.Parallel()
+
 	// given
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -184,6 +190,8 @@ func TestHTTPSourceRepository_Fetch_NonOKStatus(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ETagCaptured(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/docs/readme.md": "hello",
@@ -220,6 +228,8 @@ func TestHTTPSourceRepository_Fetch_ETagCaptured(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_MultipleMappings(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/claude/rules/arch.md":    "architecture",
@@ -269,6 +279,8 @@ func TestHTTPSourceRepository_Fetch_MultipleMappings(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldSendIfNoneMatchHeader(t *testing.T) {
+	t.Parallel()
+
 	// given
 	var receivedETag string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -299,6 +311,8 @@ func TestHTTPSourceRepository_Fetch_ShouldSendIfNoneMatchHeader(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldReturnErrorForInvalidGzip(t *testing.T) {
+	t.Parallel()
+
 	// given
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -330,6 +344,8 @@ func TestHTTPSourceRepository_Fetch_ShouldReturnErrorForInvalidGzip(t *testing.T
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldSkipTarEntriesWithNoMatchingMapping(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/unrelated/file.txt":      "unrelated content",
@@ -376,6 +392,8 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTarEntriesWithNoMatchingMapping(t 
 }
 
 func TestMatchesMapping_ShouldMatchExactFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entryPath := "claude/rules/arch.md"
 	mappingSource := "claude/rules/arch.md"
@@ -388,6 +406,8 @@ func TestMatchesMapping_ShouldMatchExactFile(t *testing.T) {
 }
 
 func TestMatchesMapping_ShouldMatchDirectoryPrefix(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entryPath := "claude/rules/arch.md"
 	mappingSource := "claude/rules"
@@ -400,6 +420,8 @@ func TestMatchesMapping_ShouldMatchDirectoryPrefix(t *testing.T) {
 }
 
 func TestMatchesMapping_ShouldNotMatchUnrelatedPath(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entryPath := "cursor/skills/lint.md"
 	mappingSource := "claude/rules"
@@ -412,6 +434,8 @@ func TestMatchesMapping_ShouldNotMatchUnrelatedPath(t *testing.T) {
 }
 
 func TestRemapPath_ShouldRemapExactFileToTarget(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entryPath := "claude/rules/arch.md"
 	mappingSource := "claude/rules/arch.md"
@@ -425,6 +449,8 @@ func TestRemapPath_ShouldRemapExactFileToTarget(t *testing.T) {
 }
 
 func TestRemapPath_ShouldRemapDirectoryPrefixToTarget(t *testing.T) {
+	t.Parallel()
+
 	// given
 	entryPath := "claude/rules/arch.md"
 	mappingSource := "claude/rules"
@@ -438,6 +464,8 @@ func TestRemapPath_ShouldRemapDirectoryPrefixToTarget(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldSkipTopLevelOnlyEntries(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/claude/rules/arch.md": "architecture",
@@ -475,6 +503,8 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipTopLevelOnlyEntries(t *testing.T) 
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
+	t.Parallel()
+
 	// given -- create a tarball with both file and directory entries
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
@@ -534,6 +564,8 @@ func TestHTTPSourceRepository_Fetch_ShouldSkipDirectoryEntries(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldHandleEmptyTarball(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{})
 
@@ -567,6 +599,8 @@ func TestHTTPSourceRepository_Fetch_ShouldHandleEmptyTarball(t *testing.T) {
 }
 
 func TestHTTPSourceRepository_Fetch_ShouldHandleExactFileMapping(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tarball := buildTarGz(t, map[string]string{
 		"repo-main/CLAUDE.md": "top level claude doc",

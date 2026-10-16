@@ -170,7 +170,8 @@ The `aisync key` command group (`commands/key.go`) manages the age identity: `ge
 - External test packages (e.g., `package commands_test`) — tests only access exported API
 - `testify/assert` for assertions, `testify/require` for fatal preconditions
 - Manual stubs in `test/doubles/mocks.go` — no mocking framework. Each stub captures call counts and arguments
-- Unit tests use `t.Parallel()` with `t.Run()` subtests
+- Unit tests call `t.Parallel()` at the top of the test and in every `t.Run()` subtest; `paralleltest` and `tparallel` fail CI otherwise. A test that calls `t.Setenv` cannot be parallel, so such sub-tests live in their own sequential function (e.g. `TestInitCommand_Execute_WithHomeDirectory`)
+- Git-backed tests create repositories with `initTempRepo`, which turns off commit signing and global hooks so the tests never depend on the developer's git setup
 
 ## Configuration
 

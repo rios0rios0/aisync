@@ -9,6 +9,8 @@ import (
 )
 
 func TestPlainFormatter_StatusTag_Passed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -20,6 +22,8 @@ func TestPlainFormatter_StatusTag_Passed(t *testing.T) {
 }
 
 func TestPlainFormatter_StatusTag_Failed(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -31,6 +35,8 @@ func TestPlainFormatter_StatusTag_Failed(t *testing.T) {
 }
 
 func TestPlainFormatter_DiffSymbol_ReturnsUnstyled(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		direction string
@@ -43,6 +49,7 @@ func TestPlainFormatter_DiffSymbol_ReturnsUnstyled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// given
 			f := &entities.PlainFormatter{}
 
@@ -56,6 +63,8 @@ func TestPlainFormatter_DiffSymbol_ReturnsUnstyled(t *testing.T) {
 }
 
 func TestPlainFormatter_Bold_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -67,6 +76,8 @@ func TestPlainFormatter_Bold_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_Subtle_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -78,6 +89,8 @@ func TestPlainFormatter_Subtle_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_FilePath_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -89,6 +102,8 @@ func TestPlainFormatter_FilePath_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_Success_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -100,6 +115,8 @@ func TestPlainFormatter_Success_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_Warning_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -111,6 +128,8 @@ func TestPlainFormatter_Warning_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_Error_ReturnsUnstyledText(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 
@@ -122,6 +141,8 @@ func TestPlainFormatter_Error_ReturnsUnstyledText(t *testing.T) {
 }
 
 func TestPlainFormatter_ImplementsFormatterInterface(t *testing.T) {
+	t.Parallel()
+
 	// given / when
 	var f entities.Formatter = &entities.PlainFormatter{}
 
@@ -130,6 +151,8 @@ func TestPlainFormatter_ImplementsFormatterInterface(t *testing.T) {
 }
 
 func TestPlainFormatter_EmptyStringInputs(t *testing.T) {
+	t.Parallel()
+
 	// given
 	f := &entities.PlainFormatter{}
 

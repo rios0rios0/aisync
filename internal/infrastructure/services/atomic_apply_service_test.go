@@ -43,6 +43,8 @@ func (r *inMemoryJournalRepo) Clear() error {
 }
 
 func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -75,6 +77,8 @@ func TestAtomicApplyService_Stage_ShouldCreateStagingDirAndJournal(t *testing.T)
 }
 
 func TestAtomicApplyService_Apply_ShouldMoveFilesToTarget(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -107,6 +111,8 @@ func TestAtomicApplyService_Apply_ShouldMoveFilesToTarget(t *testing.T) {
 }
 
 func TestAtomicApplyService_Apply_ShouldHandleMultipleFiles(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -139,6 +145,8 @@ func TestAtomicApplyService_Apply_ShouldHandleMultipleFiles(t *testing.T) {
 }
 
 func TestAtomicApplyService_Recover_ShouldCompleteApplyWhenPendingJournalExists(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -173,6 +181,8 @@ func TestAtomicApplyService_Recover_ShouldCompleteApplyWhenPendingJournalExists(
 }
 
 func TestAtomicApplyService_Recover_ShouldNoOpWhenNoJournalExists(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	repo := newInMemoryJournalRepo()
@@ -187,6 +197,8 @@ func TestAtomicApplyService_Recover_ShouldNoOpWhenNoJournalExists(t *testing.T) 
 }
 
 func TestAtomicApplyService_Recover_ShouldClearJournalWhenStagingDirIsMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	repo := newInMemoryJournalRepo()
@@ -206,6 +218,8 @@ func TestAtomicApplyService_Recover_ShouldClearJournalWhenStagingDirIsMissing(t 
 }
 
 func TestAtomicApplyService_Stage_ShouldRecordOldChecksumWhenTargetExists(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -233,6 +247,8 @@ func TestAtomicApplyService_Stage_ShouldRecordOldChecksumWhenTargetExists(t *tes
 }
 
 func TestAtomicApplyService_Apply_ShouldFallbackToCopyWhenCrossDevice(t *testing.T) {
+	t.Parallel()
+
 	// given
 	stagingDir := t.TempDir()
 	targetDir := t.TempDir()
@@ -266,6 +282,8 @@ func TestAtomicApplyService_Apply_ShouldFallbackToCopyWhenCrossDevice(t *testing
 }
 
 func TestAtomicApplyService_Apply_ShouldSkipAlreadyAppliedOperations(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
@@ -310,6 +328,8 @@ func TestAtomicApplyService_Apply_ShouldSkipAlreadyAppliedOperations(t *testing.
 }
 
 func TestAtomicApplyService_Recover_ShouldClearWhenJournalIsComplete(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	repo := newInMemoryJournalRepo()
@@ -333,6 +353,8 @@ func TestAtomicApplyService_Recover_ShouldClearWhenJournalIsComplete(t *testing.
 }
 
 func TestAtomicApplyService_Apply_ShouldCreateTargetDirectoryIfMissing(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	stagingDir := filepath.Join(tmpDir, "staging", "test")
@@ -363,6 +385,8 @@ func TestAtomicApplyService_Apply_ShouldCreateTargetDirectoryIfMissing(t *testin
 }
 
 func TestMoveFile_ShouldMoveFileSuccessfully(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	srcFile := filepath.Join(tmpDir, "source.txt")
@@ -386,6 +410,8 @@ func TestMoveFile_ShouldMoveFileSuccessfully(t *testing.T) {
 }
 
 func TestComputeChecksum_ShouldReturnConsistentHash(t *testing.T) {
+	t.Parallel()
+
 	// given
 	data := []byte("test content for checksum")
 
@@ -399,6 +425,8 @@ func TestComputeChecksum_ShouldReturnConsistentHash(t *testing.T) {
 }
 
 func TestComputeChecksum_ShouldDifferForDifferentData(t *testing.T) {
+	t.Parallel()
+
 	// given
 	data1 := []byte("content A")
 	data2 := []byte("content B")
@@ -412,6 +440,8 @@ func TestComputeChecksum_ShouldDifferForDifferentData(t *testing.T) {
 }
 
 func TestReadExistingChecksum_ShouldReturnEmptyForNonexistentFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	path := filepath.Join(t.TempDir(), "nonexistent.txt")
 
@@ -423,6 +453,8 @@ func TestReadExistingChecksum_ShouldReturnEmptyForNonexistentFile(t *testing.T) 
 }
 
 func TestReadExistingChecksum_ShouldReturnChecksumForExistingFile(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "existing.txt")
@@ -438,6 +470,8 @@ func TestReadExistingChecksum_ShouldReturnChecksumForExistingFile(t *testing.T) 
 }
 
 func TestNormalizeLineEndings_ShouldConvertCRLFToLF(t *testing.T) {
+	t.Parallel()
+
 	// given
 	input := []byte("line one\r\nline two\r\nline three\r\n")
 
@@ -449,6 +483,8 @@ func TestNormalizeLineEndings_ShouldConvertCRLFToLF(t *testing.T) {
 }
 
 func TestNormalizeLineEndings_ShouldPreserveLFOnly(t *testing.T) {
+	t.Parallel()
+
 	// given
 	input := []byte("line one\nline two\n")
 
@@ -460,6 +496,8 @@ func TestNormalizeLineEndings_ShouldPreserveLFOnly(t *testing.T) {
 }
 
 func TestNormalizeLineEndings_ShouldNotModifyBinaryContent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	input := []byte("binary\x00data\r\nwith CRLF")
 
@@ -471,6 +509,8 @@ func TestNormalizeLineEndings_ShouldNotModifyBinaryContent(t *testing.T) {
 }
 
 func TestIsBinaryContent_ShouldReturnTrueWhenNullBytePresent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	data := []byte("contains\x00null")
 
@@ -482,6 +522,8 @@ func TestIsBinaryContent_ShouldReturnTrueWhenNullBytePresent(t *testing.T) {
 }
 
 func TestIsBinaryContent_ShouldReturnFalseForTextContent(t *testing.T) {
+	t.Parallel()
+
 	// given
 	data := []byte("plain text content\nwith newlines\n")
 
@@ -493,6 +535,8 @@ func TestIsBinaryContent_ShouldReturnFalseForTextContent(t *testing.T) {
 }
 
 func TestAtomicApplyService_Stage_ShouldNormalizeCRLFToLF(t *testing.T) {
+	t.Parallel()
+
 	// given
 	tmpDir := t.TempDir()
 	targetDir := filepath.Join(tmpDir, "target")
