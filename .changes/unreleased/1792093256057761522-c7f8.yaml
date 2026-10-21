@@ -1,3 +1,0 @@
-kind: 'Changed'
-body: 'changed `sync` to reconcile personal files once, in both directions, instead of forcing its pull phase to overwrite local edits with the repo copy, and changed `push` to update the sync repo from its remote first, so changes from other devices surface as conflicts instead of being overwritten'
-time: '2026-10-15T19:40:56.057694311Z'

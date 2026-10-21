@@ -1,3 +1,0 @@
-kind: 'Changed'
-body: 'changed the secret and NDA scanners to inspect every uncommitted plaintext file a commit would publish, instead of rescanning the whole `personal/` tree on every push, so a finding in an already-committed file no longer blocks unrelated pushes'
-time: '2026-10-15T19:40:56.059768539Z'

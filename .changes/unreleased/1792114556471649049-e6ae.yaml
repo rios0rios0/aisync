@@ -1,3 +1,0 @@
-kind: 'Fixed'
-body: 'Fixed linter issues in sync reliability PR: resolved variable shadowing in pull.go, reduced nested complexity in status.go, and fixed gosec/noctx warnings for SSH agent connection'
-time: '2026-10-16T01:35:56.471605424Z'

@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added encrypted, HMAC-named storage for conversations that uploads only the conversations that changed, merges again instead of overwriting when another device published first, and keeps each pulled conversation''s original modification time'
-time: '2026-10-15T19:55:29.765242216Z'

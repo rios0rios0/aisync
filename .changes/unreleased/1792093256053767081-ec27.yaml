@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added the `sync.use_system_git` option to `config.yaml` to make `--use-system-git` the default for a repo, for SSH keys that live in an agent such as 1Password'
-time: '2026-10-15T19:40:56.053723268Z'

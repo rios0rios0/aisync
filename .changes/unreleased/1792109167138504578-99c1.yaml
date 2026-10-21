@@ -1,3 +1,0 @@
-kind: 'Fixed'
-body: 'fixed an interrupted `make sast` run leaving the `.codeql-db/` CodeQL database untracked in the repo root, where it could be committed by accident; it is now ignored'
-time: '2026-10-16T00:06:07.138398739Z'
