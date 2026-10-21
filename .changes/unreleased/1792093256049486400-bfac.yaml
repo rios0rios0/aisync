@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added the `--prefer` flag (`local`, `remote`, or `newer`) to `sync`, `push`, and `pull` to resolve personal-file conflicts without prompting; without a terminal, unresolved conflicts are skipped and never overwritten'
-time: '2026-10-15T19:40:56.049440483Z'

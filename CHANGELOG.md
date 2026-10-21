@@ -22,6 +22,46 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-21
+
+### Added
+
+- added a three-way merge for personal files: a change on one device is applied on the others, a deletion propagates when the other copy is unchanged, and a file changed on two devices opens a conflict review that shows when and where each side last changed and a colored diff before you keep this machine's version, take the repo's, skip, apply the answer to all, or quit without writing anything
+- added Codex skills, custom agents, prompts, hooks, and `AGENTS.md` to the files synced by default
+- added conversation sync: a tool's `transcripts` block in `config.yaml` (`dir`, `logs`, `files`, `max_age`) syncs recent conversations and project memories through a branch that only ever holds the current snapshot, so the repository stays the size of the conversations in the window instead of growing with every session
+- added encrypted, HMAC-named storage for conversations that uploads only the conversations that changed, merges again instead of overwriting when another device published first, and keeps each pulled conversation's original modification time
+- added log-aware merging for conversations: a conversation continued on one device fast-forwards on the others, one untouched everywhere for longer than `max_age` leaves the snapshot, and project memories changed on two devices go through the conflict review
+- added the `--prefer` flag (`local`, `remote`, or `newer`) to `sync`, `push`, and `pull` to resolve personal-file conflicts without prompting; without a terminal, unresolved conflicts are skipped and never overwritten
+- added the `sync.use_system_git` option to `config.yaml` to make `--use-system-git` the default for a repo, for SSH keys that live in an agent such as 1Password
+- added unified diffs to `aisync diff` for every personal file that differs from the sync repo, with when each side last changed, like `chezmoi diff`
+
+### Changed
+
+- changed `sync` to reconcile personal files once, in both directions, instead of forcing its pull phase to overwrite local edits with the repo copy, and changed `push` to update the sync repo from its remote first, so changes from other devices surface as conflicts instead of being overwritten
+- changed personal-file scanning to read through the tool directory as an `os.Root`, so a symlink is followed only when it is relative and stays inside the tool directory and can no longer publish a file from elsewhere on the disk
+- changed the Go modules `github.com/Microsoft/go-winio` from `v0.6.3` to `v0.6.4` and `github.com/rios0rios0/cliforge` from `v0.5.0` to `v0.5.1`
+- changed the Go version from `1.27.2` to `1.27.3`
+- changed the secret and NDA scanners to inspect every uncommitted plaintext file a commit would publish, instead of rescanning the whole `personal/` tree on every push, so a finding in an already-committed file no longer blocks unrelated pushes
+
+### Fixed
+
+- fixed an interrupted `make sast` run leaving the `.codeql-db/` CodeQL database untracked in the repo root, where it could be committed by accident; it is now ignored
+- fixed answers piped to the conflict prompt without a terminal being lost after the first conflict: every prompt now reads from one shared input instead of its own read-ahead buffer
+- fixed Claude Code's account-synced skill cache (`skills/synced/`), trashed skills, Codex's bundled system skills, and `.gitkeep` placeholders being synced as personal files
+- fixed conflict handling on pull: choosing to keep the local copy (or to skip) still overwrote it with the repo copy, and every remote change was reported as a conflict because the manifest and the conflict detector compared checksums in different formats
+- fixed encrypted personal files being re-uploaded on every push even when their content had not changed, and pulled scripts and hooks losing their executable bit; a change of the executable bit alone now syncs like a content change
+- fixed failed pushes being reported as successful; the command now exits with an error and the next push retries the commit it kept
+- Fixed linter issues in sync reliability PR: resolved variable shadowing in pull.go, reduced nested complexity in status.go, and fixed gosec/noctx warnings for SSH agent connection
+- fixed personal files already committed as plaintext staying readable after a matching `.aisyncencrypt` pattern was added: a push or sync now encrypts them in place, including those of tools not installed on the device, in a commit of its own that conflict reviews skip so each file keeps the date of its last real change, and `--dry-run` lists them
+- fixed pulled memory files losing their CRLF line endings: conversations and memory files are now written byte for byte, like personal files
+- fixed pulled personal files losing their CRLF line endings, which made the receiving device push each such file back as its own change; personal files are now written byte for byte
+- fixed the CI lint stage, which now fails on findings: every unit test runs in parallel as `paralleltest` and `tparallel` require, tests that set environment variables stay sequential in their own functions, and git-backed tests no longer depend on the developer's commit signing or global hooks, which made them fail intermittently
+- fixed the secret scanner flagging connection strings made only of variable references, such as `"${DATABASE_HOST}:${DATABASE_PORT}"`
+
+### Removed
+
+- removed the conflict detector and the `.conflict.<device>` files it wrote next to local files, replaced by the three-way merge
+
 ## [1.5.13] - 2026-10-14
 
 ### Changed

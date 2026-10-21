@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added unified diffs to `aisync diff` for every personal file that differs from the sync repo, with when each side last changed, like `chezmoi diff`'
-time: '2026-10-15T19:40:56.051298363Z'

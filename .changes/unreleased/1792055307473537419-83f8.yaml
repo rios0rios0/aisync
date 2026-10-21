@@ -1,3 +1,0 @@
-kind: 'Changed'
-body: 'changed the Go modules `github.com/Microsoft/go-winio` from `v0.6.3` to `v0.6.4` and `github.com/rios0rios0/cliforge` from `v0.5.0` to `v0.5.1`'
-time: '2026-10-15T09:08:27.473537419Z'

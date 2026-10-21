@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added log-aware merging for conversations: a conversation continued on one device fast-forwards on the others, one untouched everywhere for longer than `max_age` leaves the snapshot, and project memories changed on two devices go through the conflict review'
-time: '2026-10-15T19:55:29.769784427Z'
