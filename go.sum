@@ -126,10 +126,10 @@ github.com/pjbgf/sha1cd v0.7.0/go.mod h1:pKR5Li+qTCo+ebqITZfwPlJGoCFCvSO00qxjbNt
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/rios0rios0/cliforge v0.5.1 h1:eSXFpBtWsrEnnXcL0y/BQHPx4ITdqh+CQiORq6yxClg=
-github.com/rios0rios0/cliforge v0.5.1/go.mod h1:snAwQi+5zF+qrcE5ScCDlH5drJlDNvKbsGe8Ju6TcyQ=
-github.com/rios0rios0/testkit v0.3.5 h1:etOysyLSp9FFuFHakSy1SrVhWz5mfE6v6uO8o3wt050=
-github.com/rios0rios0/testkit v0.3.5/go.mod h1:VcnV5fCKFpKI7yT+qRhV1BW7hy2xA/GVZpArVXG4aH8=
+github.com/rios0rios0/cliforge v0.5.2 h1:wZpd3f8ZzaxjvoNfU/BUVaG0UJxqXkQPIzkLrSh0kbY=
+github.com/rios0rios0/cliforge v0.5.2/go.mod h1:bTLGqtt1d1jxfw6J+6hqme+EKpapeDmI2KumlgRGSQw=
+github.com/rios0rios0/testkit v0.3.6 h1:UycUyI/pldvP9CWajVIJzHGhVmot/kZ/RHF/nw/P37c=
+github.com/rios0rios0/testkit v0.3.6/go.mod h1:Fvr6hXHrnjdyuVrmlB4byANYhkRwdXd/u9FLS1h59qQ=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
