@@ -34,12 +34,27 @@ const (
 	BinaryName = "aisync"
 
 	cmdUseList = "list"
+
+	// excludeFileEnv names a file to read this device's exclusions from
+	// instead of the default one.
+	excludeFileEnv = "AISYNC_EXCLUDE_FILE"
 )
 
 // DefaultRepoPath returns the default aifiles repo location.
 // On Windows it uses %APPDATA%\aisync\repo; on other platforms ~/.config/aisync/repo.
 func DefaultRepoPath() string {
 	return filepath.Join(defaultConfigDir(), "repo")
+}
+
+// DefaultExcludePath returns the file holding this device's exclusions:
+// AISYNC_EXCLUDE_FILE when set, otherwise "exclude" in aisync's config
+// directory, beside key.txt and repo/. It is outside the sync repo, so it is
+// never committed or synced.
+func DefaultExcludePath() string {
+	if path := os.Getenv(excludeFileEnv); path != "" {
+		return path
+	}
+	return filepath.Join(defaultConfigDir(), "exclude")
 }
 
 // DefaultConfigPath returns the default config.yaml location inside the repo.
@@ -125,31 +140,32 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	sourceCmd := commands.NewSourceCommand(configRepo, sourceRepo)
 	promptSvc := ui.NewHuhPromptService()
 	differ := services.NewUnifiedDiffer()
+	excludeRepo := infraRepos.NewFileExcludeRepository(DefaultExcludePath())
 	personalSyncer := commands.NewPersonalSyncer(
 		manifestRepo, encryptionSvc, atomicApplySvc, promptSvc,
 		differ, infraRepos.NewExecGitRepoHistory(),
-	)
+	).WithExcludes(excludeRepo)
 	transcriptSyncer := commands.NewTranscriptSyncer(
 		services.NewGitTranscriptService(encryptionSvc), infraRepos.NewJSONTranscriptBaseRepository(),
 		atomicApplySvc, promptSvc, differ,
-	)
+	).WithExcludes(excludeRepo)
 	pullCmd := commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo, manifestRepo,
 		gitProxy, encryptionSvc, personalSyncer, transcriptSyncer,
 		hooksMerger, settingsMerger, sectionMerger,
 		atomicApplySvc, promptSvc,
 		bundleSvc, bundleStateRepo,
-	)
+	).WithExcludes(excludeRepo)
 	pushCmd := commands.NewPushCommand(
 		configRepo, stateRepo, gitProxy,
 		secretScanner, ndaChecker, bundleSvc, personalSyncer, transcriptSyncer,
 	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
-	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo).WithExcludes(excludeRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
 	diffCmd := commands.NewDiffCommand(
 		configRepo, sourceRepo, diffSvc, personalSyncer, differ, formatter, diffViewer,
-	)
+	).WithExcludes(excludeRepo)
 	keyCmd := commands.NewKeyCommand(configRepo, encryptionSvc, opSecretRepo)
 	deviceCmd := commands.NewDeviceCommand(stateRepo)
 	doctorCmd := commands.NewDoctorCommand(configRepo, stateRepo, encryptionSvc, toolDetector, gitProxy, formatter)

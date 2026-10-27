@@ -107,6 +107,7 @@ type PersonalSyncer struct {
 	prompt       repositories.PromptService
 	differ       repositories.TextDiffer
 	history      repositories.RepoHistory
+	excludes     repositories.ExcludeRepository
 }
 
 // NewPersonalSyncer creates a new PersonalSyncer.
@@ -126,6 +127,23 @@ func NewPersonalSyncer(
 		differ:       differ,
 		history:      history,
 	}
+}
+
+// WithExcludes sets where the device's exclusions come from. An excluded path
+// is out of scope on this device in both directions: never pulled, pushed or
+// deleted on either side, never a conflict. Without it, nothing is excluded.
+func (s *PersonalSyncer) WithExcludes(excludes repositories.ExcludeRepository) *PersonalSyncer {
+	s.excludes = excludes
+	return s
+}
+
+// deviceExcludes loads the device's exclusions. A syncer built without them,
+// or no syncer at all -- a pull with no tools needs none -- excludes nothing.
+func (s *PersonalSyncer) deviceExcludes() (*entities.ExcludePatterns, error) {
+	if s == nil {
+		return loadExcludes(nil)
+	}
+	return loadExcludes(s.excludes)
 }
 
 // localFile is a personal file found in a tool directory.
@@ -183,7 +201,11 @@ func (s *PersonalSyncer) Sync(
 	repoPath string,
 	opts PersonalSyncOptions,
 ) (*PersonalSyncReport, error) {
-	plans := s.planTools(config, repoPath)
+	excludes, excludeErr := s.deviceExcludes()
+	if excludeErr != nil {
+		return nil, excludeErr
+	}
+	plans := s.planTools(config, repoPath, excludes)
 	if err := s.resolveConflicts(repoPath, plans, opts); err != nil {
 		return nil, err
 	}
@@ -219,8 +241,12 @@ func (s *PersonalSyncer) Sync(
 // Changes returns every path whose local and repo copies differ, without
 // resolving or writing anything.
 func (s *PersonalSyncer) Changes(config *entities.Config, repoPath string) []PersonalChange {
+	excludes, err := s.deviceExcludes()
+	if err != nil {
+		logger.Warnf("%v; listing changes as if nothing were excluded", err)
+	}
 	var changes []PersonalChange
-	for _, plan := range s.planTools(config, repoPath) {
+	for _, plan := range s.planTools(config, repoPath, excludes) {
 		for _, entry := range plan.entries {
 			if entry.Action == entities.SyncActionNone || entry.Action == entities.SyncActionForget {
 				continue
@@ -244,7 +270,11 @@ func (s *PersonalSyncer) Changes(config *entities.Config, repoPath string) []Per
 
 // planTools plans every enabled tool that exists on this device, in name
 // order so prompts and output are deterministic.
-func (s *PersonalSyncer) planTools(config *entities.Config, repoPath string) []*toolPlan {
+func (s *PersonalSyncer) planTools(
+	config *entities.Config,
+	repoPath string,
+	excludes *entities.ExcludePatterns,
+) []*toolPlan {
 	ignorePatterns := readIgnorePatterns(repoPath)
 	identityPath := ExpandHome(config.Encryption.Identity)
 	hostname, _ := os.Hostname()
@@ -259,7 +289,8 @@ func (s *PersonalSyncer) planTools(config *entities.Config, repoPath string) []*
 
 	plans := make([]*toolPlan, 0, len(names))
 	for _, name := range names {
-		if plan := s.planTool(name, config.Tools[name], repoPath, ignorePatterns, identityPath, hostname); plan != nil {
+		plan := s.planTool(name, config.Tools[name], repoPath, ignorePatterns, excludes, identityPath, hostname)
+		if plan != nil {
 			plans = append(plans, plan)
 		}
 	}
@@ -273,6 +304,7 @@ func (s *PersonalSyncer) planTool(
 	tool entities.Tool,
 	repoPath string,
 	ignorePatterns *entities.IgnorePatterns,
+	excludes *entities.ExcludePatterns,
 	identityPath, hostname string,
 ) *toolPlan {
 	toolDir := ExpandHome(tool.Path)
@@ -288,9 +320,14 @@ func (s *PersonalSyncer) planTool(
 			sharedPaths[rel] = true
 		}
 	}
+	// The same filter applies to the local files, the repo files and the
+	// base, so a path this device excludes is invisible to the merge: never
+	// pulled, pushed or deleted on either side, and never a conflict. Its
+	// base entry stays in the manifest untouched, so lifting the exclusion
+	// resumes the three-way merge where it stopped.
 	inScope := func(rel string) bool {
 		return entities.IsSyncable(name, rel, tool.ExtraAllowlist) &&
-			!ignorePatterns.Matches(rel) && !sharedPaths[rel]
+			!ignorePatterns.Matches(rel) && !sharedPaths[rel] && !excludes.Matches(name, rel)
 	}
 
 	plan := &toolPlan{

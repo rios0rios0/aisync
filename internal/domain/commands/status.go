@@ -24,6 +24,7 @@ type StatusCommand struct {
 	configRepo   repositories.ConfigRepository
 	stateRepo    repositories.StateRepository
 	manifestRepo repositories.ManifestRepository
+	excludes     repositories.ExcludeRepository
 }
 
 // NewStatusCommand creates a new StatusCommand.
@@ -39,6 +40,14 @@ func NewStatusCommand(
 	}
 }
 
+// WithExcludes sets where the device's exclusions come from: status names the
+// file when it holds any, and leaves the paths it excludes out of the pending
+// changes. Without it, nothing is excluded.
+func (c *StatusCommand) WithExcludes(excludes repositories.ExcludeRepository) *StatusCommand {
+	c.excludes = excludes
+	return c
+}
+
 // Execute prints the current sync status.
 func (c *StatusCommand) Execute(configPath, repoPath string) error {
 	config, err := c.configRepo.Load(configPath)
@@ -47,11 +56,14 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 	}
 
 	state := c.loadState(repoPath)
+	excludes, excludeErr := loadExcludes(c.excludes)
 	c.printDeviceInfo(config, state)
+	c.printExcludes(excludes, excludeErr)
+	fmt.Fprintln(os.Stdout)
 	c.printToolsStatus(config)
 	fmt.Fprintln(os.Stdout)
 
-	c.printPendingChanges(config, repoPath)
+	c.printPendingChanges(config, repoPath, excludes)
 	fmt.Fprintln(os.Stdout)
 
 	c.printIncomingHint(config, state)
@@ -116,7 +128,19 @@ func (c *StatusCommand) printDeviceInfo(config *entities.Config, state *entities
 	fmt.Fprintf(os.Stdout, "Last pull:  %s\n", lastPull)
 	fmt.Fprintf(os.Stdout, "Last push:  %s\n", lastPush)
 	fmt.Fprintf(os.Stdout, "Encryption: %s\n", encryption)
-	fmt.Fprintln(os.Stdout)
+}
+
+// printExcludes names the file holding the device's exclusions when it holds
+// any, or says that it could not be read.
+func (c *StatusCommand) printExcludes(excludes *entities.ExcludePatterns, err error) {
+	switch {
+	case c.excludes == nil:
+	case err != nil:
+		fmt.Fprintf(os.Stdout, "Excludes:   unreadable (%v)\n", err)
+	case excludes.Len() > 0:
+		fmt.Fprintf(os.Stdout, "Excludes:   %s (%d pattern(s), never synced on this device)\n",
+			c.excludes.Path(), excludes.Len())
+	}
 }
 
 // printToolsStatus prints the status of each enabled AI tool and an aggregate
@@ -231,7 +255,11 @@ func (c *StatusCommand) sourceFreshness(source entities.Source, state *entities.
 
 // printPendingChanges counts local files that differ from or are absent in the
 // sync repo's personal/<tool>/ directory for each enabled tool.
-func (c *StatusCommand) printPendingChanges(config *entities.Config, repoPath string) {
+func (c *StatusCommand) printPendingChanges(
+	config *entities.Config,
+	repoPath string,
+	excludes *entities.ExcludePatterns,
+) {
 	fmt.Fprintln(os.Stdout, "Pending Local Changes:")
 	anyPending := false
 
@@ -240,7 +268,7 @@ func (c *StatusCommand) printPendingChanges(config *entities.Config, repoPath st
 			continue
 		}
 
-		pending := c.countPendingForTool(name, tool, repoPath)
+		pending := c.countPendingForTool(name, tool, repoPath, excludes)
 		if pending > 0 {
 			anyPending = true
 			fmt.Fprintf(os.Stdout, "  %-12s %d file(s) not yet pushed\n", name, pending)
@@ -254,7 +282,12 @@ func (c *StatusCommand) printPendingChanges(config *entities.Config, repoPath st
 
 // countPendingForTool walks a single tool directory and counts personal files
 // that differ from or are absent in the sync repo.
-func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, repoPath string) int {
+func (c *StatusCommand) countPendingForTool(
+	name string,
+	tool entities.Tool,
+	repoPath string,
+	excludes *entities.ExcludePatterns,
+) int {
 	toolDir := ExpandHome(tool.Path)
 	if _, err := os.Stat(toolDir); os.IsNotExist(err) {
 		return 0
@@ -276,7 +309,7 @@ func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, rep
 			return nil //nolint:nilerr // return nil to continue Walk traversal
 		}
 
-		if c.isFilePending(path, toolDir, personalDir, name, tool.ExtraAllowlist, manifest) {
+		if c.isFilePending(path, toolDir, personalDir, name, tool.ExtraAllowlist, excludes, manifest) {
 			pending++
 		}
 		return nil
@@ -291,6 +324,7 @@ func (c *StatusCommand) countPendingForTool(name string, tool entities.Tool, rep
 func (c *StatusCommand) isFilePending(
 	path, toolDir, personalDir, toolName string,
 	extraAllowlist []string,
+	excludes *entities.ExcludePatterns,
 	manifest *entities.Manifest,
 ) bool {
 	relPath, err := filepath.Rel(toolDir, path)
@@ -298,7 +332,7 @@ func (c *StatusCommand) isFilePending(
 		return false
 	}
 
-	if !entities.IsSyncable(toolName, relPath, extraAllowlist) {
+	if !entities.IsSyncable(toolName, relPath, extraAllowlist) || excludes.Matches(toolName, relPath) {
 		return false
 	}
 

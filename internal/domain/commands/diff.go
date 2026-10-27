@@ -34,6 +34,7 @@ type DiffCommand struct {
 	differ         repositories.TextDiffer
 	formatter      entities.Formatter
 	viewer         DiffViewer
+	excludes       repositories.ExcludeRepository
 }
 
 // NewDiffCommand creates a new DiffCommand.
@@ -55,6 +56,15 @@ func NewDiffCommand(
 		formatter:      formatter,
 		viewer:         viewer,
 	}
+}
+
+// WithExcludes sets where the device's exclusions come from: the external
+// source files they match are left out of the diff, as a pull leaves them
+// alone. Personal files follow the PersonalSyncer's own exclusions. Without
+// it, nothing is excluded.
+func (c *DiffCommand) WithExcludes(excludes repositories.ExcludeRepository) *DiffCommand {
+	c.excludes = excludes
+	return c
 }
 
 // DiffOptions holds the flags for the diff command.
@@ -133,6 +143,12 @@ func (c *DiffCommand) fetchSharedChanges(config *entities.Config, repoPath, sour
 		}
 		maps.Copy(allFiles, fetched.Files)
 	}
+
+	excludes, err := loadExcludes(c.excludes)
+	if err != nil {
+		logger.Warnf("%v; listing changes as if nothing were excluded", err)
+	}
+	dropExcludedShared(allFiles, excludes)
 
 	shared, diffErr := c.diffService.ComputeSharedDiff(config, repoPath, allFiles)
 	if diffErr != nil {

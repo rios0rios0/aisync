@@ -51,6 +51,7 @@ type PullCommand struct {
 	promptService     repositories.PromptService
 	bundleService     repositories.BundleService
 	bundleStateRepo   repositories.BundleStateRepository
+	excludes          repositories.ExcludeRepository
 }
 
 // NewPullCommand creates a new PullCommand.
@@ -90,6 +91,14 @@ func NewPullCommand(
 	}
 }
 
+// WithExcludes sets where the device's exclusions come from: the external
+// source files they match are never applied to, nor deleted from, this
+// device's tool directories. Without it, nothing is excluded.
+func (c *PullCommand) WithExcludes(excludes repositories.ExcludeRepository) *PullCommand {
+	c.excludes = excludes
+	return c
+}
+
 // fileEntry tracks a single file's content, provenance, and checksum.
 type fileEntry struct {
 	content  []byte
@@ -107,6 +116,14 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	}
 
 	c.applyHooksExclude(config)
+
+	// Read the device's exclusions before anything changes: when they exist
+	// but cannot be read, pulling as if nothing were excluded could overwrite
+	// the very files this device keeps for itself.
+	excludes, err := loadExcludes(c.excludes)
+	if err != nil {
+		return err
+	}
 
 	// Step 1: Pull personal changes from the sync repo (other devices).
 	// A failed git pull is fatal when a remote is configured: proceeding
@@ -136,8 +153,10 @@ func (c *PullCommand) Execute(configPath, repoPath string, opts PullOptions) err
 	// Step 7: Load encrypt patterns for personal file decryption.
 	encryptPatterns := c.loadEncryptPatterns(repoPath)
 
-	// Step 8: Apply files to each enabled AI tool directory.
-	c.applyToolDirectories(config, repoPath, allFiles, sourceFileMap, encryptPatterns, opts)
+	// Step 8: Apply files to each enabled AI tool directory, except those
+	// this device excludes.
+	dropExcludedShared(allFiles, excludes)
+	c.applyToolDirectories(config, repoPath, allFiles, sourceFileMap, encryptPatterns, excludes, opts)
 
 	// Step 8a: Reconcile personal files with the three-way merge. --force
 	// only suppresses prompts: unresolved conflicts are skipped, never
@@ -256,6 +275,7 @@ func (c *PullCommand) applyToolDirectories(
 	allFiles map[string]fileEntry,
 	sourceFileMap map[string]map[string][]byte,
 	encryptPatterns *entities.EncryptPatterns,
+	excludes *entities.ExcludePatterns,
 	opts PullOptions,
 ) {
 	for toolName, tool := range config.Tools {
@@ -265,7 +285,7 @@ func (c *PullCommand) applyToolDirectories(
 
 		if applyErr := c.applyToToolDir(
 			config, repoPath, toolName, tool, allFiles, sourceFileMap,
-			encryptPatterns, opts,
+			encryptPatterns, excludes, opts,
 		); applyErr != nil {
 			logger.Warnf("failed to apply to tool %s: %v", toolName, applyErr)
 		}
@@ -475,6 +495,7 @@ func (c *PullCommand) applyToToolDir(
 	allFiles map[string]fileEntry,
 	sourceFileMap map[string]map[string][]byte,
 	encryptPatterns *entities.EncryptPatterns,
+	excludes *entities.ExcludePatterns,
 	opts PullOptions,
 ) error {
 	toolDir := ExpandHome(tool.Path)
@@ -500,7 +521,9 @@ func (c *PullCommand) applyToToolDir(
 		}
 	}
 
-	deletions := c.detectDeletions(oldManifest, manifest, toolDir)
+	deletions := c.detectDeletions(oldManifest, manifest, toolDir, func(relPath string) bool {
+		return excludes.Matches(toolName, relPath)
+	})
 
 	if len(pendingFiles) == 0 && len(deletions) == 0 {
 		logger.Infof("tool %s: no changes", toolName)
@@ -817,9 +840,12 @@ func (c *PullCommand) readPersonalFile(
 
 // detectDeletions compares the old manifest against the new manifest and returns
 // the absolute paths of files that should be deleted (present in old, absent in new).
+// A path excluded on this device is no longer managed here, so it drops out of
+// the new manifest without being deleted.
 func (c *PullCommand) detectDeletions(
 	oldManifest, newManifest *entities.Manifest,
 	toolDir string,
+	excluded func(relPath string) bool,
 ) []string {
 	if oldManifest == nil {
 		return nil
@@ -827,6 +853,9 @@ func (c *PullCommand) detectDeletions(
 
 	var deletions []string
 	for relPath := range oldManifest.Files {
+		if excluded(relPath) {
+			continue
+		}
 		if _, exists := newManifest.Files[relPath]; !exists {
 			absPath := filepath.Join(toolDir, relPath)
 			if _, statErr := os.Stat(absPath); statErr == nil {
