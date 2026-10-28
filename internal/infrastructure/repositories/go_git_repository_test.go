@@ -313,7 +313,7 @@ func TestGoGitRepository_Push_NotOpened(t *testing.T) {
 	repo := repositories.NewGoGitRepository()
 
 	// when
-	err := repo.Push()
+	_, err := repo.Push()
 
 	// then
 	require.Error(t, err)
@@ -380,11 +380,35 @@ func TestGoGitRepository_Push_LocalOnlyRepoNoRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	// when -- push without any remote configured
-	err = repo.Push()
+	_, err = repo.Push()
 
 	// then -- the failure is reported; PushCommand only pushes when a remote exists
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to push")
+}
+
+func TestGoGitRepository_Push_ShouldReportNothingPushedWhenTheRemoteIsUpToDate(t *testing.T) {
+	t.Parallel()
+
+	// given
+	seedDir := t.TempDir()
+	seedRepo := repositories.NewGoGitRepository()
+	require.NoError(t, seedRepo.Init(seedDir))
+	require.NoError(t, os.WriteFile(filepath.Join(seedDir, "init.txt"), []byte("initial"), 0600))
+	require.NoError(t, seedRepo.CommitAll("chore: initial commit"))
+	bareDir := filepath.Join(t.TempDir(), "remote.git")
+	_, err := git.PlainClone(bareDir, true, &git.CloneOptions{URL: seedDir})
+	require.NoError(t, err)
+	cloneDir := filepath.Join(t.TempDir(), "cloned")
+	cloneRepo := repositories.NewGoGitRepository()
+	require.NoError(t, cloneRepo.Clone(bareDir, cloneDir, "main"))
+
+	// when -- push with no commit the remote lacks
+	pushed, err := cloneRepo.Push()
+
+	// then
+	require.NoError(t, err)
+	assert.False(t, pushed, "the remote already had every commit")
 }
 
 func TestGoGitRepository_Pull_WithHTTPSRemote(t *testing.T) {
@@ -454,10 +478,11 @@ func TestGoGitRepository_Push_WithLocalRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	// when -- push to the local remote
-	err = cloneRepo.Push()
+	pushed, err := cloneRepo.Push()
 
 	// then -- the remote's main now points at the new commit
 	require.NoError(t, err)
+	assert.True(t, pushed, "the remote received the new commit")
 	remote, err := git.PlainOpen(bareDir)
 	require.NoError(t, err)
 	remoteMain, err := remote.Reference("refs/heads/main", true)
@@ -586,7 +611,7 @@ func TestGoGitRepository_Push_WithUnreachableHTTPSRemote(t *testing.T) {
 	require.NoError(t, err)
 
 	// when -- push to an unreachable remote
-	err = repo.Push()
+	_, err = repo.Push()
 
 	// then -- the failure is reported instead of being logged and swallowed
 	require.Error(t, err)

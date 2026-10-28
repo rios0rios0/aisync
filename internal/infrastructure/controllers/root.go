@@ -74,7 +74,7 @@ func (p *gitRepoProxy) Open(dir string) error               { return p.impl.Open
 func (p *gitRepoProxy) Fetch() error                        { return p.impl.Fetch() }
 func (p *gitRepoProxy) Pull() error                         { return p.impl.Pull() }
 func (p *gitRepoProxy) CommitAll(message string) error      { return p.impl.CommitAll(message) }
-func (p *gitRepoProxy) Push() error                         { return p.impl.Push() }
+func (p *gitRepoProxy) Push() (bool, error)                 { return p.impl.Push() }
 func (p *gitRepoProxy) IsClean() (bool, error)              { return p.impl.IsClean() }
 func (p *gitRepoProxy) ChangedFiles() ([]string, error)     { return p.impl.ChangedFiles() }
 func (p *gitRepoProxy) HasRemote() bool                     { return p.impl.HasRemote() }

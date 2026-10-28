@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -222,4 +223,65 @@ func TestExecGitRepository_Clone_ShouldCloneFromLocalRepo(t *testing.T) {
 	data, readErr := os.ReadFile(filepath.Join(destDir, "README.md"))
 	require.NoError(t, readErr)
 	assert.Equal(t, "# Test", string(data))
+}
+
+func TestExecGitRepository_Push_ShouldReportPushedWhenTheRemoteReceivesACommit(t *testing.T) {
+	t.Parallel()
+
+	// given
+	repo, dir := initTempRepo(t)
+	remoteDir := addBareRemote(t, repo, dir)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "second.txt"), []byte("second"), 0600))
+	require.NoError(t, repo.CommitAll("feat: added a second file"))
+
+	// when
+	pushed, err := repo.Push()
+
+	// then
+	require.NoError(t, err)
+	assert.True(t, pushed, "the remote received the new commit")
+	assert.Equal(t, gitOutput(t, dir, "rev-parse", "HEAD"), gitOutput(t, remoteDir, "rev-parse", "main"))
+}
+
+func TestExecGitRepository_Push_ShouldReportNothingPushedWhenTheRemoteIsUpToDate(t *testing.T) {
+	t.Parallel()
+
+	// given
+	repo, dir := initTempRepo(t)
+	addBareRemote(t, repo, dir)
+
+	// when
+	pushed, err := repo.Push()
+
+	// then
+	require.NoError(t, err)
+	assert.False(t, pushed, "the remote already had every commit")
+}
+
+// addBareRemote commits a first file, creates a bare repository as origin,
+// and pushes main to it with upstream tracking, as a cloned sync repo has.
+// It returns the bare repository's directory.
+func addBareRemote(t *testing.T, repo *repositories.ExecGitRepository, dir string) string {
+	t.Helper()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "first.txt"), []byte("first"), 0600))
+	require.NoError(t, repo.CommitAll("chore: added a first file"))
+
+	remoteDir := filepath.Join(t.TempDir(), "remote.git")
+	gitOutput(t, "", "init", "--bare", "--initial-branch=main", remoteDir)
+	gitOutput(t, remoteDir, "config", "core.hooksPath", os.DevNull)
+	require.NoError(t, repo.AddRemote("origin", remoteDir))
+	gitOutput(t, dir, "push", "--set-upstream", "origin", "main")
+	return remoteDir
+}
+
+// gitOutput runs git in dir (the current directory when empty) and returns
+// its trimmed standard output, failing the test when git fails.
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+	out, err := exec.Command("git", args...).CombinedOutput()
+	require.NoError(t, err, string(out))
+	return strings.TrimSpace(string(out))
 }

@@ -209,6 +209,8 @@ type MockGitRepository struct {
 	PullCalls        int
 	CommitAllCalls   int
 	PushCalls        int
+	// NothingToPush makes Push report that the remote already had every commit.
+	NothingToPush bool
 }
 
 func (m *MockGitRepository) Clone(url, dir, branch string) error {
@@ -266,9 +268,12 @@ func (m *MockGitRepository) CommitAll(message string) error {
 	return m.CommitErr
 }
 
-func (m *MockGitRepository) Push() error {
+func (m *MockGitRepository) Push() (bool, error) {
 	m.PushCalls++
-	return m.PushErr
+	if m.PushErr != nil {
+		return false, m.PushErr
+	}
+	return !m.NothingToPush, nil
 }
 
 func (m *MockGitRepository) IsClean() (bool, error) {

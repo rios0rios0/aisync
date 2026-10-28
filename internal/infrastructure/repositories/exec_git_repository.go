@@ -106,14 +106,33 @@ func (r *ExecGitRepository) CommitAll(message string) error {
 	return nil
 }
 
-// Push pushes commits to the remote origin.
-func (r *ExecGitRepository) Push() error {
-	_, err := r.run(r.dir, "push", "origin")
+// Push pushes commits to the remote origin and reports whether the remote
+// received any. It reads git's porcelain output, which is machine-readable
+// and never translated: every ref gets a status line led by a one-character
+// flag.
+func (r *ExecGitRepository) Push() (bool, error) {
+	out, err := r.run(r.dir, "push", "--porcelain", "origin")
 	if err != nil {
 		logger.Warnf("git push failed (offline?): %v", err)
-		return fmt.Errorf("git push failed: %w", err)
+		return false, fmt.Errorf("git push failed: %w", err)
 	}
-	return nil
+	return pushedAnyRef(out), nil
+}
+
+// updatedRefFlags are the porcelain flags of a ref the push changed: a
+// fast-forward, a forced update, a deletion, and a new ref. An up-to-date
+// ref is flagged "=" and a rejected one "!".
+const updatedRefFlags = " +-*"
+
+// pushedAnyRef reports whether porcelain push output has a status line for
+// a ref the push changed. A status line is the flag, a tab, and the refs.
+func pushedAnyRef(output string) bool {
+	for line := range strings.SplitSeq(output, "\n") {
+		if len(line) > 1 && line[1] == '\t' && strings.IndexByte(updatedRefFlags, line[0]) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // IsClean returns true if the working tree has no uncommitted changes.
