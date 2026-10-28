@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, Codex, Cursor, GitHub Copilot) when working with code in this repository.
 
 ## What This Project Does
 
@@ -13,10 +13,12 @@ make build          # Compile to bin/aisync (stripped with -s -w)
 make debug          # Compile with debug symbols (-gcflags "-N -l")
 make run            # go run ./cmd/aisync
 make install        # Build and copy to ~/.local/bin/aisync
-make lint           # golangci-lint (always use this, never call golangci-lint directly)
+make lint           # golangci-lint with the pipelines config; calling golangci-lint directly skips that config
 make test           # Full test suite via pipeline scripts
 make sast           # Security analysis (CodeQL, Semgrep, Trivy, Hadolint, Gitleaks)
 ```
+
+`lint`, `test`, and `sast` come from the `rios0rios0/pipelines` checkout at `SCRIPTS_DIR` (default `~/Development/github.com/rios0rios0/pipelines`). The Makefile `-include`s it, so those targets do not exist without that checkout.
 
 Run a single test during development:
 ```bash
@@ -39,15 +41,6 @@ Clean Architecture with Hexagonal (Ports & Adapters) design. Dependencies always
 ### How Dependency Injection Works
 
 `controllers/root.go` is the composition root. `NewRootCommand(version)` creates every infrastructure instance, injects them into domain command constructors, and wires cobra subcommands. This is the only place where concrete types are referenced — domain commands accept only interfaces.
-
-```
-main.go → NewRootCommand(version)
-             ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo, JSONBundleStateRepo
-             ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, TarAgeBundleSvc, UnifiedDiffer, ExecGitRepoHistory, ...
-             ├── creates the PersonalSyncer shared by pull, push, sync, diff, and status
-             ├── creates domain commands (injecting interface deps)
-             └── registers cobra subcommands → returns root *cobra.Command
-```
 
 ### Adding a New Command
 
@@ -120,7 +113,7 @@ Two bundle modes exist:
 
 | Mode | Config value | Behavior |
 |------|-------------|----------|
-| `subdirs` (default) | `mode: subdirs` | Each immediate subdirectory is packaged as one `.age` tarball. Filename is `hmac_sha256(per_repo_key, name)[:16].age` where `per_repo_key` is HKDF-derived from the device's age identity (info string `aisync-bundle-name-v1`). The original name lives only inside the encrypted `_aisync-manifest.json`. Without the age identity, an attacker cannot compute or verify a filename for a guessed project name — closing the SHA-256 confirmation oracle that existed before. Bundle ciphertext is also padded with cryptographic-random bytes (appended after the gzip end marker; `Multistream(false)` ignores them on extract) up to the smallest power-of-2 bucket from 16 KiB to 128 MiB, so two bundles in the same bucket are byte-length-indistinguishable in the public-clone view. |
+| `subdirs` (default) | `mode: subdirs` | Each immediate subdirectory is packaged as one `.age` tarball. Filename is `hmac_sha256(per_repo_key, name)[:16].age` where `per_repo_key` is HKDF-derived from the device's age identity (info string `aisync-bundle-name-v1`). The original name lives only inside the encrypted `_aisync-manifest.json`. Without the age identity, an attacker cannot compute or verify a filename for a guessed project name. Bundle ciphertext is also padded with cryptographic-random bytes (appended after the gzip end marker; `Multistream(false)` ignores them on extract) up to the smallest power-of-2 bucket from 16 KiB to 128 MiB, so two bundles in the same bucket are byte-length-indistinguishable in the public-clone view. |
 | `whole` | `mode: whole` | The entire source directory is one tarball — for loose-file directories like `plans/` or `todos/`. |
 
 Two merge strategies control how pull reconciles bundles with local state:
@@ -132,29 +125,11 @@ Two merge strategies control how pull reconciles bundles with local state:
 
 Cross-device deletion detection uses a per-device cache at `~/.cache/aisync/bundle-state.json` (`0600`, never committed). Pulls compute `removed = (cached) − (remote)` and prompt the user before deleting. Auto-removal is intentionally avoided.
 
-Key files:
-
-- `entities/bundle_manifest.go`, `entities/bundle_state.go` — value objects for bundle metadata and cross-device state.
-- `entities/tool.go` — `BundleSpec`, `BundleMode`, `BundleMergeStrategy` definitions.
-- `repositories/bundle_service.go` — `BundleService` interface (HashName, Bundle, Extract, MergeIntoLocal).
-- `repositories/bundle_state_repository.go` — `BundleStateRepository` interface.
-- `services/tar_age_bundle_service.go` — production implementation (tar+gzip+age).
-- `repositories/json_bundle_state_repository.go` — persistent state store.
-- `commands/push_bundles.go`, `commands/pull_bundles.go` — bundle pipeline integration.
-- `commands/bundles_prune.go` — `PruneBundlesCommand` (`aisync bundles prune`).
-
-### Platform-Specific Watch Service
-
-`controllers/root.go` selects the watch implementation at startup:
-
-- **Desktop (Linux/macOS/Windows)** — `FSNotifyWatchService` using OS-native events (`inotify`, `FSEvents`, `ReadDirectoryChangesW`).
-- **Termux (Android)** — `PollingWatchService` with 30-second interval. Detected via `runtime.GOOS == "android"` or `ANDROID_ROOT` env var.
-
 ### Four-Layer Push Protection Stack
 
 `aisync push` runs four orthogonal protections on every file. Any layer firing blocks the push. Each layer catches a different leak class — they compose, they don't overlap.
 
-1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. `ToolDenylists` and `CommonDenylist` exclude tool-managed content inside allowlisted directories (Claude's account-synced `skills/synced/` and `skills/.trash/`, Codex's bundled `skills/.system/`, `.gitkeep` placeholders). Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`, which also overrides the denylists. Replaces the old compiled deny-list — unknown content is now never synced rather than silently leaking when a vendor ships a new runtime directory.
+1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. `ToolDenylists` and `CommonDenylist` exclude tool-managed content inside allowlisted directories (Claude's account-synced `skills/synced/` and `skills/.trash/`, Codex's bundled `skills/.system/`, `.gitkeep` placeholders). Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`, which also overrides the denylists. Unknown content is never synced, so a new runtime directory a vendor ships cannot leak.
 2. **`.aisyncignore`** — Gitignore-syntax file for additional path exclusions on top of the allowlist. Additive, user-configurable.
 3. **`.aisyncencrypt` + age** — Paths matching the patterns are written as ciphertext using `config.Encryption.Recipients`. Has two independent gates: pattern match AND non-empty recipients. Mismatched gates have previously caused silent plaintext commits.
 4. **Content scanners** — Two scanners run in sequence on the plaintext the commit is about to publish: every uncommitted, non-`.age` file under `personal/` (`GitRepository.ChangedFiles`), whichever command wrote it. Files already committed are not rescanned, so an old false positive does not block unrelated pushes:

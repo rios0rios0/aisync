@@ -12,8 +12,8 @@ devices and 30+ AI tools. It pulls shared rules from public sources via Git
 tarball downloads, syncs personal configurations through a private Git repo,
 and encrypts sensitive data with `age`.
 
-The canonical, human-written deep-dive is [`CLAUDE.md`](../CLAUDE.md). When
-this file and `CLAUDE.md` disagree, `CLAUDE.md` wins — update both together.
+The canonical, human-written deep-dive is [`AGENTS.md`](../AGENTS.md). When
+this file and `AGENTS.md` disagree, `AGENTS.md` wins — update both together.
 
 ## Build, Test, and Lint — Always Use the Makefile
 
@@ -100,18 +100,19 @@ HKDF-derived from the device's age identity) and `whole` (entire source director
 tarball). Two merge strategies on pull: `mtime` (default, newer-wins with
 local-only preservation) and `replace` (overwrite unconditionally). Cross-device
 deletion detection uses `~/.cache/aisync/bundle-state.json` and prompts before
-removing. See `CLAUDE.md` § Bundle Sync for full details.
+removing. See `AGENTS.md` § Bundle Sync for full details.
 
 ### Three-Way Personal Sync
 
 Personal files are reconciled by `PersonalSyncer`
 (`internal/domain/commands/personal_sync.go`) for `pull`, `push`, `sync`,
-and `diff`. Each tool's `.aisync-manifest.json` records the checksum every
-path had when this device last synced it; `entities.Reconcile` compares local,
-repo, and that base to decide push, pull, delete on either side, or conflict.
-Conflicts are resolved before anything is written (prompt with diff and
-timestamps, or `--prefer local|remote|newer`); without a terminal they are
-skipped, never overwritten. See `CLAUDE.md` § Three-Way Personal Sync.
+`diff`, and `status`. Each tool's `.aisync-manifest.json` records the checksum
+every path had when this device last synced it; `entities.Reconcile` compares
+local, repo, and that base to decide push, pull, delete on either side, or
+conflict. Conflicts are resolved before anything is written (prompt with diff
+and timestamps, or `--prefer local|remote|newer`); without a terminal the
+answers are read from stdin, one line per prompt, and end of input skips the
+conflict rather than overwriting it. See `AGENTS.md` § Three-Way Personal Sync.
 
 ### Transcript Sync
 
@@ -120,7 +121,7 @@ branch that always holds a single parentless commit
 (`services/git_transcript_service.go`), so git history never grows with
 sessions. Files are gzip+age encrypted under HMAC names, publishes use
 `--force-with-lease`, and `TranscriptSyncer` merges again on
-`ErrSnapshotMoved`. See `CLAUDE.md` § Transcript Sync.
+`ErrSnapshotMoved`. See `AGENTS.md` § Transcript Sync.
 
 ### Age Identity Provisioning
 
@@ -259,8 +260,9 @@ Every code change ships with documentation in the same commit/PR:
   kinds (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
   Simple past tense, lowercase first verb, no trailing period.
 - **`README.md`** — when usage, CLI flags, or setup changes.
-- **`CLAUDE.md`** — when architecture, build commands, or development
-  workflow changes.
+- **`AGENTS.md`** — when architecture, build commands, or development
+  workflow changes. `CLAUDE.md` holds only the `@AGENTS.md` import line;
+  never add content to it.
 - **This file (`.github/copilot-instructions.md`)** — when the workflow
   that Copilot should reinforce changes.
 
@@ -303,9 +305,10 @@ Copilot should actively steer away from these:
   `services.HeuristicCount()`. The count must travel through the
   constructor as an `int`. The same rule applies to any future scanner
   configuration the domain layer needs to know about.
-- Skipping the secret or NDA scanner in `executeDryRun` to keep dry-run
-  "fast." Dry-run must run the same content scanners as the real-push
-  path so users discover blocks before they commit.
+- Skipping the secret or NDA scanner in the `opts.DryRun` branch of
+  `PushCommand.Execute` to keep dry-run "fast." Dry-run must run the same
+  content scanners as the real-push path so users discover blocks before
+  they commit.
 - Removing or weakening any of the four push-protection layers (per-tool
   allowlist, `.aisyncignore`, `.aisyncencrypt`, content scanners) without
   an explicit user-facing decision in the PR description.
@@ -325,7 +328,7 @@ When asked to change something, read these files before suggesting edits:
 | Push pipeline (copy, encrypt, scan)            | `internal/domain/commands/push.go`                                        |
 | Pull pipeline (fetch, merge, apply)            | `internal/domain/commands/pull.go`                                        |
 | Encrypt / ignore pattern matching              | `internal/domain/entities/{encrypt,ignore}_patterns.go`                   |
-| Per-tool allowlist (replaces old deny-list)    | `internal/domain/entities/allowlist.go`                                   |
+| Per-tool allowlist                             | `internal/domain/entities/allowlist.go`                                   |
 | Credential regex scanner                       | `internal/infrastructure/services/secret_scanner.go`                      |
 | NDA scanner (3 sources + heuristics)           | `internal/infrastructure/services/{nda_scanner,auto_deriver,nda_content_checker}.go` |
 | NDA forbidden-terms entity (canonical match)   | `internal/domain/entities/forbidden_terms.go`                             |

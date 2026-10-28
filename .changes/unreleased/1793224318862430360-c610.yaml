@@ -1,0 +1,3 @@
+kind: 'Changed'
+body: 'refreshed `AGENTS.md`, `.github/copilot-instructions.md`, and the code-review skill to point at `AGENTS.md` instead of `CLAUDE.md`, corrected stale dry-run, conflict-prompt, and command-naming references, and trimmed `AGENTS.md` under 200 lines'
+time: '2026-10-28T21:51:58.862352653Z'
