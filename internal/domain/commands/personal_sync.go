@@ -268,6 +268,48 @@ func (s *PersonalSyncer) Changes(config *entities.Config, repoPath string) []Per
 	return changes
 }
 
+// PersonalPending counts what a sync in both directions would do with one
+// tool's personal files, as `aisync status` reports it.
+type PersonalPending struct {
+	Tool string
+	// Outgoing counts files new, changed, or deleted here: a push sends them.
+	Outgoing int
+	// Incoming counts files new, changed, or deleted in the sync repo: a
+	// pull applies them here.
+	Incoming int
+	// Conflicts counts files changed on both sides: a sync asks which to keep.
+	Conflicts int
+}
+
+// Pending plans every enabled tool exactly as Sync does and counts what each
+// plan would change, without resolving conflicts or writing anything. The
+// scope, the comparison and the device's exclusions are Sync's own, so
+// encrypted repo copies are decrypted before they are compared, a path this
+// device excludes is never counted, and an unchanged file is never counted.
+func (s *PersonalSyncer) Pending(config *entities.Config, repoPath string) []PersonalPending {
+	excludes, err := s.deviceExcludes()
+	if err != nil {
+		logger.Warnf("%v; counting pending changes as if nothing were excluded", err)
+	}
+	plans := s.planTools(config, repoPath, excludes)
+	pending := make([]PersonalPending, 0, len(plans))
+	for _, plan := range plans {
+		counts := PersonalPending{Tool: plan.name}
+		for _, entry := range plan.entries {
+			switch {
+			case entry.Action.IsOutgoing():
+				counts.Outgoing++
+			case entry.Action.IsIncoming():
+				counts.Incoming++
+			case entry.Action == entities.SyncActionConflict:
+				counts.Conflicts++
+			}
+		}
+		pending = append(pending, counts)
+	}
+	return pending
+}
+
 // planTools plans every enabled tool that exists on this device, in name
 // order so prompts and output are deterministic.
 func (s *PersonalSyncer) planTools(

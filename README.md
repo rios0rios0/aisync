@@ -196,7 +196,7 @@ The 1Password item must expose the `AGE-SECRET-KEY-1...` value in a field labell
 ### Diagnostics
 
 ```bash
-aisync status     # Sync state, managed files, sources (offline indicator if unreachable)
+aisync status     # Sync state, managed files, personal files to push or pull, sources (offline indicator if unreachable)
 aisync diff       # Preview what would change (interactive TUI viewer when TTY)
 aisync doctor     # Check config, git, age key, tools, sources, git connectivity
 aisync device list

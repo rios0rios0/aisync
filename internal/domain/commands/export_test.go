@@ -1,10 +1,17 @@
 package commands
 
 import (
+	"io"
 	"path/filepath"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
 )
+
+// SetStatusOutput sends what a StatusCommand prints to w instead of
+// [os.Stdout], so parallel tests can assert on it.
+func SetStatusOutput(c *StatusCommand, w io.Writer) {
+	c.out = w
+}
 
 // ExposeApplyBundles is a test-only re-export of the unexported
 // [PullCommand.applyBundles] method so external test packages can

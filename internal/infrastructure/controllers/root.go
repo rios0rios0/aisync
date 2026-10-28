@@ -161,7 +161,8 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 		secretScanner, ndaChecker, bundleSvc, personalSyncer, transcriptSyncer,
 	)
 	syncCmd := commands.NewSyncCommand(pullCmd, pushCmd)
-	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo).WithExcludes(excludeRepo)
+	statusCmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, personalSyncer).
+		WithExcludes(excludeRepo)
 	diffViewer := ui.NewBubbleteaDiffViewer()
 	diffCmd := commands.NewDiffCommand(
 		configRepo, sourceRepo, diffSvc, personalSyncer, differ, formatter, diffViewer,

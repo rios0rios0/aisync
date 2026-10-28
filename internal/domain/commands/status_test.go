@@ -1,6 +1,7 @@
 package commands_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +48,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 			},
 		}
 		manifestRepo := &doubles.MockManifestRepository{}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -72,7 +73,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		stateRepo := &doubles.MockStateRepository{ExistsVal: false}
 		manifestRepo := &doubles.MockManifestRepository{}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -85,7 +86,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewStatusCommand(configRepo, nil, nil)
+		cmd := commands.NewStatusCommand(configRepo, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo")
@@ -116,7 +117,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 		configRepo := &doubles.MockConfigRepository{Config: config}
 		stateRepo := &doubles.MockStateRepository{ExistsVal: false}
 		manifestRepo := &doubles.MockManifestRepository{}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -152,7 +153,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 			ExistsVal: true,
 			Manifest:  manifest,
 		}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -189,7 +190,7 @@ func TestStatusCommand_Execute(t *testing.T) {
 			},
 		}
 		manifestRepo := &doubles.MockManifestRepository{}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -218,7 +219,8 @@ func TestStatusCommand_Execute(t *testing.T) {
 				SourceETags: map[string]string{},
 			},
 		}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, &doubles.MockManifestRepository{})
+		manifestRepo := &doubles.MockManifestRepository{}
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -249,7 +251,8 @@ func TestStatusCommand_Execute(t *testing.T) {
 				LastPush: time.Now().Add(-1 * time.Hour),
 			},
 		}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, &doubles.MockManifestRepository{})
+		manifestRepo := &doubles.MockManifestRepository{}
+		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo, newStatusSyncer(manifestRepo))
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir)
@@ -257,77 +260,135 @@ func TestStatusCommand_Execute(t *testing.T) {
 		// then
 		require.NoError(t, err)
 	})
+}
 
-	t.Run("should count pending local changes when local file differs from sync repo", func(t *testing.T) {
+func TestStatusCommand_Execute_PendingChanges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should report nothing pending when an encrypted repo copy matches the file last synced", func(t *testing.T) {
 		t.Parallel()
 		// given
-		tmpDir := t.TempDir()
-		repoPath := filepath.Join(tmpDir, "repo")
-		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(toolDir, 0700))
-
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "my-rule.md"), []byte("local content"), 0600))
-
-		personalDir := filepath.Join(repoPath, "personal", "claude")
-		require.NoError(t, os.MkdirAll(personalDir, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-rule.md"), []byte("repo content"), 0600))
-
-		config := &entities.Config{
-			Sync: entities.SyncConfig{Branch: "main"},
-			Encryption: entities.EncryptionConfig{
-				Identity: "/tmp/nonexistent-key.txt",
-			},
-			Tools: map[string]entities.Tool{
-				"claude": {Path: toolDir, Enabled: true},
-			},
-			Sources: []entities.Source{},
-		}
-		configRepo := &doubles.MockConfigRepository{Config: config}
-		stateRepo := &doubles.MockStateRepository{ExistsVal: false}
-		manifestRepo := &doubles.MockManifestRepository{ExistsVal: false}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "rule")
+		f.writeLocal("rules/go.md", "rule")
+		f.writeRepo("rules/go.md.age", "ciphertext")
+		f.encryption.DecryptedData = []byte("rule")
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		out := statusOutput(t, f)
 
 		// then
-		require.NoError(t, err)
+		assert.Contains(t, out, "Pending Local Changes:\n  (none)\n")
+		assert.NotContains(t, out, "not yet pushed")
 	})
 
-	t.Run("should skip shared files from manifest in pending count", func(t *testing.T) {
+	t.Run("should not count a file .aisyncignore excludes", func(t *testing.T) {
 		t.Parallel()
 		// given
-		tmpDir := t.TempDir()
-		repoPath := filepath.Join(tmpDir, "repo")
-		require.NoError(t, os.MkdirAll(repoPath, 0700))
-
-		toolDir := filepath.Join(tmpDir, "claude")
-		require.NoError(t, os.MkdirAll(filepath.Join(toolDir, "rules"), 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "rules/shared.md"), []byte("shared rule"), 0600))
-
-		manifest := entities.NewManifest("0.1.0", "host")
-		manifest.SetFile("rules/shared.md", "guide", "shared", "checksum")
-
-		config := &entities.Config{
-			Sync:       entities.SyncConfig{Branch: "main"},
-			Encryption: entities.EncryptionConfig{Identity: "/tmp/nonexistent-key.txt"},
-			Tools: map[string]entities.Tool{
-				"claude": {Path: toolDir, Enabled: true},
-			},
-			Sources: []entities.Source{},
-		}
-		configRepo := &doubles.MockConfigRepository{Config: config}
-		stateRepo := &doubles.MockStateRepository{ExistsVal: false}
-		manifestRepo := &doubles.MockManifestRepository{
-			ExistsVal: true,
-			Manifest:  manifest,
-		}
-		cmd := commands.NewStatusCommand(configRepo, stateRepo, manifestRepo)
+		f := newSyncFixture(t)
+		writeFile(t, filepath.Join(f.repoPath, ".aisyncignore"), "__pycache__/\n*.pyc\n")
+		f.writeLocal("skills/demo/scripts/__pycache__/run.cpython-313.pyc", "bytecode")
 
 		// when
-		err := cmd.Execute("/tmp/config.yaml", repoPath)
+		out := statusOutput(t, f)
 
 		// then
-		require.NoError(t, err)
+		assert.Contains(t, out, "Pending Local Changes:\n  (none)\n")
 	})
+
+	t.Run("should not count shared files the manifest records", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.manifest.Manifest = entities.NewManifest("0.1.0", "host")
+		f.manifest.ExistsVal = true
+		f.manifest.Manifest.SetFile("rules/shared.md", "guide", "shared", "checksum")
+		f.writeLocal("rules/shared.md", "shared rule")
+
+		// when
+		out := statusOutput(t, f)
+
+		// then
+		assert.Contains(t, out, "Pending Local Changes:\n  (none)\n")
+	})
+
+	t.Run("should count new, edited, and deleted local files as not yet pushed", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/edited.md", "before")
+		f.writeRepo("rules/edited.md", "before")
+		f.writeLocal("rules/edited.md", "after")
+		f.base("rules/deleted.md", "gone")
+		f.writeRepo("rules/deleted.md", "gone")
+		f.writeLocal("rules/new.md", "new")
+
+		// when
+		out := statusOutput(t, f)
+
+		// then
+		assert.Contains(t, out, "Pending Local Changes:\n  claude       3 file(s) not yet pushed\n")
+	})
+
+	t.Run("should report a file changed only in the sync repo as incoming", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "before")
+		f.writeLocal("rules/go.md", "before")
+		f.writeRepo("rules/go.md", "after")
+
+		// when
+		out := statusOutput(t, f)
+
+		// then
+		assert.Contains(t, out, "Pending Local Changes:\n  (none)\n")
+		assert.Contains(t, out, "Incoming Changes:\n"+
+			"  claude       1 file(s) in the sync repo not yet applied here\n"+
+			"  (run 'aisync pull' to apply them)\n")
+	})
+
+	t.Run("should report conflicts beside the files not yet pushed", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/both.md", "before")
+		f.writeLocal("rules/both.md", "mine")
+		f.writeRepo("rules/both.md", "theirs")
+		f.writeLocal("rules/new.md", "new")
+
+		// when
+		out := statusOutput(t, f)
+
+		// then
+		assert.Contains(t, out, "  claude       1 file(s) not yet pushed, 1 conflict(s) to resolve\n")
+	})
+}
+
+// newStatusSyncer builds the PersonalSyncer a StatusCommand plans with.
+func newStatusSyncer(manifestRepo *doubles.MockManifestRepository) *commands.PersonalSyncer {
+	return commands.NewPersonalSyncer(
+		manifestRepo,
+		&doubles.MockEncryptionService{},
+		&doubles.MockApplyService{},
+		&doubles.MockPromptService{},
+		&doubles.MockTextDiffer{},
+		&doubles.MockRepoHistory{},
+	)
+}
+
+// statusOutput runs `aisync status` against the fixture's tool directory and
+// sync repo and returns what it printed.
+func statusOutput(t *testing.T, f *syncFixture) string {
+	t.Helper()
+	var out bytes.Buffer
+	cmd := commands.NewStatusCommand(
+		&doubles.MockConfigRepository{Config: f.config},
+		&doubles.MockStateRepository{},
+		f.manifest,
+		f.syncer(),
+	)
+	commands.SetStatusOutput(cmd, &out)
+	require.NoError(t, cmd.Execute("config.yaml", f.repoPath))
+	return out.String()
 }
