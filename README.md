@@ -140,6 +140,24 @@ Merging works like personal files, with two rules for logs: a conversation conti
 
 Conversation sync uses the system `git` binary and needs encryption recipients; it never publishes plaintext.
 
+### Per-Device Exclusions
+
+`config.yaml`, `.aisyncignore` and `.aisyncencrypt` are committed, so every device reads the same ones. When one device needs its own copy of a file every other device shares, list it in `~/.config/aisync/exclude` (`%APPDATA%\aisync\exclude` on Windows, or the file `AISYNC_EXCLUDE_FILE` names). It sits beside `key.txt`, outside the sync repo, so it is never committed or synced.
+
+Each line is `<tool>/<path>`: the path is relative to the tool's directory and uses the allowlist's patterns (`**` crosses directories, a trailing `/` names a directory at any depth, a bare name is the file at the tool root), and `*` as the tool means every tool. Blank lines and lines starting with `#` are ignored. A phone running Claude Code in Termux, for example, keeps its own settings and environment notes:
+
+```text
+# Linux's status line forks bash on every redraw, and its hooks call /usr/bin/python3
+claude/settings.json
+# environment notes written for WSL
+claude/CLAUDE.md
+opencode/AGENTS.md
+```
+
+An excluded path is out of scope on that device in both directions: `pull` never writes or deletes it there, `push` and `sync` never write or delete the repo copy, it is never a conflict, and `diff` and `status` leave it out (`status` names the exclude file). Every other device goes on syncing it. Conversation files match as `<tool>/<transcripts dir>/<path>`, so `claude/projects/**/*.jsonl` keeps conversation logs off a device while its project memories still sync. Deleting a line resumes the merge from the version this device last synced: a change made meanwhile on one side is applied, and changes on both sides are a conflict. Bundles ignore the file.
+
+An exclude file that exists but cannot be read stops `pull`, `push` and `sync` before they write to a tool directory or commit anything, rather than letting them run as if nothing were excluded.
+
 ### Source Management
 
 ```bash

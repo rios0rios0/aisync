@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
@@ -397,13 +398,16 @@ func (m *MockSecretScanner) Scan(_ map[string][]byte) []repositories.SecretFindi
 type MockDiffService struct {
 	SharedDiff []entities.FileChange
 	SharedErr  error
+	// Incoming captures the files passed to the last ComputeSharedDiff call.
+	Incoming map[string][]byte
 }
 
 func (m *MockDiffService) ComputeSharedDiff(
 	_ *entities.Config,
 	_ string,
-	_ map[string][]byte,
+	incoming map[string][]byte,
 ) ([]entities.FileChange, error) {
+	m.Incoming = incoming
 	return m.SharedDiff, m.SharedErr
 }
 
@@ -854,6 +858,28 @@ func (m *MockOpSecretRepository) GetIdentity(vault, item string) (string, error)
 		return "", m.GetIdentityErr
 	}
 	return m.Identity, nil
+}
+
+// MockExcludeRepository is a manual stub for repositories.ExcludeRepository.
+// Lines are parsed like the exclude file's lines; LoadErr fails every Load.
+type MockExcludeRepository struct {
+	Lines     []string
+	PathVal   string
+	LoadErr   error
+	LoadCalls int
+}
+
+func (m *MockExcludeRepository) Load() (*entities.ExcludePatterns, error) {
+	m.LoadCalls++
+	if m.LoadErr != nil {
+		return nil, m.LoadErr
+	}
+	patterns, _ := entities.ParseExcludePatterns([]byte(strings.Join(m.Lines, "\n")))
+	return patterns, nil
+}
+
+func (m *MockExcludeRepository) Path() string {
+	return m.PathVal
 }
 
 // MockSSHAliasRepository is a manual stub for repositories.SSHAliasRepository.

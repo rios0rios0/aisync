@@ -35,6 +35,7 @@ type TranscriptSyncer struct {
 	applyService repositories.ApplyService
 	prompt       repositories.PromptService
 	differ       repositories.TextDiffer
+	excludes     repositories.ExcludeRepository
 }
 
 // NewTranscriptSyncer creates a new TranscriptSyncer.
@@ -52,6 +53,16 @@ func NewTranscriptSyncer(
 		prompt:       prompt,
 		differ:       differ,
 	}
+}
+
+// WithExcludes sets where the device's exclusions come from. A conversation
+// file is matched as <tool>/<transcripts dir>/<path>, so every exclusion is
+// relative to the tool's directory; an excluded file is neither pulled nor
+// published from this device, and stays in the snapshot for every other one.
+// Without it, nothing is excluded.
+func (s *TranscriptSyncer) WithExcludes(excludes repositories.ExcludeRepository) *TranscriptSyncer {
+	s.excludes = excludes
+	return s
 }
 
 // transcriptTool is one installed tool whose conversations are synced.
@@ -74,6 +85,7 @@ type transcriptLocal struct {
 // transcriptRun is the state of one fetch, merge, and publish attempt.
 type transcriptRun struct {
 	tools    map[string]transcriptTool
+	excludes *entities.ExcludePatterns
 	snapshot *entities.TranscriptSnapshot
 	base     map[string]string
 	local    map[string]transcriptLocal
@@ -98,9 +110,13 @@ func (s *TranscriptSyncer) Sync(
 	if err != nil || len(tools) == 0 {
 		return report, err
 	}
+	excludes, err := loadExcludes(s.excludes)
+	if err != nil {
+		return report, err
+	}
 
 	for attempt := 1; ; attempt++ {
-		report, err = s.syncOnce(config, repoPath, tools, opts)
+		report, err = s.syncOnce(config, repoPath, tools, excludes, opts)
 		if !errors.Is(err, repositories.ErrSnapshotMoved) || attempt == transcriptPublishAttempts {
 			return report, err
 		}
@@ -134,6 +150,7 @@ func (s *TranscriptSyncer) syncOnce(
 	config *entities.Config,
 	repoPath string,
 	tools map[string]transcriptTool,
+	excludes *entities.ExcludePatterns,
 	opts PersonalSyncOptions,
 ) (*PersonalSyncReport, error) {
 	identityPath := ExpandHome(config.Encryption.Identity)
@@ -146,7 +163,7 @@ func (s *TranscriptSyncer) syncOnce(
 		return nil, fmt.Errorf("failed to load the conversation sync state: %w", err)
 	}
 
-	run := planTranscripts(tools, snapshot, base, time.Now())
+	run := planTranscripts(tools, snapshot, base, excludes, time.Now())
 	if err = s.resolveTranscripts(repoPath, run, identityPath, opts); err != nil {
 		return nil, err
 	}
@@ -165,15 +182,18 @@ func (s *TranscriptSyncer) syncOnce(
 
 // planTranscripts scans this device, drops expired logs on both sides, and
 // reconciles the rest against the base. Files of tools not synced on this
-// device stay in the snapshot untouched.
+// device, and files this device excludes, stay in the snapshot untouched, and
+// their base entries are kept for when that changes.
 func planTranscripts(
 	tools map[string]transcriptTool,
 	snapshot *entities.TranscriptSnapshot,
 	base map[string]string,
+	excludes *entities.ExcludePatterns,
 	now time.Time,
 ) *transcriptRun {
 	run := &transcriptRun{
 		tools:    tools,
+		excludes: excludes,
 		snapshot: snapshot,
 		base:     maps.Clone(base),
 		local:    make(map[string]transcriptLocal),
@@ -191,7 +211,7 @@ func planTranscripts(
 	}
 	for key, file := range snapshot.Files {
 		tool, rel, synced := run.toolOf(key)
-		if !synced {
+		if !synced || run.excluded(tool, rel) {
 			continue
 		}
 		kind := tool.spec.Classify(rel)
@@ -208,7 +228,7 @@ func planTranscripts(
 
 	base = make(map[string]string)
 	for key, checksum := range run.base {
-		if _, _, synced := run.toolOf(key); synced {
+		if tool, rel, synced := run.toolOf(key); synced && !run.excluded(tool, rel) {
 			base[key] = checksum
 		}
 	}
@@ -227,12 +247,19 @@ func (r *transcriptRun) toolOf(key string) (transcriptTool, string, bool) {
 	return tool, rel, synced
 }
 
+// excluded reports whether rel, a path under tool's transcript directory, is
+// excluded on this device. It is matched as <transcripts dir>/<rel>, relative
+// to the tool's directory like every other exclusion.
+func (r *transcriptRun) excluded(tool transcriptTool, rel string) bool {
+	return r.excludes.Matches(tool.name, path.Join(tool.spec.Dir, rel))
+}
+
 // scanTranscriptDir records every file of tool's spec on this device,
 // without reading contents yet.
 func scanTranscriptDir(tool transcriptTool, run *transcriptRun) {
 	walkRoot(tool.dir, func(fsys fs.FS, rel string, _ fs.DirEntry) {
 		kind := tool.spec.Classify(rel)
-		if kind == entities.TranscriptKindNone {
+		if kind == entities.TranscriptKindNone || run.excluded(tool, rel) {
 			return
 		}
 		info, err := fs.Stat(fsys, rel)

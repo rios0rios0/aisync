@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,5 +63,38 @@ func TestConfigWantsSystemGit(t *testing.T) {
 
 		// then
 		assert.False(t, wants)
+	})
+}
+
+// TestDefaultExcludePath is not parallel: every sub-test sets AISYNC_EXCLUDE_FILE, and one
+// sets HOME, with t.Setenv.
+func TestDefaultExcludePath(t *testing.T) {
+	t.Run("should name the file AISYNC_EXCLUDE_FILE points at", func(t *testing.T) {
+		// given
+		path := filepath.Join(t.TempDir(), "phone-excludes")
+		t.Setenv("AISYNC_EXCLUDE_FILE", path)
+
+		// when
+		got := controllers.DefaultExcludePath()
+
+		// then
+		assert.Equal(t, path, got)
+	})
+
+	t.Run("should default to exclude beside the repo and key in aisync's config directory", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("the config directory is under %APPDATA% on Windows")
+		}
+		// given
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("AISYNC_EXCLUDE_FILE", "")
+
+		// when
+		got := controllers.DefaultExcludePath()
+
+		// then
+		assert.Equal(t, filepath.Join(home, ".config", "aisync", "exclude"), got)
+		assert.Equal(t, filepath.Dir(controllers.DefaultRepoPath()), filepath.Dir(got))
 	})
 }
