@@ -547,8 +547,10 @@ func (s *PersonalSyncer) resolveConflicts(repoPath string, plans []*toolPlan, op
 // preferenceChoices maps the --prefer values that always keep the same side
 // to that side.
 //
+// Partial by design: ask and newer are decided per conflict.
+//
 //nolint:gochecknoglobals // compiled-in lookup table
-//exhaustive:ignore // partial by design: ask and newer are decided per conflict
+//exhaustive:ignore
 var preferenceChoices = map[entities.SyncPreference]entities.ConflictChoice{
 	entities.PreferLocal:  entities.ChoiceKeepLocal,
 	entities.PreferRemote: entities.ChoiceKeepRemote,
@@ -660,8 +662,10 @@ type actionHandler func(s *PersonalSyncer, state *executionState, entry entities
 // actionHandlers maps every action that writes to a side to the function
 // that performs it; actions missing from the map write nothing.
 //
+// Partial by design: actions without a handler write nothing.
+//
 //nolint:gochecknoglobals // compiled-in dispatch table
-//exhaustive:ignore // partial by design: actions without a handler write nothing
+//exhaustive:ignore
 var actionHandlers = map[entities.SyncAction]actionHandler{
 	entities.SyncActionPush:        (*PersonalSyncer).executePush,
 	entities.SyncActionDeleteRepo:  (*PersonalSyncer).executeDeleteRepo,
@@ -958,8 +962,10 @@ func (s *PersonalSyncer) previewPlaintext(state *executionState, entry entities.
 
 // previewCounters maps every action a dry run counts to its report counter.
 //
+// Partial by design: only actions that write are counted.
+//
 //nolint:gochecknoglobals // compiled-in lookup table
-//exhaustive:ignore // partial by design: only actions that write are counted
+//exhaustive:ignore
 var previewCounters = map[entities.SyncAction]func(*PersonalSyncReport) *int{
 	entities.SyncActionPush:        func(r *PersonalSyncReport) *int { return &r.Pushed },
 	entities.SyncActionPull:        func(r *PersonalSyncReport) *int { return &r.Pulled },
@@ -970,8 +976,10 @@ var previewCounters = map[entities.SyncAction]func(*PersonalSyncReport) *int{
 // entryDescriptions maps each action shown to the user to its column label
 // and explanation.
 //
+// Partial by design: unchanged paths are never shown.
+//
 //nolint:gochecknoglobals // compiled-in lookup table
-//exhaustive:ignore // partial by design: unchanged paths are never shown
+//exhaustive:ignore
 var entryDescriptions = map[entities.SyncAction]func(entities.SyncEntry) (string, string){
 	entities.SyncActionPush: func(e entities.SyncEntry) (string, string) {
 		return "→ repo", newOrChanged(e, "new here", "changed here")

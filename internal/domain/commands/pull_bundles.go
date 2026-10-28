@@ -73,59 +73,73 @@ func (c *PullCommand) applyToolBundles(
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".age") {
 			continue
 		}
-		hash := strings.TrimSuffix(entry.Name(), ".age")
-		bundlePath := filepath.Join(targetDir, entry.Name())
+		c.applyOneBundle(targetDir, entry.Name(), toolName, toolPath, identityPath, spec, current)
+	}
+}
 
-		ciphertext, readErr := os.ReadFile(bundlePath)
-		if readErr != nil {
-			logger.Warnf("read bundle %s: %v", bundlePath, readErr)
-			continue
-		}
-		manifest, files, extractErr := c.bundleService.Extract(ciphertext, identityPath)
-		if extractErr != nil {
-			logger.Warnf("extract bundle %s: %v", bundlePath, extractErr)
-			continue
-		}
-		// In subdirs mode each bundle restores into a per-project
-		// subdir under the source root, and manifest.OriginalName is
-		// joined into the destination path — so it MUST be a single
-		// safe path segment to prevent traversal. In whole mode the
-		// localDir is built from spec.Source alone and OriginalName
-		// is purely informational (e.g. spec.Source itself, which can
-		// legitimately contain "/"), so the check is skipped.
-		var localDir string
-		if spec.EffectiveMode() == entities.BundleModeWhole {
-			localDir = filepath.Join(toolPath, spec.Source)
-		} else {
-			if !isSafePathSegment(manifest.OriginalName) {
-				logger.Warnf(
-					"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
-					bundlePath, manifest.OriginalName,
-				)
-				continue
-			}
-			localDir = filepath.Join(toolPath, spec.Source, manifest.OriginalName)
-		}
-		report, mergeErr := c.bundleService.MergeIntoLocal(files, localDir, spec.EffectiveMergeStrategy())
-		if mergeErr != nil {
-			logger.Warnf("merge bundle %s: %v", bundlePath, mergeErr)
-			continue
-		}
+// applyOneBundle decrypts a single <hash>.age bundle, merges its contents
+// into the matching local source directory, and records the hash →
+// original-name mapping in `current` for deletion detection. Every failure
+// mode — an unreadable file, a bundle that will not decrypt, an unsafe
+// manifest name, or a failed merge — is logged and skipped so one bad bundle
+// never aborts the rest. Extracted from applyToolBundles to keep cognitive
+// complexity in check.
+func (c *PullCommand) applyOneBundle(
+	targetDir, fileName, toolName, toolPath, identityPath string,
+	spec entities.BundleSpec,
+	current *entities.BundleState,
+) {
+	hash := strings.TrimSuffix(fileName, ".age")
+	bundlePath := filepath.Join(targetDir, fileName)
 
-		current.Bundles[bundleStateKey(toolName, spec.Target, hash)] = entities.BundleStateEntry{
-			OriginalName: manifest.OriginalName,
-			Tool:         toolName,
-			Target:       spec.Target,
-			LastSeen:     time.Now().UTC(),
-		}
-
-		if total := len(report.Added) + len(report.Overwrote); total > 0 {
-			fmt.Fprintf(os.Stdout,
-				"  bundle %s/%s: %d added, %d updated, %d preserved\n",
-				toolName, manifest.OriginalName,
-				len(report.Added), len(report.Overwrote), len(report.SkippedNew),
+	ciphertext, readErr := os.ReadFile(bundlePath)
+	if readErr != nil {
+		logger.Warnf("read bundle %s: %v", bundlePath, readErr)
+		return
+	}
+	manifest, files, extractErr := c.bundleService.Extract(ciphertext, identityPath)
+	if extractErr != nil {
+		logger.Warnf("extract bundle %s: %v", bundlePath, extractErr)
+		return
+	}
+	// In subdirs mode each bundle restores into a per-project subdir under
+	// the source root, and manifest.OriginalName is joined into the
+	// destination path — so it MUST be a single safe path segment to prevent
+	// traversal. In whole mode the localDir is built from spec.Source alone
+	// and OriginalName is purely informational (e.g. spec.Source itself,
+	// which can legitimately contain "/"), so the check is skipped.
+	var localDir string
+	if spec.EffectiveMode() == entities.BundleModeWhole {
+		localDir = filepath.Join(toolPath, spec.Source)
+	} else {
+		if !isSafePathSegment(manifest.OriginalName) {
+			logger.Warnf(
+				"refuse bundle %s: manifest OriginalName %q is not a single safe path segment",
+				bundlePath, manifest.OriginalName,
 			)
+			return
 		}
+		localDir = filepath.Join(toolPath, spec.Source, manifest.OriginalName)
+	}
+	report, mergeErr := c.bundleService.MergeIntoLocal(files, localDir, spec.EffectiveMergeStrategy())
+	if mergeErr != nil {
+		logger.Warnf("merge bundle %s: %v", bundlePath, mergeErr)
+		return
+	}
+
+	current.Bundles[bundleStateKey(toolName, spec.Target, hash)] = entities.BundleStateEntry{
+		OriginalName: manifest.OriginalName,
+		Tool:         toolName,
+		Target:       spec.Target,
+		LastSeen:     time.Now().UTC(),
+	}
+
+	if total := len(report.Added) + len(report.Overwrote); total > 0 {
+		fmt.Fprintf(os.Stdout,
+			"  bundle %s/%s: %d added, %d updated, %d preserved\n",
+			toolName, manifest.OriginalName,
+			len(report.Added), len(report.Overwrote), len(report.SkippedNew),
+		)
 	}
 }
 

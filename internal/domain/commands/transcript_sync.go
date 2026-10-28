@@ -478,8 +478,10 @@ type transcriptHandler func(s *TranscriptSyncer, exec *transcriptExecution, repo
 // transcriptHandlers maps every action that writes to a side to the function
 // that performs it; actions missing from the map write nothing.
 //
+// Partial by design: actions without a handler write nothing.
+//
 //nolint:gochecknoglobals // compiled-in dispatch table
-//exhaustive:ignore // partial by design: actions without a handler write nothing
+//exhaustive:ignore
 var transcriptHandlers = map[entities.SyncAction]transcriptHandler{
 	entities.SyncActionPush:        (*TranscriptSyncer).executeTranscriptPush,
 	entities.SyncActionDeleteRepo:  (*TranscriptSyncer).executeTranscriptDeleteRepo,
