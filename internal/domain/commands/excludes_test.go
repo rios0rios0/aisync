@@ -1,8 +1,8 @@
 package commands_test
 
 import (
+	"bytes"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -407,26 +407,9 @@ func TestDiffCommand_Execute_WithExcludes(t *testing.T) {
 	})
 }
 
-// captureStdout returns what run writes to [os.Stdout].
-func captureStdout(t *testing.T, run func()) string {
-	t.Helper()
-	reader, writer, err := os.Pipe()
-	require.NoError(t, err)
-	original := os.Stdout
-	os.Stdout = writer                      //nolint:reassign // the status command prints to os.Stdout and takes no writer
-	defer func() { os.Stdout = original }() //nolint:reassign // restores what the line above replaced
-
-	run()
-
-	require.NoError(t, writer.Close())
-	output, err := io.ReadAll(reader)
-	require.NoError(t, err)
-	return string(output)
-}
-
-//nolint:paralleltest // captures os.Stdout, which a parallel test would write into
+//nolint:paralleltest // subtests build per-case fixtures through the shared newStatus closure
 func TestStatusCommand_Execute_WithExcludes(t *testing.T) {
-	newStatus := func(t *testing.T, excludes repositories.ExcludeRepository) (*commands.StatusCommand, string) {
+	newStatus := func(t *testing.T, excludes repositories.ExcludeRepository) (*commands.StatusCommand, string, *bytes.Buffer) {
 		t.Helper()
 		root := t.TempDir()
 		toolDir := filepath.Join(root, "claude-home")
@@ -437,20 +420,25 @@ func TestStatusCommand_Execute_WithExcludes(t *testing.T) {
 			Encryption: entities.EncryptionConfig{Identity: filepath.Join(root, "key.txt")},
 			Tools:      map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
 		}
+		manifestRepo := &doubles.MockManifestRepository{}
 		cmd := commands.NewStatusCommand(
 			&doubles.MockConfigRepository{Config: config},
 			&doubles.MockStateRepository{},
-			&doubles.MockManifestRepository{},
+			manifestRepo,
+			newStatusSyncer(manifestRepo).WithExcludes(excludes),
 		).WithExcludes(excludes)
-		return cmd, filepath.Join(root, "repo")
+		out := &bytes.Buffer{}
+		commands.SetStatusOutput(cmd, out)
+		return cmd, filepath.Join(root, "repo"), out
 	}
 
 	t.Run("should name the exclude file and leave its paths out of the pending changes", func(t *testing.T) {
 		// given
-		cmd, repoPath := newStatus(t, excluding("claude/settings.json"))
+		cmd, repoPath, out := newStatus(t, excluding("claude/settings.json"))
 
 		// when
-		output := captureStdout(t, func() { require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath)) })
+		require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath))
+		output := out.String()
 
 		// then
 		assert.Contains(t, output,
@@ -460,10 +448,11 @@ func TestStatusCommand_Execute_WithExcludes(t *testing.T) {
 
 	t.Run("should say nothing about an exclude file without patterns", func(t *testing.T) {
 		// given
-		cmd, repoPath := newStatus(t, excluding())
+		cmd, repoPath, out := newStatus(t, excluding())
 
 		// when
-		output := captureStdout(t, func() { require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath)) })
+		require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath))
+		output := out.String()
 
 		// then
 		assert.NotContains(t, output, "Excludes:")
@@ -472,10 +461,11 @@ func TestStatusCommand_Execute_WithExcludes(t *testing.T) {
 
 	t.Run("should report an exclude file it cannot read", func(t *testing.T) {
 		// given
-		cmd, repoPath := newStatus(t, &doubles.MockExcludeRepository{LoadErr: errors.New("permission denied")})
+		cmd, repoPath, out := newStatus(t, &doubles.MockExcludeRepository{LoadErr: errors.New("permission denied")})
 
 		// when
-		output := captureStdout(t, func() { require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath)) })
+		require.NoError(t, cmd.Execute("/tmp/config.yaml", repoPath))
+		output := out.String()
 
 		// then
 		assert.Contains(t, output, "Excludes:   unreadable (permission denied)")

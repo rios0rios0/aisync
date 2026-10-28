@@ -198,29 +198,30 @@ func (r *GoGitRepository) CommitAll(message string) error {
 	return nil
 }
 
-// Push pushes committed changes to the remote origin. A failure is returned
-// rather than swallowed: the commit stays local and the caller reports that
-// the next push retries it, instead of claiming the push succeeded.
-func (r *GoGitRepository) Push() error {
+// Push pushes committed changes to the remote origin and reports whether the
+// remote received any. A failure is returned rather than swallowed: the
+// commit stays local and the caller reports that the next push retries it,
+// instead of claiming the push succeeded.
+func (r *GoGitRepository) Push() (bool, error) {
 	if r.repo == nil {
-		return errors.New("repository not opened; call Open or Clone first")
+		return false, errors.New("repository not opened; call Open or Clone first")
 	}
 
 	opts := &git.PushOptions{}
 
 	if err := r.addSSHAuthToPushIfNeeded(opts); err != nil {
-		return err
+		return false, err
 	}
 
 	err := r.repo.Push(opts)
 	if errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed to push: %w", err)
+		return false, fmt.Errorf("failed to push: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 // ChangedFiles lists every path with an uncommitted change in the worktree,

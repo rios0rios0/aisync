@@ -44,7 +44,7 @@ Clean Architecture with Hexagonal (Ports & Adapters) design. Dependencies always
 main.go → NewRootCommand(version)
              ├── creates repos: YAMLConfigRepo, HTTPSourceRepo, JSONManifestRepo, JSONStateRepo, GoGitRepo, JSONJournalRepo, JSONBundleStateRepo
              ├── creates services: AgeEncryptionSvc, HooksMerger, SettingsMerger, SectionMerger, AtomicApplySvc, WatchSvc, TarAgeBundleSvc, UnifiedDiffer, ExecGitRepoHistory, ...
-             ├── creates the PersonalSyncer shared by pull, push, sync, and diff
+             ├── creates the PersonalSyncer shared by pull, push, sync, diff, and status
              ├── creates domain commands (injecting interface deps)
              └── registers cobra subcommands → returns root *cobra.Command
 ```
@@ -83,7 +83,7 @@ On interruption, the next invocation detects the incomplete journal and resumes 
 
 ### Three-Way Personal Sync
 
-`commands/personal_sync.go` (`PersonalSyncer`) reconciles personal files between each enabled tool directory and `personal/<tool>/` in the sync repo. Pull, push, sync, and diff all go through it; external-source (shared) files keep their own flow in `pull.go`.
+`commands/personal_sync.go` (`PersonalSyncer`) reconciles personal files between each enabled tool directory and `personal/<tool>/` in the sync repo. Pull, push, sync, diff, and status all go through it; external-source (shared) files keep their own flow in `pull.go`. `status` counts the plan with `Pending`, so it reports exactly what a sync would send, apply, or ask about, never a second opinion.
 
 - **Base**: the tool's `.aisync-manifest.json` entries with `source: personal` record the checksum each path had when this device last synced it. The manifest is device-local (never synced) and is only rewritten when a base entry changes.
 - **Classification**: `entities.Reconcile(local, remote, base)` (`entities/sync_plan.go`) is a pure decision table returning a `SyncEntry` per path: `push`, `pull`, `delete-repo`, `delete-local`, `forget`, `none`, or `conflict` with a `ConflictReason`. Without a base (first sync), differing copies are `both-added` conflicts and nothing is inferred as deleted.

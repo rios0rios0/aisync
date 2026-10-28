@@ -107,8 +107,9 @@ func TestPushCommand_Execute(t *testing.T) {
 			ExistsVal: true,
 		}
 		gitRepo := &doubles.MockGitRepository{
-			HasRemoteVal: true,
-			IsCleanVal:   true,
+			HasRemoteVal:  true,
+			IsCleanVal:    true,
+			NothingToPush: true,
 		}
 
 		cmd := newPushCmd(

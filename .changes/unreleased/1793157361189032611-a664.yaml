@@ -1,0 +1,3 @@
+kind: 'Fixed'
+body: 'fixed `aisync push` and `aisync sync` logging "pushed to remote" when the remote already had every commit, so a run that published nothing read as the one that pushed; they now say there was nothing to push'
+time: '2026-10-28T03:16:01.188949704Z'

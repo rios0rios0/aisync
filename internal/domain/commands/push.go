@@ -311,6 +311,8 @@ func (c *PushCommand) encryptStoredPlaintext(
 // scanner + NDA scanner, each independently skippable), commits, and pushes.
 // The push runs even when there is nothing new to commit, so a commit whose
 // earlier push failed is retried; a failed push is an error, not a warning.
+// It says "pushed" only when the remote received a commit, so a run that
+// found everything already there never reads as having published something.
 func (c *PushCommand) commitAndPush(
 	repoPath, commitMsg string,
 	opts PushOptions,
@@ -331,11 +333,16 @@ func (c *PushCommand) commitAndPush(
 		logger.Info("no remote configured, skipping push")
 		return nil
 	}
-	if err = c.gitRepo.Push(); err != nil {
+	pushed, err := c.gitRepo.Push()
+	if err != nil {
 		return fmt.Errorf("committed locally but could not push to the remote "+
 			"(the next push retries it): %w", err)
 	}
-	logger.Info("pushed to remote")
+	if pushed {
+		logger.Info("pushed to remote")
+	} else {
+		logger.Info("nothing to push: the remote already has every commit")
+	}
 	return nil
 }
 

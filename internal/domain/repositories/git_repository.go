@@ -10,7 +10,9 @@ type GitRepository interface {
 	Fetch() error
 	Pull() error
 	CommitAll(message string) error
-	Push() error
+	// Push sends local commits to the remote and reports whether the remote
+	// received any; false means it already had every commit.
+	Push() (bool, error)
 	IsClean() (bool, error)
 	// ChangedFiles lists the repo-relative, slash-separated paths of every
 	// uncommitted change in the working tree: modified, added, deleted, and

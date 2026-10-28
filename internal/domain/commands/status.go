@@ -2,8 +2,8 @@ package commands
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,22 +21,28 @@ const (
 
 // StatusCommand displays the current sync state.
 type StatusCommand struct {
-	configRepo   repositories.ConfigRepository
-	stateRepo    repositories.StateRepository
-	manifestRepo repositories.ManifestRepository
-	excludes     repositories.ExcludeRepository
+	configRepo     repositories.ConfigRepository
+	stateRepo      repositories.StateRepository
+	manifestRepo   repositories.ManifestRepository
+	excludes       repositories.ExcludeRepository
+	personalSyncer *PersonalSyncer
+	out            io.Writer
 }
 
-// NewStatusCommand creates a new StatusCommand.
+// NewStatusCommand creates a new StatusCommand. The PersonalSyncer is the one
+// sync uses, so the pending counts are what a sync would actually do.
 func NewStatusCommand(
 	configRepo repositories.ConfigRepository,
 	stateRepo repositories.StateRepository,
 	manifestRepo repositories.ManifestRepository,
+	personalSyncer *PersonalSyncer,
 ) *StatusCommand {
 	return &StatusCommand{
-		configRepo:   configRepo,
-		stateRepo:    stateRepo,
-		manifestRepo: manifestRepo,
+		configRepo:     configRepo,
+		stateRepo:      stateRepo,
+		manifestRepo:   manifestRepo,
+		personalSyncer: personalSyncer,
+		out:            os.Stdout,
 	}
 }
 
@@ -59,15 +65,16 @@ func (c *StatusCommand) Execute(configPath, repoPath string) error {
 	excludes, excludeErr := loadExcludes(c.excludes)
 	c.printDeviceInfo(config, state)
 	c.printExcludes(excludes, excludeErr)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(c.out)
 	c.printToolsStatus(config)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(c.out)
 
-	c.printPendingChanges(config, repoPath, excludes)
-	fmt.Fprintln(os.Stdout)
+	pending := c.personalSyncer.Pending(config, repoPath)
+	c.printPendingChanges(pending)
+	fmt.Fprintln(c.out)
 
-	c.printIncomingHint(config, state)
-	fmt.Fprintln(os.Stdout)
+	c.printIncomingHint(config, state, pending)
+	fmt.Fprintln(c.out)
 
 	c.printSourcesStatus(config, state)
 
@@ -113,21 +120,21 @@ func (c *StatusCommand) printDeviceInfo(config *entities.Config, state *entities
 		encryption = "enabled (" + filepath.Base(identityPath) + ")"
 	}
 
-	fmt.Fprintf(os.Stdout, "Device:     %s (%s)\n", deviceName, deviceID)
+	fmt.Fprintf(c.out, "Device:     %s (%s)\n", deviceName, deviceID)
 
 	remote := config.Sync.Remote
 	if remote == "" {
 		remote = "(not configured)"
 	}
-	fmt.Fprintf(os.Stdout, "Remote:     %s\n", remote)
+	fmt.Fprintf(c.out, "Remote:     %s\n", remote)
 	if config.Sync.Remote != "" && !isRemoteReachable(config.Sync.Remote) && state != nil {
 		cachedAt := state.LastPull.Format("2006-01-02 15:04")
-		fmt.Fprintf(os.Stdout, "            (offline, cached at %s)\n", cachedAt)
+		fmt.Fprintf(c.out, "            (offline, cached at %s)\n", cachedAt)
 	}
-	fmt.Fprintf(os.Stdout, "Branch:     %s\n", config.Sync.Branch)
-	fmt.Fprintf(os.Stdout, "Last pull:  %s\n", lastPull)
-	fmt.Fprintf(os.Stdout, "Last push:  %s\n", lastPush)
-	fmt.Fprintf(os.Stdout, "Encryption: %s\n", encryption)
+	fmt.Fprintf(c.out, "Branch:     %s\n", config.Sync.Branch)
+	fmt.Fprintf(c.out, "Last pull:  %s\n", lastPull)
+	fmt.Fprintf(c.out, "Last push:  %s\n", lastPush)
+	fmt.Fprintf(c.out, "Encryption: %s\n", encryption)
 }
 
 // printExcludes names the file holding the device's exclusions when it holds
@@ -136,9 +143,9 @@ func (c *StatusCommand) printExcludes(excludes *entities.ExcludePatterns, err er
 	switch {
 	case c.excludes == nil:
 	case err != nil:
-		fmt.Fprintf(os.Stdout, "Excludes:   unreadable (%v)\n", err)
+		fmt.Fprintf(c.out, "Excludes:   unreadable (%v)\n", err)
 	case excludes.Len() > 0:
-		fmt.Fprintf(os.Stdout, "Excludes:   %s (%d pattern(s), never synced on this device)\n",
+		fmt.Fprintf(c.out, "Excludes:   %s (%d pattern(s), never synced on this device)\n",
 			c.excludes.Path(), excludes.Len())
 	}
 }
@@ -149,7 +156,7 @@ func (c *StatusCommand) printToolsStatus(config *entities.Config) {
 	totalFiles := 0
 	provenance := make(map[string]int)
 
-	fmt.Fprintln(os.Stdout, "AI Tools:")
+	fmt.Fprintln(c.out, "AI Tools:")
 	for name, tool := range config.Tools {
 		if !tool.Enabled {
 			continue
@@ -162,15 +169,15 @@ func (c *StatusCommand) printToolsStatus(config *entities.Config) {
 			status = c.toolManifestStatus(toolDir, &totalFiles, provenance)
 		}
 
-		fmt.Fprintf(os.Stdout, "  %-12s %s  %s\n", name, tool.Path, status)
+		fmt.Fprintf(c.out, "  %-12s %s  %s\n", name, tool.Path, status)
 	}
-	fmt.Fprintf(os.Stdout, "\n  Total managed files: %d\n", totalFiles)
+	fmt.Fprintf(c.out, "\n  Total managed files: %d\n", totalFiles)
 	if len(provenance) > 0 {
 		parts := make([]string, 0, len(provenance))
 		for source, count := range provenance {
 			parts = append(parts, fmt.Sprintf("%d from %s", count, source))
 		}
-		fmt.Fprintf(os.Stdout, "  Provenance: %s\n", strings.Join(parts, ", "))
+		fmt.Fprintf(c.out, "  Provenance: %s\n", strings.Join(parts, ", "))
 	}
 }
 
@@ -202,9 +209,9 @@ func (c *StatusCommand) toolManifestStatus(
 
 // printSourcesStatus prints the status of each configured external source.
 func (c *StatusCommand) printSourcesStatus(config *entities.Config, state *entities.State) {
-	fmt.Fprintln(os.Stdout, "External Sources:")
+	fmt.Fprintln(c.out, "External Sources:")
 	if len(config.Sources) == 0 {
-		fmt.Fprintln(os.Stdout, "  (none configured)")
+		fmt.Fprintln(c.out, "  (none configured)")
 		return
 	}
 	for _, s := range config.Sources {
@@ -214,7 +221,7 @@ func (c *StatusCommand) printSourcesStatus(config *entities.Config, state *entit
 		}
 
 		freshness := c.sourceFreshness(s, state)
-		fmt.Fprintf(os.Stdout, "  %-20s %s@%s (%s) %s\n", s.Name, s.Repo, s.Branch, ref, freshness)
+		fmt.Fprintf(c.out, "  %-20s %s@%s (%s) %s\n", s.Name, s.Repo, s.Branch, ref, freshness)
 	}
 }
 
@@ -253,154 +260,58 @@ func (c *StatusCommand) sourceFreshness(source entities.Source, state *entities.
 	return "(fetched)"
 }
 
-// printPendingChanges counts local files that differ from or are absent in the
-// sync repo's personal/<tool>/ directory for each enabled tool.
-func (c *StatusCommand) printPendingChanges(
-	config *entities.Config,
-	repoPath string,
-	excludes *entities.ExcludePatterns,
-) {
-	fmt.Fprintln(os.Stdout, "Pending Local Changes:")
+// printPendingChanges reports, per tool, the personal files a push would
+// send (new, changed, or deleted here) and the conflicts a sync would ask
+// about. The counts come from the plan sync itself executes, so right after
+// a sync there is nothing left to report.
+func (c *StatusCommand) printPendingChanges(pending []PersonalPending) {
+	fmt.Fprintln(c.out, "Pending Local Changes:")
 	anyPending := false
 
-	for name, tool := range config.Tools {
-		if !tool.Enabled {
+	for _, tool := range pending {
+		var parts []string
+		if tool.Outgoing > 0 {
+			parts = append(parts, fmt.Sprintf("%d file(s) not yet pushed", tool.Outgoing))
+		}
+		if tool.Conflicts > 0 {
+			parts = append(parts, fmt.Sprintf("%d conflict(s) to resolve", tool.Conflicts))
+		}
+		if len(parts) == 0 {
 			continue
 		}
-
-		pending := c.countPendingForTool(name, tool, repoPath, excludes)
-		if pending > 0 {
-			anyPending = true
-			fmt.Fprintf(os.Stdout, "  %-12s %d file(s) not yet pushed\n", name, pending)
-		}
+		anyPending = true
+		fmt.Fprintf(c.out, "  %-12s %s\n", tool.Tool, strings.Join(parts, ", "))
 	}
 
 	if !anyPending {
-		fmt.Fprintln(os.Stdout, "  (none)")
+		fmt.Fprintln(c.out, "  (none)")
 	}
 }
 
-// countPendingForTool walks a single tool directory and counts personal files
-// that differ from or are absent in the sync repo.
-func (c *StatusCommand) countPendingForTool(
-	name string,
-	tool entities.Tool,
-	repoPath string,
-	excludes *entities.ExcludePatterns,
-) int {
-	toolDir := ExpandHome(tool.Path)
-	if _, err := os.Stat(toolDir); os.IsNotExist(err) {
-		return 0
+// printIncomingHint prints the personal files the sync repo already holds
+// that this device has not applied, or, when there are none, a hint about
+// changes other devices may have pushed since. A full check would require a
+// git fetch, so for offline mode that hint uses heuristics based on the
+// state timestamps.
+func (c *StatusCommand) printIncomingHint(
+	config *entities.Config,
+	state *entities.State,
+	pending []PersonalPending,
+) {
+	fmt.Fprintln(c.out, "Incoming Changes:")
+
+	if c.printUnappliedChanges(pending) {
+		fmt.Fprintln(c.out, "  (run 'aisync pull' to apply them)")
+		return
 	}
-
-	personalDir := filepath.Join(repoPath, "personal", name)
-
-	var manifest *entities.Manifest
-	if c.manifestRepo.Exists(toolDir) {
-		loaded, loadErr := c.manifestRepo.Load(toolDir)
-		if loadErr == nil {
-			manifest = loaded
-		}
-	}
-
-	pending := 0
-	_ = filepath.Walk(toolDir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
-			return nil //nolint:nilerr // return nil to continue Walk traversal
-		}
-
-		if c.isFilePending(path, toolDir, personalDir, name, tool.ExtraAllowlist, excludes, manifest) {
-			pending++
-		}
-		return nil
-	})
-
-	return pending
-}
-
-// isFilePending checks whether a local file is new or differs from its sync repo
-// counterpart. Files stored as .age in the repo are matched against their
-// plaintext name; their encrypted content is compared via the manifest checksum.
-func (c *StatusCommand) isFilePending(
-	path, toolDir, personalDir, toolName string,
-	extraAllowlist []string,
-	excludes *entities.ExcludePatterns,
-	manifest *entities.Manifest,
-) bool {
-	relPath, err := filepath.Rel(toolDir, path)
-	if err != nil {
-		return false
-	}
-
-	if !entities.IsSyncable(toolName, relPath, extraAllowlist) || excludes.Matches(toolName, relPath) {
-		return false
-	}
-
-	if manifest != nil {
-		if entry, exists := manifest.Files[relPath]; exists && entry.Namespace == namespaceShared {
-			return false
-		}
-	}
-
-	if strings.HasSuffix(relPath, ".aisync-manifest.json") {
-		return false
-	}
-
-	localContent, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return false
-	}
-
-	// Try the plaintext path first, then the .age encrypted variant.
-	repoFilePath := filepath.Join(personalDir, relPath)
-	repoContent, repoErr := os.ReadFile(repoFilePath)
-	if repoErr != nil {
-		return c.isFilePendingEncrypted(repoFilePath, relPath, localContent, manifest)
-	}
-
-	localSum := sha256.Sum256(localContent)
-	repoSum := sha256.Sum256(repoContent)
-	return localSum != repoSum
-}
-
-// isFilePendingEncrypted checks whether a local file differs from its .age
-// encrypted counterpart in the sync repo. Since decryption requires the
-// identity (unavailable here), comparison uses the manifest checksum.
-func (*StatusCommand) isFilePendingEncrypted(
-	repoFilePath, relPath string,
-	localContent []byte,
-	manifest *entities.Manifest,
-) bool {
-	ageFilePath := repoFilePath + ".age"
-	if _, statErr := os.Stat(ageFilePath); statErr != nil {
-		// No .age file exists either; file is pending (new local file).
-		return true
-	}
-	// .age file exists; compare via manifest if available.
-	if manifest == nil {
-		return false // No manifest entry; cannot determine, assume in sync.
-	}
-	entry, exists := manifest.Files[relPath]
-	if !exists {
-		return false // No manifest entry; cannot determine, assume in sync.
-	}
-	localSum := fmt.Sprintf("%x", sha256.Sum256(localContent))
-	return localSum != entry.Checksum
-}
-
-// printIncomingHint prints a hint about incoming changes from other devices.
-// A full check would require a git fetch, so for offline mode we use heuristics
-// based on the state timestamps.
-func (c *StatusCommand) printIncomingHint(config *entities.Config, state *entities.State) {
-	fmt.Fprintln(os.Stdout, "Incoming Changes:")
 
 	if config.Sync.Remote == "" {
-		fmt.Fprintln(os.Stdout, "  (no remote configured)")
+		fmt.Fprintln(c.out, "  (no remote configured)")
 		return
 	}
 
 	if state == nil || state.LastPull.IsZero() {
-		fmt.Fprintln(os.Stdout, "  (never pulled -- run 'aisync pull' to check for incoming changes)")
+		fmt.Fprintln(c.out, "  (never pulled -- run 'aisync pull' to check for incoming changes)")
 		return
 	}
 
@@ -408,21 +319,36 @@ func (c *StatusCommand) printIncomingHint(config *entities.Config, state *entiti
 	// there may be incoming changes. Since we only store global timestamps,
 	// check if LastPush > LastPull as a proxy.
 	if !state.LastPush.IsZero() && state.LastPush.After(state.LastPull) {
-		fmt.Fprintf(os.Stdout, "  Last push (%s) is newer than last pull (%s)\n",
+		fmt.Fprintf(c.out, "  Last push (%s) is newer than last pull (%s)\n",
 			state.LastPush.Format("2006-01-02 15:04"),
 			state.LastPull.Format("2006-01-02 15:04"))
-		fmt.Fprintln(os.Stdout, "  (run 'aisync pull' to check for incoming changes)")
+		fmt.Fprintln(c.out, "  (run 'aisync pull' to check for incoming changes)")
 		return
 	}
 
 	// Check if the pull is stale (older than 24 hours).
 	if time.Since(state.LastPull) > 24*time.Hour {
-		fmt.Fprintf(os.Stdout, "  Last pull was %s ago\n", formatDuration(time.Since(state.LastPull)))
-		fmt.Fprintln(os.Stdout, "  (run 'aisync pull' to check for incoming changes)")
+		fmt.Fprintf(c.out, "  Last pull was %s ago\n", formatDuration(time.Since(state.LastPull)))
+		fmt.Fprintln(c.out, "  (run 'aisync pull' to check for incoming changes)")
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "  Up to date (last pull %s ago)\n", formatDuration(time.Since(state.LastPull)))
+	fmt.Fprintf(c.out, "  Up to date (last pull %s ago)\n", formatDuration(time.Since(state.LastPull)))
+}
+
+// printUnappliedChanges lists, per tool, the personal files a pull would
+// apply here (new, changed, or deleted in the sync repo), and reports
+// whether there were any.
+func (c *StatusCommand) printUnappliedChanges(pending []PersonalPending) bool {
+	anyIncoming := false
+	for _, tool := range pending {
+		if tool.Incoming == 0 {
+			continue
+		}
+		anyIncoming = true
+		fmt.Fprintf(c.out, "  %-12s %d file(s) in the sync repo not yet applied here\n", tool.Tool, tool.Incoming)
+	}
+	return anyIncoming
 }
 
 // formatDuration returns a human-friendly duration string.

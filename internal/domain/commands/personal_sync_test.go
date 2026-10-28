@@ -586,6 +586,108 @@ func TestPersonalSyncer_Changes(t *testing.T) {
 	})
 }
 
+func TestPersonalSyncer_Pending(t *testing.T) {
+	t.Parallel()
+
+	t.Run("should count every action of the plan on the side it changes", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/edited-here.md", "before")
+		f.writeRepo("rules/edited-here.md", "before")
+		f.writeLocal("rules/edited-here.md", "after")
+		f.base("rules/deleted-here.md", "gone")
+		f.writeRepo("rules/deleted-here.md", "gone")
+		f.base("rules/edited-there.md", "before")
+		f.writeRepo("rules/edited-there.md", "after")
+		f.writeLocal("rules/edited-there.md", "before")
+		f.base("rules/deleted-there.md", "gone")
+		f.writeLocal("rules/deleted-there.md", "gone")
+		f.base("rules/both.md", "before")
+		f.writeRepo("rules/both.md", "theirs")
+		f.writeLocal("rules/both.md", "mine")
+		f.base("rules/same.md", "same")
+		f.writeRepo("rules/same.md", "same")
+		f.writeLocal("rules/same.md", "same")
+
+		// when
+		pending := f.syncer().Pending(f.config, f.repoPath)
+
+		// then
+		assert.Equal(t, []commands.PersonalPending{
+			{Tool: "claude", Outgoing: 2, Incoming: 2, Conflicts: 1},
+		}, pending)
+	})
+
+	t.Run("should not count an encrypted repo copy that matches the file last synced", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/go.md", "rule")
+		f.writeLocal("rules/go.md", "rule")
+		f.writeRepo("rules/go.md.age", "ciphertext")
+		f.encryption.DecryptedData = []byte("rule")
+
+		// when
+		pending := f.syncer().Pending(f.config, f.repoPath)
+
+		// then
+		assert.Equal(t, []commands.PersonalPending{{Tool: "claude"}}, pending)
+		assert.Equal(t, 1, f.encryption.DecryptCalls, "the repo copy is decrypted before it is compared")
+	})
+
+	t.Run("should not count a file .aisyncignore excludes", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		writeFile(t, filepath.Join(f.repoPath, ".aisyncignore"), "__pycache__/\n*.pyc\n")
+		f.writeLocal("skills/demo/scripts/__pycache__/run.cpython-313.pyc", "bytecode")
+
+		// when
+		pending := f.syncer().Pending(f.config, f.repoPath)
+
+		// then
+		assert.Equal(t, []commands.PersonalPending{{Tool: "claude"}}, pending)
+	})
+
+	t.Run("should leave out a tool that is not installed on this device", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.config.Tools["opencode"] = entities.Tool{Path: filepath.Join(f.repoPath, "missing"), Enabled: true}
+		f.writeLocal("rules/new.md", "new")
+
+		// when
+		pending := f.syncer().Pending(f.config, f.repoPath)
+
+		// then
+		assert.Equal(t, []commands.PersonalPending{{Tool: "claude", Outgoing: 1}}, pending)
+	})
+
+	t.Run("should write nothing to either side", func(t *testing.T) {
+		t.Parallel()
+		// given
+		f := newSyncFixture(t)
+		f.base("rules/edited-here.md", "before")
+		f.writeRepo("rules/edited-here.md", "before")
+		f.writeLocal("rules/edited-here.md", "after")
+		f.base("rules/edited-there.md", "before")
+		f.writeRepo("rules/edited-there.md", "after")
+		f.writeLocal("rules/edited-there.md", "before")
+
+		// when
+		f.syncer().Pending(f.config, f.repoPath)
+
+		// then
+		assert.Zero(t, f.manifest.SaveCalls)
+		assert.Zero(t, f.apply.StageCalls)
+		repoCopy, _ := f.readRepo("rules/edited-here.md")
+		assert.Equal(t, "before", repoCopy)
+		localCopy, _ := f.readLocal("rules/edited-there.md")
+		assert.Equal(t, "before", localCopy)
+	})
+}
+
 func TestPersonalSyncer_ExecutableBit(t *testing.T) {
 	t.Parallel()
 
