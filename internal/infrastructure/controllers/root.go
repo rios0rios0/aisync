@@ -121,7 +121,6 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	// Mergers + Formatter
 	hooksMerger := services.NewHooksMerger(nil) // excludes loaded per-pull from config
 	settingsMerger := services.NewSettingsMerger()
-	sectionMerger := services.NewSectionMerger()
 	atomicApplySvc := services.NewAtomicApplyService(journalRepo, defaultConfigDir())
 	formatter := ui.NewLipglossFormatter()
 
@@ -152,7 +151,7 @@ func NewRootCommand(version string) (*cobra.Command, func(repositories.GitReposi
 	pullCmd := commands.NewPullCommand(
 		configRepo, stateRepo, sourceRepo, manifestRepo,
 		gitProxy, encryptionSvc, personalSyncer, transcriptSyncer,
-		hooksMerger, settingsMerger, sectionMerger,
+		hooksMerger, settingsMerger,
 		atomicApplySvc, promptSvc,
 		bundleSvc, bundleStateRepo,
 	).WithExcludes(excludeRepo)

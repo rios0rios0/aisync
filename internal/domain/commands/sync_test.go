@@ -38,7 +38,6 @@ func newTestPullCommand(
 		nil,
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
-		&doubles.MockMerger{},
 		applyService,
 		promptService,
 		&doubles.MockBundleService{},

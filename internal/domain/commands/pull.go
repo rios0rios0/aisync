@@ -46,7 +46,6 @@ type PullCommand struct {
 	transcriptSyncer  *TranscriptSyncer
 	hooksMerger       repositories.Merger
 	settingsMerger    repositories.Merger
-	sectionMerger     repositories.Merger
 	applyService      repositories.ApplyService
 	promptService     repositories.PromptService
 	bundleService     repositories.BundleService
@@ -66,7 +65,6 @@ func NewPullCommand(
 	transcriptSyncer *TranscriptSyncer,
 	hooksMerger repositories.Merger,
 	settingsMerger repositories.Merger,
-	sectionMerger repositories.Merger,
 	applyService repositories.ApplyService,
 	promptService repositories.PromptService,
 	bundleService repositories.BundleService,
@@ -83,7 +81,6 @@ func NewPullCommand(
 		transcriptSyncer:  transcriptSyncer,
 		hooksMerger:       hooksMerger,
 		settingsMerger:    settingsMerger,
-		sectionMerger:     sectionMerger,
 		applyService:      applyService,
 		promptService:     promptService,
 		bundleService:     bundleService,
@@ -778,9 +775,6 @@ func (c *PullCommand) selectMerger(baseName string) repositories.Merger {
 	}
 	if strings.HasSuffix(baseName, "settings.json") {
 		return c.settingsMerger
-	}
-	if baseName == "CLAUDE.md" || baseName == "AGENTS.md" {
-		return c.sectionMerger
 	}
 	return nil
 }

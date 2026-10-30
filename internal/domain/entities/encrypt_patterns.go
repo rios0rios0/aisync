@@ -99,12 +99,12 @@ func matchesAnyPattern(path string, patterns []string) bool {
 // matchesAnchoredPattern is a stricter variant of [matchesAnyPattern] that
 // does NOT fall back to basename matching for patterns without "/". It still
 // honors trailing-slash directory patterns and gitwildmatch-style "**"
-// globs, but a bare filename pattern like "CLAUDE.md" matches only when the
-// path IS that filename at the tool root — never a file coincidentally
-// named CLAUDE.md inside a runtime cache dir. Used by the allowlist layer
+// globs, but a bare filename pattern like "settings.json" matches only when
+// the path IS that filename at the tool root — never a file coincidentally
+// named settings.json inside a runtime cache dir. Used by the allowlist layer
 // in allowlist.go, where lenient basename matching would be a security
-// regression (a vendor could ship a "new-runtime-thing/CLAUDE.md" and have
-// it slip through).
+// regression (a vendor could ship a "new-runtime-thing/settings.json" and
+// have it slip through).
 func matchesAnchoredPattern(path string, patterns []string) bool {
 	normalized := filepath.ToSlash(path)
 

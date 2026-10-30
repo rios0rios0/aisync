@@ -26,9 +26,9 @@ func TestMigrateCommand_Execute(t *testing.T) {
 
 		// Create a tool directory with a file
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
 		require.NoError(t, os.WriteFile(
-			filepath.Join(claudeDir, "CLAUDE.md"),
+			filepath.Join(claudeDir, "rules", "personal.md"),
 			[]byte("# My Personal Config"),
 			0600,
 		))
@@ -54,7 +54,7 @@ func TestMigrateCommand_Execute(t *testing.T) {
 		assert.Equal(t, 1, manifestRepo.SaveCalls)
 
 		// Verify file was copied to personal namespace
-		migratedPath := filepath.Join(repoPath, "personal", "claude", "CLAUDE.md")
+		migratedPath := filepath.Join(repoPath, "personal", "claude", "rules", "personal.md")
 		content, readErr := os.ReadFile(migratedPath)
 		require.NoError(t, readErr)
 		assert.Equal(t, "# My Personal Config", string(content))
