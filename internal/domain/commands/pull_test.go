@@ -722,6 +722,57 @@ func TestPullCommand_Execute(t *testing.T) {
 		assert.True(t, os.IsNotExist(statErr))
 	})
 
+	t.Run("should keep a file an earlier version applied when the allowlist no longer covers it", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		toolDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
+
+		// An earlier version applied the source's CLAUDE.md and recorded it as shared.
+		keptFile := filepath.Join(toolDir, "CLAUDE.md")
+		require.NoError(t, os.WriteFile(keptFile, []byte("# hand-written"), 0600))
+
+		oldManifest := entities.NewManifest("0.1.0", "host")
+		oldManifest.SetFile("CLAUDE.md", "guide", "shared", "old-checksum")
+
+		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
+
+		configRepo.Config = &entities.Config{
+			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
+			Tools: map[string]entities.Tool{
+				"claude": {Path: toolDir, Enabled: true},
+			},
+			Encryption: entities.EncryptionConfig{Identity: "/tmp/key.txt"},
+		}
+		stateRepo.State = entities.NewState("test-device")
+		stateRepo.ExistsVal = true
+		sourceRepo.Result = &repositories.FetchResult{
+			Files: map[string][]byte{
+				"shared/claude/CLAUDE.md":    []byte("# Section"),
+				"shared/claude/rules/new.md": []byte("# New"),
+			},
+			ETag: "etag-1",
+		}
+		gitRepo.HasRemoteVal = false
+		manifestRepo.ExistsVal = true
+		manifestRepo.Manifest = oldManifest
+
+		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
+
+		// then
+		require.NoError(t, err)
+		content, readErr := os.ReadFile(keptFile)
+		require.NoError(t, readErr)
+		assert.Equal(t, "# hand-written", string(content))
+		assert.NotContains(t, applySvc.StagedFiles, keptFile)
+	})
+
 	t.Run("should apply personal-only file from sync repo to tool dir", func(t *testing.T) {
 		t.Parallel()
 		// given
