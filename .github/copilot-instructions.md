@@ -216,7 +216,9 @@ Test description patterns by layer:
   1. **Per-tool allowlist** (`internal/domain/entities/allowlist.go`) —
      unknown content is never synced; users opt in via
      `tools.<name>.extra_allowlist`. The strict matcher does NOT fall back
-     to basename matching.
+     to basename matching. The home-level instruction files (`CLAUDE.md`,
+     `AGENTS.md` at a tool's root) stay out of every tool's list: the
+     dotfiles manager renders them per machine.
   2. **`.aisyncignore`** — gitignore-syntax additional exclusions.
   3. **`.aisyncencrypt` + age** — paths matching the patterns are
      written as ciphertext to the configured recipients; plaintext copies
@@ -336,7 +338,7 @@ When asked to change something, read these files before suggesting edits:
 | `aisync nda` command (add/remove/list/ignore)  | `internal/domain/commands/nda.go`                                         |
 | `aisync key` command (generate/import/export/import-from-op) | `internal/domain/commands/key.go`                            |
 | 1Password age-identity lookup (`op` CLI)       | `internal/infrastructure/repositories/op_cli_secret_repository.go`        |
-| File merge strategies                          | `internal/infrastructure/services/{hooks,settings,section}_merger.go`     |
+| File merge strategies                          | `internal/infrastructure/services/{hooks,settings}_merger.go`             |
 | Atomic apply (two-phase commit)                | `internal/infrastructure/services/atomic_apply_service.go`                |
 | Bundle sync (tar+age packaging)                | `internal/infrastructure/services/tar_age_bundle_service.go`              |
 | Bundle push / pull integration                 | `internal/domain/commands/{push,pull}_bundles.go`                         |

@@ -53,13 +53,14 @@ Adding a command touches 4 locations:
 
 ### Merger Polymorphism
 
-The `Merger` interface has three implementations, each handling a different single-file merge strategy:
+The `Merger` interface has two implementations, each handling a different single-file merge strategy:
 
 | Implementation | File Type | Strategy |
 |---------------|-----------|----------|
 | `HooksMerger` | `hooks.json` | Array concatenation per event key + deduplication by `(event, matcher, command)` tuple. Personal hooks always last. |
 | `SettingsMerger` | `settings.json` | Recursive deep merge. Array values (e.g., `allowedTools`) merged by union. Personal keys win on collision. |
-| `SectionMerger` | `CLAUDE.md`, `AGENTS.md` | Shared content first, then `<!-- aisync: personal content below -->` separator, then personal content. |
+
+Any other file a source delivers is applied whole, so a `CLAUDE.md` opted in through `extra_allowlist` is overwritten, never merged.
 
 `HooksMerger` also implements `ExcludeAware` — an interface that allows the `PullCommand` to inject `hooks_exclude` entries from `config.yaml` after the merger is constructed (since config is loaded at pull time, not at startup).
 
@@ -129,7 +130,7 @@ Cross-device deletion detection uses a per-device cache at `~/.cache/aisync/bund
 
 `aisync push` runs four orthogonal protections on every file. Any layer firing blocks the push. Each layer catches a different leak class — they compose, they don't overlap.
 
-1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`, `CLAUDE.md`). Tools without a compiled-in entry fall back to a conservative default. `ToolDenylists` and `CommonDenylist` exclude tool-managed content inside allowlisted directories (Claude's account-synced `skills/synced/` and `skills/.trash/`, Codex's bundled `skills/.system/`, `.gitkeep` placeholders). Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`, which also overrides the denylists. Unknown content is never synced, so a new runtime directory a vendor ships cannot leak.
+1. **Per-tool allowlist** (`entities/allowlist.go`) — A file is only syncable if its tool-relative path matches an entry in the compiled-in allowlist for that tool (e.g. `rules/**`, `agents/**`, `commands/**`, `hooks.json`, `settings.json`). The home-level instruction files (`CLAUDE.md` and `AGENTS.md` at a tool's root) are deliberately left out: a dotfiles manager renders them per machine, and a synced copy would overwrite, resurrect or duplicate it. Tools without a compiled-in entry fall back to a conservative default. `ToolDenylists` and `CommonDenylist` exclude tool-managed content inside allowlisted directories (Claude's account-synced `skills/synced/` and `skills/.trash/`, Codex's bundled `skills/.system/`, `.gitkeep` placeholders). Users opt in to additional paths via `tools.<name>.extra_allowlist` in `config.yaml`, which also overrides the denylists. Unknown content is never synced, so a new runtime directory a vendor ships cannot leak.
 2. **`.aisyncignore`** — Gitignore-syntax file for additional path exclusions on top of the allowlist. Additive, user-configurable.
 3. **`.aisyncencrypt` + age** — Paths matching the patterns are written as ciphertext using `config.Encryption.Recipients`. Has two independent gates: pattern match AND non-empty recipients. Mismatched gates have previously caused silent plaintext commits.
 4. **Content scanners** — Two scanners run in sequence on the plaintext the commit is about to publish: every uncommitted, non-`.age` file under `personal/` (`GitRepository.ChangedFiles`), whichever command wrote it. Files already committed are not rescanned, so an old false positive does not block unrelated pushes:

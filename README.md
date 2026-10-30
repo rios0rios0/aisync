@@ -150,8 +150,8 @@ Each line is `<tool>/<path>`: the path is relative to the tool's directory and u
 # Linux's status line forks bash on every redraw, and its hooks call /usr/bin/python3
 claude/settings.json
 # environment notes written for WSL
-claude/CLAUDE.md
-opencode/AGENTS.md
+claude/rules/environment.md
+opencode/rules/environment.md
 ```
 
 An excluded path is out of scope on that device in both directions: `pull` never writes or deletes it there, `push` and `sync` never write or delete the repo copy, it is never a conflict, and `diff` and `status` leave it out (`status` names the exclude file). Every other device goes on syncing it. Conversation files match as `<tool>/<transcripts dir>/<path>`, so `claude/projects/**/*.jsonl` keeps conversation logs off a device while its project memories still sync. Deleting a line resumes the merge from the version this device last synced: a change made meanwhile on one side is applied, and changes on both sides are a conflict. Bundles ignore the file.
@@ -304,11 +304,13 @@ aisync is heavily inspired by chezmoi — Git-backed sync, age encryption, diff 
 | **Scope** | Entire `$HOME` | Only AI tool directories |
 | **Shared vs personal** | Manual (no enforcement) | Enforced namespaces (`shared/`, `personal/`) |
 | **Multi-source aggregation** | `.chezmoiexternal.toml` (fragile at scale) | First-class with ordering, conflict detection, provenance |
-| **Merge strategies** | Generic 3-way text merge | AI-tool-aware (hooks concat, settings deep merge, section concat) |
+| **Merge strategies** | Generic 3-way text merge | AI-tool-aware (hooks concat, settings deep merge) |
 | **File watching** | Declined ([issue #752](https://github.com/twpayne/chezmoi/issues/752)) | Built-in (fsnotify + polling fallback) |
 | **User prerequisite** | Full chezmoi installation | Single binary, one config file |
 
 **Use chezmoi for your dotfiles. Use aisync for your AI tools.** Add `~/.claude/`, `~/.cursor/`, `~/.codex/`, `~/.gemini/` to `.chezmoiignore` and let aisync manage those directories.
+
+The home-level instruction files are the exception, and they stay with your dotfiles manager: aisync never syncs a `CLAUDE.md` or `AGENTS.md` at a tool's root (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`), so chezmoi can render one per machine without aisync overwriting, resurrecting or duplicating it. Copies synced by an earlier version stay where they are, on each device and in `personal/<tool>/`, and `aisync push` lists the repo's with the `git rm` command that removes them. To sync one anyway, add it to the tool's `extra_allowlist` in `config.yaml` (`extra_allowlist: ['CLAUDE.md']`); it is then copied whole, like any other file.
 
 ## Contributing
 

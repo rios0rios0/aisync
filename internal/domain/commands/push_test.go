@@ -47,9 +47,9 @@ func TestPushCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(repoPath, 0700))
 
 		claudeDir := filepath.Join(tmpDir, "claude-home")
-		require.NoError(t, os.MkdirAll(claudeDir, 0700))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
 		require.NoError(t, os.WriteFile(
-			filepath.Join(claudeDir, "CLAUDE.md"),
+			filepath.Join(claudeDir, "rules", "config.md"),
 			[]byte("# My Config"),
 			0600,
 		))
@@ -529,8 +529,9 @@ func TestPushCommand_Execute(t *testing.T) {
 			[]byte(`{"permissions":{}}`),
 			0600,
 		))
+		require.NoError(t, os.MkdirAll(filepath.Join(claudeDir, "rules"), 0700))
 		require.NoError(t, os.WriteFile(
-			filepath.Join(claudeDir, "CLAUDE.md"),
+			filepath.Join(claudeDir, "rules", "shared.md"),
 			[]byte("# shared"),
 			0600,
 		))
@@ -591,9 +592,9 @@ func TestPushCommand_Execute(t *testing.T) {
 		_, statErr = os.Stat(encryptedSettings)
 		require.NoError(t, statErr, "settings.local.json should have been encrypted")
 
-		// CLAUDE.md is not matched and must remain plaintext.
-		plaintextClaude := filepath.Join(repoPath, "personal", "claude", "CLAUDE.md")
-		content, readErr := os.ReadFile(plaintextClaude)
+		// rules/shared.md is not matched and must remain plaintext.
+		plaintextRule := filepath.Join(repoPath, "personal", "claude", "rules", "shared.md")
+		content, readErr := os.ReadFile(plaintextRule)
 		require.NoError(t, readErr)
 		assert.Equal(t, "# shared", string(content))
 	})

@@ -66,14 +66,14 @@ func TestPersonalSyncer_Sync_WithExcludes(t *testing.T) {
 		t.Parallel()
 		// given
 		f := newSyncFixture(t)
-		f.writeRepo("CLAUDE.md", "WSL environment")
+		f.writeRepo("rules/wsl.md", "WSL environment")
 
 		// when
-		report, err := f.syncExcluding(excluding("claude/CLAUDE.md"), both)
+		report, err := f.syncExcluding(excluding("claude/rules/wsl.md"), both)
 
 		// then
 		require.NoError(t, err)
-		_, pulled := f.readLocal("CLAUDE.md")
+		_, pulled := f.readLocal("rules/wsl.md")
 		assert.False(t, pulled)
 		assert.Equal(t, 0, report.Pulled)
 		assert.Equal(t, 0, report.PendingIncoming)
@@ -231,7 +231,7 @@ func TestPullCommand_Execute_WithExcludes(t *testing.T) {
 	) {
 		t.Helper()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, promptSvc, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, promptSvc, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 		configRepo.Config = &entities.Config{
 			Sources:    []entities.Source{{Name: "guide", Repo: "rios0rios0/guide", Branch: "generated"}},
 			Tools:      map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
@@ -243,7 +243,7 @@ func TestPullCommand_Execute_WithExcludes(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 		build := func(excludes repositories.ExcludeRepository) *commands.PullCommand {
 			return newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo, encSvc, promptSvc,
-				hooksMerger, settingsMerger, sectionMerger, applySvc).WithExcludes(excludes)
+				hooksMerger, settingsMerger, applySvc).WithExcludes(excludes)
 		}
 		return gitRepo, manifestRepo, applySvc, build
 	}

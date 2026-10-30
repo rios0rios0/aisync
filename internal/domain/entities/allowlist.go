@@ -33,8 +33,12 @@ const (
 // sharing that name deeper in the tree). The allowlist uses the stricter
 // [matchesAnchoredPattern] variant rather than [matchesAnyPattern] because
 // a basename fallback here would re-open the exact leak vector this design
-// exists to close: a vendor could drop `<runtime-cache>/CLAUDE.md` and have
-// it slip through.
+// exists to close: a vendor could drop `<runtime-cache>/settings.json` and
+// have it slip through.
+//
+// The home-level instruction files (CLAUDE.md, AGENTS.md at a tool's root)
+// are deliberately absent: a dotfiles manager renders them per machine, and a
+// synced copy would overwrite, resurrect, or duplicate that file.
 //
 // Tool keys correspond to the entries in [DefaultTools]. Users can extend a
 // tool's allowlist via tools.<name>.extra_allowlist in config.yaml without
@@ -53,8 +57,6 @@ var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-
 		"scripts/**",
 		allowSettings,
 		allowSettingsLocal,
-		"CLAUDE.md",
-		"AGENTS.md",
 	},
 	// Cursor (~/.cursor/)
 	"cursor": {
@@ -86,7 +88,6 @@ var ToolAllowlists = map[string][]string{ //nolint:gochecknoglobals // compiled-
 		"prompts/**",
 		"hooks/**",
 		"hooks.json",
-		"AGENTS.md",
 	},
 }
 

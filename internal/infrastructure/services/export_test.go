@@ -9,9 +9,6 @@ import (
 	"github.com/rios0rios0/aisync/internal/domain/repositories"
 )
 
-// DefaultSeparator exposes defaultSeparator for black-box testing.
-const DefaultSeparator = defaultSeparator
-
 // MoveFile exposes moveFile for black-box testing.
 var MoveFile = moveFile //nolint:gochecknoglobals // test export for black-box testing
 

@@ -79,20 +79,20 @@ func TestIsSyncable(t *testing.T) {
 			relPath:  "settings.local.json",
 			expected: true,
 		},
-		{
-			name:     "should allow claude CLAUDE.md",
-			toolName: "claude",
-			relPath:  "CLAUDE.md",
-			expected: true,
-		},
-		{
-			name:     "should allow claude AGENTS.md",
-			toolName: "claude",
-			relPath:  "AGENTS.md",
-			expected: true,
-		},
 
 		// Claude — negative (formerly denied, now simply not allowlisted)
+		{
+			name:     "should deny claude CLAUDE.md, which the dotfiles manager owns",
+			toolName: "claude",
+			relPath:  "CLAUDE.md",
+			expected: false,
+		},
+		{
+			name:     "should deny claude AGENTS.md, which the dotfiles manager owns",
+			toolName: "claude",
+			relPath:  "AGENTS.md",
+			expected: false,
+		},
 		{
 			name:     "should deny claude projects transcripts",
 			toolName: "claude",
@@ -345,12 +345,6 @@ func TestIsSyncable(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "should allow codex AGENTS.md",
-			toolName: "codex",
-			relPath:  "AGENTS.md",
-			expected: true,
-		},
-		{
 			name:     "should allow codex hooks",
 			toolName: "codex",
 			relPath:  "hooks.json",
@@ -358,6 +352,12 @@ func TestIsSyncable(t *testing.T) {
 		},
 
 		// Codex — negative
+		{
+			name:     "should deny codex AGENTS.md, which the dotfiles manager owns",
+			toolName: "codex",
+			relPath:  "AGENTS.md",
+			expected: false,
+		},
 		{
 			name:     "should deny codex bundled system skills",
 			toolName: "codex",
@@ -470,6 +470,13 @@ func TestIsSyncable(t *testing.T) {
 			expected:       true,
 		},
 		{
+			name:           "should allow claude CLAUDE.md via extra_allowlist",
+			toolName:       "claude",
+			relPath:        "CLAUDE.md",
+			extraAllowlist: []string{"CLAUDE.md"},
+			expected:       true,
+		},
+		{
 			name:           "should allow cursor path via extra_allowlist",
 			toolName:       "cursor",
 			relPath:        "mcp.json",
@@ -555,7 +562,7 @@ func TestIsSyncable(t *testing.T) {
 		{
 			name:     "should deny relPath that coincidentally looks like allowlisted file elsewhere",
 			toolName: "claude",
-			relPath:  "random/CLAUDE.md",
+			relPath:  "random/settings.json",
 			expected: false,
 		},
 	}

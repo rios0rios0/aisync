@@ -46,7 +46,6 @@ type PullCommand struct {
 	transcriptSyncer  *TranscriptSyncer
 	hooksMerger       repositories.Merger
 	settingsMerger    repositories.Merger
-	sectionMerger     repositories.Merger
 	applyService      repositories.ApplyService
 	promptService     repositories.PromptService
 	bundleService     repositories.BundleService
@@ -66,7 +65,6 @@ func NewPullCommand(
 	transcriptSyncer *TranscriptSyncer,
 	hooksMerger repositories.Merger,
 	settingsMerger repositories.Merger,
-	sectionMerger repositories.Merger,
 	applyService repositories.ApplyService,
 	promptService repositories.PromptService,
 	bundleService repositories.BundleService,
@@ -83,7 +81,6 @@ func NewPullCommand(
 		transcriptSyncer:  transcriptSyncer,
 		hooksMerger:       hooksMerger,
 		settingsMerger:    settingsMerger,
-		sectionMerger:     sectionMerger,
 		applyService:      applyService,
 		promptService:     promptService,
 		bundleService:     bundleService,
@@ -521,8 +518,11 @@ func (c *PullCommand) applyToToolDir(
 		}
 	}
 
+	// A path the allowlist no longer covers is out of scope like an excluded one: an earlier
+	// version may have applied it from a source, and it stays where it is, no longer tracked.
 	deletions := c.detectDeletions(oldManifest, manifest, toolDir, func(relPath string) bool {
-		return excludes.Matches(toolName, relPath)
+		return excludes.Matches(toolName, relPath) ||
+			!entities.IsSyncable(toolName, relPath, tool.ExtraAllowlist)
 	})
 
 	if len(pendingFiles) == 0 && len(deletions) == 0 {
@@ -779,9 +779,6 @@ func (c *PullCommand) selectMerger(baseName string) repositories.Merger {
 	if strings.HasSuffix(baseName, "settings.json") {
 		return c.settingsMerger
 	}
-	if baseName == "CLAUDE.md" || baseName == "AGENTS.md" {
-		return c.sectionMerger
-	}
 	return nil
 }
 
@@ -840,8 +837,8 @@ func (c *PullCommand) readPersonalFile(
 
 // detectDeletions compares the old manifest against the new manifest and returns
 // the absolute paths of files that should be deleted (present in old, absent in new).
-// A path excluded on this device is no longer managed here, so it drops out of
-// the new manifest without being deleted.
+// A path excluded on this device, or one the allowlist no longer covers, is no
+// longer managed here, so it drops out of the new manifest without being deleted.
 func (c *PullCommand) detectDeletions(
 	oldManifest, newManifest *entities.Manifest,
 	toolDir string,

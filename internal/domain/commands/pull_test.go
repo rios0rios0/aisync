@@ -26,7 +26,6 @@ func newPullCmd(
 	promptService *doubles.MockPromptService,
 	hooksMerger *doubles.MockMerger,
 	settingsMerger *doubles.MockMerger,
-	sectionMerger *doubles.MockMerger,
 	applyService *doubles.MockApplyService,
 ) *commands.PullCommand {
 	personalSyncer := commands.NewPersonalSyncer(
@@ -37,7 +36,7 @@ func newPullCmd(
 		configRepo, stateRepo, sourceRepo,
 		manifestRepo, gitRepo, encryptionService,
 		personalSyncer, nil, hooksMerger, settingsMerger,
-		sectionMerger, applyService,
+		applyService,
 		promptService,
 		&doubles.MockBundleService{},
 		&doubles.MockBundleStateRepository{},
@@ -54,7 +53,6 @@ func defaultPullDeps() (
 	*doubles.MockPromptService,
 	*doubles.MockMerger,
 	*doubles.MockMerger,
-	*doubles.MockMerger,
 	*doubles.MockApplyService,
 ) {
 	return &doubles.MockConfigRepository{},
@@ -64,7 +62,6 @@ func defaultPullDeps() (
 		&doubles.MockGitRepository{},
 		&doubles.MockEncryptionService{},
 		&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
-		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		&doubles.MockMerger{},
 		&doubles.MockApplyService{}
@@ -80,7 +77,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -100,7 +97,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -115,7 +112,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		t.Parallel()
 		// given
 		configRepo, stateRepo, _, manifestRepo, gitRepo,
-			encSvc, _, _, _, _, applySvc := defaultPullDeps()
+			encSvc, _, _, _, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{},
@@ -124,7 +121,7 @@ func TestPullCommand_Execute(t *testing.T) {
 
 		cmd := commands.NewPullCommand(
 			configRepo, stateRepo, nil, manifestRepo, gitRepo,
-			encSvc, nil, nil, nil, nil, nil, applySvc,
+			encSvc, nil, nil, nil, nil, applySvc,
 			&doubles.MockPromptService{ToolAction: "apply", Confirmation: true},
 			&doubles.MockBundleService{},
 			&doubles.MockBundleStateRepository{},
@@ -141,7 +138,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		t.Parallel()
 		// given
 		configRepo := &doubles.MockConfigRepository{LoadErr: assert.AnError}
-		cmd := commands.NewPullCommand(configRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		cmd := commands.NewPullCommand(configRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", "/tmp/repo", commands.PullOptions{})
@@ -156,7 +153,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -170,7 +167,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -186,7 +183,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -206,7 +203,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir,
@@ -224,7 +221,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -239,7 +236,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.PullErr = assert.AnError
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -256,7 +253,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -270,7 +267,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -286,7 +283,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		tmpDir := t.TempDir()
 		state := entities.NewState("test-device")
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -305,7 +302,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -321,7 +318,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -334,7 +331,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -349,7 +346,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -363,7 +360,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -381,7 +378,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -403,7 +400,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -419,7 +416,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -441,7 +438,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -456,7 +453,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -476,7 +473,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -493,7 +490,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -507,7 +504,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -525,7 +522,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -546,7 +543,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		hooksMerger.MergedData = []byte(`{"merged":true}`)
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -565,7 +562,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -586,7 +583,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		settingsMerger.MergedData = []byte(`{"merged":true}`)
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -596,7 +593,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		assert.Equal(t, 1, settingsMerger.MergeCalls)
 	})
 
-	t.Run("should invoke section merger when source returns CLAUDE.md", func(t *testing.T) {
+	t.Run("should not apply CLAUDE.md or AGENTS.md when a source delivers them", func(t *testing.T) {
 		t.Parallel()
 		// given
 		tmpDir := t.TempDir()
@@ -604,7 +601,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -618,21 +615,63 @@ func TestPullCommand_Execute(t *testing.T) {
 		sourceRepo.Result = &repositories.FetchResult{
 			Files: map[string][]byte{
 				"shared/claude/CLAUDE.md": []byte("# Section"),
+				"shared/claude/AGENTS.md": []byte("# Section"),
 			},
 			ETag: "etag-1",
 		}
 		gitRepo.HasRemoteVal = false
-		sectionMerger.MergedData = []byte("# Merged Section")
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 1, sectionMerger.MergeCalls)
+		assert.Equal(t, 0, applySvc.StageCalls)
+		assert.NoFileExists(t, filepath.Join(toolDir, "CLAUDE.md"))
+		assert.NoFileExists(t, filepath.Join(toolDir, "AGENTS.md"))
+	})
+
+	t.Run("should apply a source's CLAUDE.md unmerged when extra_allowlist opts it in", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		toolDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
+
+		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
+
+		configRepo.Config = &entities.Config{
+			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
+			Tools: map[string]entities.Tool{
+				"claude": {Path: toolDir, Enabled: true, ExtraAllowlist: []string{"CLAUDE.md"}},
+			},
+			Encryption: entities.EncryptionConfig{Identity: "/tmp/key.txt"},
+		}
+		stateRepo.State = entities.NewState("test-device")
+		stateRepo.ExistsVal = true
+		sourceRepo.Result = &repositories.FetchResult{
+			Files: map[string][]byte{
+				"shared/claude/CLAUDE.md": []byte("# Section"),
+			},
+			ETag: "etag-1",
+		}
+		gitRepo.HasRemoteVal = false
+
+		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "# Section", string(applySvc.StagedFiles[filepath.Join(toolDir, "CLAUDE.md")]))
+		assert.Equal(t, 0, hooksMerger.MergeCalls)
+		assert.Equal(t, 0, settingsMerger.MergeCalls)
 	})
 
 	t.Run("should detect deletions when file in old manifest is missing from new set", func(t *testing.T) {
@@ -650,7 +689,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		oldManifest.SetFile("rules/old.md", "guide", "shared", "old-checksum")
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -672,7 +711,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		manifestRepo.Manifest = oldManifest
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -681,6 +720,57 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, err)
 		_, statErr := os.Stat(deletedFile)
 		assert.True(t, os.IsNotExist(statErr))
+	})
+
+	t.Run("should keep a file an earlier version applied when the allowlist no longer covers it", func(t *testing.T) {
+		t.Parallel()
+		// given
+		tmpDir := t.TempDir()
+		toolDir := filepath.Join(tmpDir, "claude-home")
+		require.NoError(t, os.MkdirAll(toolDir, 0700))
+
+		// An earlier version applied the source's CLAUDE.md and recorded it as shared.
+		keptFile := filepath.Join(toolDir, "CLAUDE.md")
+		require.NoError(t, os.WriteFile(keptFile, []byte("# hand-written"), 0600))
+
+		oldManifest := entities.NewManifest("0.1.0", "host")
+		oldManifest.SetFile("CLAUDE.md", "guide", "shared", "old-checksum")
+
+		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
+
+		configRepo.Config = &entities.Config{
+			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
+			Tools: map[string]entities.Tool{
+				"claude": {Path: toolDir, Enabled: true},
+			},
+			Encryption: entities.EncryptionConfig{Identity: "/tmp/key.txt"},
+		}
+		stateRepo.State = entities.NewState("test-device")
+		stateRepo.ExistsVal = true
+		sourceRepo.Result = &repositories.FetchResult{
+			Files: map[string][]byte{
+				"shared/claude/CLAUDE.md":    []byte("# Section"),
+				"shared/claude/rules/new.md": []byte("# New"),
+			},
+			ETag: "etag-1",
+		}
+		gitRepo.HasRemoteVal = false
+		manifestRepo.ExistsVal = true
+		manifestRepo.Manifest = oldManifest
+
+		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
+
+		// when
+		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
+
+		// then
+		require.NoError(t, err)
+		content, readErr := os.ReadFile(keptFile)
+		require.NoError(t, readErr)
+		assert.Equal(t, "# hand-written", string(content))
+		assert.NotContains(t, applySvc.StagedFiles, keptFile)
 	})
 
 	t.Run("should apply personal-only file from sync repo to tool dir", func(t *testing.T) {
@@ -696,7 +786,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "custom.md"), []byte("my custom rule"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -716,7 +806,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -734,7 +824,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -754,7 +844,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{DryRun: true, Force: true})
@@ -770,7 +860,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -791,7 +881,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -809,7 +899,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -829,7 +919,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -847,7 +937,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -868,7 +958,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		applySvc.StageErr = assert.AnError
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -895,7 +985,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -915,7 +1005,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -941,7 +1031,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		state.SetETag("guide", "same-etag") // will be same after fetch
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -961,7 +1051,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -998,7 +1088,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1019,7 +1109,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		encSvc.DecryptedData = []byte("decrypted secret content")
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1044,7 +1134,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1064,7 +1154,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1092,7 +1182,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		oldManifest.SetFile("agents/custom.md", "personal", "personal", "sha256:last-synced")
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, prompt, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 		configRepo.Config = &entities.Config{
 			Tools: map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
 		}
@@ -1102,7 +1192,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		manifestRepo.Manifest = oldManifest
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1131,7 +1221,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		oldManifest.SetFile("agents/custom.md", "personal", "personal", "sha256:last-synced")
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, prompt, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 		configRepo.Config = &entities.Config{
 			Tools: map[string]entities.Tool{"claude": {Path: toolDir, Enabled: true}},
 		}
@@ -1142,7 +1232,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		applySvc.WriteOnApply = true
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, prompt, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{
@@ -1162,7 +1252,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1177,7 +1267,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// Git pull succeeds
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1193,7 +1283,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1207,7 +1297,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.OpenErr = assert.AnError
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1231,7 +1321,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1252,7 +1342,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1276,7 +1366,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		state.SetETag("guide", "old-etag")
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1296,7 +1386,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1313,7 +1403,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.MkdirAll(toolDir, 0700))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1333,7 +1423,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when - non-force mode will prompt, stdin closed -> abort
 		err := cmd.Execute("/tmp/config.yaml", tmpDir,
@@ -1370,7 +1460,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1391,7 +1481,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		encSvc.DecryptedData = []byte("decrypted personal override")
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1416,7 +1506,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(personalDir, "my-config.md"), []byte("personal config"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1436,7 +1526,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1459,7 +1549,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "same.md"), []byte("unchanged"), 0600))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1481,7 +1571,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir,
@@ -1497,7 +1587,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		// given
 		tmpDir := t.TempDir()
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1511,7 +1601,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1534,7 +1624,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{
@@ -1555,7 +1645,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
@@ -1589,7 +1679,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		))
 
 		configRepo, stateRepo, sourceRepo, manifestRepo, gitRepo,
-			encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc := defaultPullDeps()
+			encSvc, conflictDet, hooksMerger, settingsMerger, applySvc := defaultPullDeps()
 
 		configRepo.Config = &entities.Config{
 			Sources: []entities.Source{{Name: "guide", Repo: "r/g", Branch: "gen"}},
@@ -1609,7 +1699,7 @@ func TestPullCommand_Execute(t *testing.T) {
 		gitRepo.HasRemoteVal = false
 
 		cmd := newPullCmd(configRepo, stateRepo, sourceRepo, manifestRepo,
-			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, sectionMerger, applySvc)
+			gitRepo, encSvc, conflictDet, hooksMerger, settingsMerger, applySvc)
 
 		// when
 		err := cmd.Execute("/tmp/config.yaml", tmpDir, commands.PullOptions{Force: true})
