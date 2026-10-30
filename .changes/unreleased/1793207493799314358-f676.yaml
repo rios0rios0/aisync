@@ -1,3 +1,0 @@
-kind: 'Fixed'
-body: 'fixed the `golangci-lint` `exhaustive` and `gocognit` findings that broke CI after the shared pipelines upgraded the linter: dropped the trailing text the newer `exhaustive` linter rejects (`args not allowed`) from the `//exhaustive:ignore` directives on the sync handler maps, keeping each reason as a plain comment, and extracted `applyOneBundle` from `applyToolBundles` to bring its cognitive complexity back under the `gocognit` limit'
-time: '2026-10-28T17:11:33.799259497Z'

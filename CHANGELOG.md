@@ -22,6 +22,29 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-29
+
+### Added
+
+- added per-device exclusions: `<tool>/<path>` lines in `~/.config/aisync/exclude` (or the file `AISYNC_EXCLUDE_FILE` names), kept outside the sync repo, opt a path out of pull, push, sync, conversations, `diff` and `status` on that device alone, so a phone can keep its own `settings.json` while every other device goes on sharing it
+
+### Changed
+
+- changed the Go module `github.com/rios0rios0/cliforge` from `v0.5.1` to `v0.5.2`
+- changed the Go module `golang.org/x/net` from `v0.61.0` to `v0.62.0`
+- moved the agent instructions from `CLAUDE.md` to `AGENTS.md`, keeping a `CLAUDE.md` that imports it
+- refreshed `AGENTS.md`, `.github/copilot-instructions.md`, and the code-review skill to point at `AGENTS.md` instead of `CLAUDE.md`, corrected stale dry-run, conflict-prompt, and command-naming references, and trimmed `AGENTS.md` under 200 lines
+
+### Fixed
+
+- fixed `aisync push` and `aisync sync` logging "pushed to remote" when the remote already had every commit, so a run that published nothing read as the one that pushed; they now say there was nothing to push
+- fixed `aisync status` counting every encrypted personal file, and every file `.aisyncignore` excludes, as not yet pushed forever: it now counts the three-way plan `aisync sync` executes, so it reports nothing after a sync, counts local deletions, and lists changes waiting in the sync repo and conflicts separately
+- fixed the `golangci-lint` `exhaustive` and `gocognit` findings that broke CI after the shared pipelines upgraded the linter: dropped the trailing text the newer `exhaustive` linter rejects (`args not allowed`) from the `//exhaustive:ignore` directives on the sync handler maps, keeping each reason as a plain comment, and extracted `applyOneBundle` from `applyToolBundles` to bring its cognitive complexity back under the `gocognit` limit
+
+### Removed
+
+- **BREAKING CHANGE:** removed `CLAUDE.md` and `AGENTS.md` from the files synced by default (Claude Code's `CLAUDE.md` and `AGENTS.md`, Codex's `AGENTS.md`), together with the `SectionMerger` that joined the copies external sources and `personal/<tool>/` held: these home-level instruction files belong to the dotfiles manager, which renders one for each machine, and a synced copy overwrote, brought back or duplicated it. Copies synced by an earlier version stay where they are, on each device and in the repo, where `aisync push` lists them with the `git rm` command that removes them, and `tools.<name>.extra_allowlist` brings a file back, copied whole
+
 ## [1.6.0] - 2026-10-21
 
 ### Added

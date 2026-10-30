@@ -1,4 +1,0 @@
-kind: 'Removed'
-body: 'removed `CLAUDE.md` and `AGENTS.md` from the files synced by default (Claude Code''s `CLAUDE.md` and `AGENTS.md`, Codex''s `AGENTS.md`), together with the `SectionMerger` that joined the copies external sources and `personal/<tool>/` held: these home-level instruction files belong to the dotfiles manager, which renders one for each machine, and a synced copy overwrote, brought back or duplicated it. Copies synced by an earlier version stay where they are, on each device and in the repo, where `aisync push` lists them with the `git rm` command that removes them, and `tools.<name>.extra_allowlist` brings a file back, copied whole'
-breaking: true
-time: '2026-10-30T02:14:49.909621674Z'
