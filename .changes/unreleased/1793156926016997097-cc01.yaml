@@ -1,3 +1,0 @@
-kind: 'Fixed'
-body: 'fixed `aisync status` counting every encrypted personal file, and every file `.aisyncignore` excludes, as not yet pushed forever: it now counts the three-way plan `aisync sync` executes, so it reports nothing after a sync, counts local deletions, and lists changes waiting in the sync repo and conflicts separately'
-time: '2026-10-28T03:08:46.01693458Z'
