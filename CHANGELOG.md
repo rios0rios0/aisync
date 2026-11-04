@@ -22,6 +22,13 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-04
+
+### Changed
+
+- changed the Go module `github.com/xo/terminfo` from `v1.2.0` to `v1.3.0`
+- changed the Go module `go.yaml.in/yaml/v3` from `v3.0.5` to `v3.0.6`
+
 ## [2.0.0] - 2026-10-29
 
 ### Added
