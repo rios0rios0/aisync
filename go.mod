@@ -3,11 +3,11 @@ module github.com/rios0rios0/aisync
 go 1.27.3
 
 require (
+	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.6
 	filippo.io/age v1.3.2
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
-	github.com/charmbracelet/huh v1.0.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/rios0rios0/cliforge v0.5.2
@@ -22,6 +22,8 @@ require (
 )
 
 require (
+	charm.land/bubbles/v2 v2.0.0 // indirect
+	charm.land/bubbletea/v2 v2.0.2 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
@@ -34,6 +36,7 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886 // indirect
 	github.com/charmbracelet/x/ansi v0.11.9 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
+	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect
 	github.com/charmbracelet/x/exp/strings v0.1.0 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
