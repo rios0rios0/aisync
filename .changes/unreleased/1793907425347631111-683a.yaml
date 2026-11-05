@@ -1,0 +1,3 @@
+kind: 'Changed'
+body: 'changed the imports and the module requirements of `github.com/charmbracelet/bubbletea` and `github.com/charmbracelet/bubbles` to `charm.land/bubbletea/v2` and `charm.land/bubbles/v2`, and moved the diff pager to their v2 APIs'
+time: '2026-11-05T19:37:05.347567714Z'

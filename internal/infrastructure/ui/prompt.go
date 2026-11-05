@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
-	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
@@ -177,7 +177,7 @@ func showConflictDiff(detail entities.ConflictDetail) {
 	colored := entities.ColorizeDiff(detail.Diff, NewLipglossFormatter())
 	_, height, err := term.GetSize(int(os.Stdout.Fd()))
 	if err == nil && strings.Count(colored, "\n") > height-2 {
-		if _, runErr := tea.NewProgram(newDiffModel(colored), tea.WithAltScreen()).Run(); runErr == nil {
+		if _, runErr := tea.NewProgram(newDiffModel(colored)).Run(); runErr == nil {
 			return
 		}
 	}
