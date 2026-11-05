@@ -1,0 +1,3 @@
+kind: 'Changed'
+body: 'changed the imports and the module requirement of `github.com/charmbracelet/lipgloss` to `charm.land/lipgloss/v2`'
+time: '2026-11-05T09:06:14.922316438Z'
