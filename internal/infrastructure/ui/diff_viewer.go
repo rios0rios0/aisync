@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 )
 
@@ -31,7 +31,7 @@ func (v *BubbleteaDiffViewer) ShowText(content string) error {
 	if err != nil || strings.Count(content, "\n") < height-1 {
 		return errPrintInstead
 	}
-	_, err = tea.NewProgram(newDiffModel(content), tea.WithAltScreen()).Run()
+	_, err = tea.NewProgram(newDiffModel(content)).Run()
 	return err
 }
 
@@ -55,19 +55,19 @@ func (m diffModel) Init() tea.Cmd {
 
 func (m diffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		}
 	case tea.WindowSizeMsg:
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height-1)
+			m.viewport = viewport.New(viewport.WithWidth(msg.Width), viewport.WithHeight(msg.Height-1))
 			m.viewport.SetContent(m.content)
 			m.ready = true
 		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = msg.Height - 1
+			m.viewport.SetWidth(msg.Width)
+			m.viewport.SetHeight(msg.Height - 1)
 		}
 	}
 
@@ -76,10 +76,15 @@ func (m diffModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m diffModel) View() string {
-	if !m.ready {
-		return "Loading..."
+// View draws the pager in the alternate screen, which Bubble Tea leaves when
+// the program quits, so the paged diff does not stay in the scrollback.
+func (m diffModel) View() tea.View {
+	content := "Loading..."
+	if m.ready {
+		footer := helpStyle.Render("↑/↓ scroll • q quit")
+		content = m.viewport.View() + "\n" + footer
 	}
-	footer := helpStyle.Render("↑/↓ scroll • q quit")
-	return m.viewport.View() + "\n" + footer
+	view := tea.NewView(content)
+	view.AltScreen = true
+	return view
 }
