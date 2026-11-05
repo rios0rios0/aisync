@@ -3,9 +3,9 @@ module github.com/rios0rios0/aisync
 go 1.27.3
 
 require (
+	charm.land/bubbles/v2 v2.2.1
 	charm.land/lipgloss/v2 v2.0.6
 	filippo.io/age v1.3.2
-	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -22,6 +22,7 @@ require (
 )
 
 require (
+	charm.land/bubbletea/v2 v2.0.8 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
@@ -29,6 +30,7 @@ require (
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/catppuccin/go v0.3.0 // indirect
+	github.com/charmbracelet/bubbles v1.0.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260811164956-006e29f97886 // indirect

@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
 )
