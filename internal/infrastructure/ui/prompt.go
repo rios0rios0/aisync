@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/huh/v2"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
 
 	"github.com/rios0rios0/aisync/internal/domain/entities"
