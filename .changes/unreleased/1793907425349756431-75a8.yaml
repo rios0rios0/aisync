@@ -1,3 +1,0 @@
-kind: 'Added'
-body: 'added sideways scrolling to the diff pager: the left and right arrows (or `h` and `l`) move across lines wider than the terminal'
-time: '2026-11-05T19:37:05.349710113Z'

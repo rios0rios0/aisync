@@ -22,6 +22,21 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-11
+
+### Added
+
+- added sideways scrolling to the diff pager: the left and right arrows (or `h` and `l`) move across lines wider than the terminal
+
+### Changed
+
+- changed the Go module `github.com/xo/terminfo` from `v1.3.0` to `v1.3.1`
+- changed the Go modules `charm.land/lipgloss/v2` from `v2.0.6` to `v2.1.0`, `golang.org/x/sync` from `v0.24.0` to `v0.25.0`, `golang.org/x/sys` from `v0.49.0` to `v0.50.0`, `golang.org/x/term` from `v0.47.0` to `v0.48.0` and `golang.org/x/text` from `v0.43.0` to `v0.44.0`
+- changed the Go modules `github.com/charmbracelet/ultraviolet` from `v0.0.0-20261008173134-6b8d4baf91b4` to `v0.0.0-20261023060817-a45b7c86333f` and `github.com/spf13/pflag` from `v1.0.10` to `v1.1.0`
+- changed the imports and the module requirement of `github.com/charmbracelet/huh` to `charm.land/huh/v2`
+- changed the imports and the module requirement of `github.com/charmbracelet/lipgloss` to `charm.land/lipgloss/v2`
+- changed the imports and the module requirements of `github.com/charmbracelet/bubbletea` and `github.com/charmbracelet/bubbles` to `charm.land/bubbletea/v2` and `charm.land/bubbles/v2`, and moved the diff pager to their v2 APIs
+
 ## [2.0.1] - 2026-11-04
 
 ### Changed
