@@ -10,8 +10,8 @@ require (
 	filippo.io/age v1.3.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-git/go-git/v5 v5.19.3
-	github.com/rios0rios0/cliforge v0.5.2
-	github.com/sergi/go-diff v1.4.0
+	github.com/rios0rios0/cliforge v0.5.3
+	github.com/sergi/go-diff v1.4.5
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
