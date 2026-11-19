@@ -1,0 +1,3 @@
+kind: 'Changed'
+body: 'changed the Go modules `charm.land/bubbletea/v2` from `v2.1.1` to `v2.1.2`, `github.com/charmbracelet/x/ansi` from `v0.11.9` to `v0.11.10`, `github.com/rios0rios0/cliforge` from `v0.5.3` to `v0.5.4` and `golang.org/x/net` from `v0.62.0` to `v0.63.0`'
+time: '2026-11-19T09:06:14.352168506Z'
