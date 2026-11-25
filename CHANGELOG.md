@@ -22,6 +22,14 @@ Exceptions are acceptable depending on the circumstances (critical bug fixes tha
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-25
+
+### Changed
+
+- changed the Go module `github.com/charmbracelet/ultraviolet` from `v0.0.0-20261023060817-a45b7c86333f` to `v0.0.0-20261119151026-8ecbcf0e188c`
+- changed the Go modules `charm.land/bubbles/v2` from `v2.2.1` to `v2.2.2` and `github.com/rivo/uniseg` from `v0.4.7` to `v0.4.8-0.20261110175422-3a370411ca06`
+- changed the Go modules `charm.land/bubbletea/v2` from `v2.1.1` to `v2.1.2`, `github.com/charmbracelet/x/ansi` from `v0.11.9` to `v0.11.10`, `github.com/rios0rios0/cliforge` from `v0.5.3` to `v0.5.4` and `golang.org/x/net` from `v0.62.0` to `v0.63.0`
+
 ## [2.1.1] - 2026-11-18
 
 ### Changed
